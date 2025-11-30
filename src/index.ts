@@ -9,9 +9,6 @@ import { BunContext, BunHttpServer, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer, Schema, Stream } from "effect";
 import { OcService, type OcEvent } from "./services/oc.ts";
 
-// TODO: when streaming the oc service is getting terminated too early, needs to be long running for the http server to keep the connection open...
-// it closes after any question is asked...
-
 const programLayer = Layer.mergeAll(OcService.Default);
 
 const logEvent = (event: OcEvent) => {
@@ -94,7 +91,7 @@ const serveCommand = Command.make("serve", { port: portOption }, ({ port }) =>
           );
 
           return yield* HttpServerResponse.json({ answer: chunks.join("") });
-        }).pipe(Effect.provide(programLayer))
+        })
       )
     );
 
@@ -107,7 +104,7 @@ const serveCommand = Command.make("serve", { port: portOption }, ({ port }) =>
     );
 
     return yield* Layer.launch(HttpLive);
-  })
+  }).pipe(Effect.scoped, Effect.provide(programLayer))
 );
 
 // === Main Command ===
