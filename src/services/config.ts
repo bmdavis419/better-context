@@ -1,6 +1,5 @@
 import type { Config as OpenCodeConfig } from "@opencode-ai/sdk";
 import { Effect, Schema } from "effect";
-import { mkdir } from "node:fs/promises";
 import * as path from "node:path";
 import { getDocsAgentPrompt } from "../lib/prompts.ts";
 import { ConfigError } from "../lib/errors.ts";
@@ -9,7 +8,8 @@ import { directoryExists, expandHome } from "../lib/utils/files.ts";
 
 const CONFIG_DIRECTORY = "~/.config/btca";
 const CONFIG_FILENAME = "btca.json";
-const DOCS_PROMPT_FILENAME = (tech: string) => `btca-${tech}-agent.md`;
+
+// TODO: figure out why grok code sucks so much
 
 const repoSchema = Schema.Struct({
   name: Schema.String,
@@ -57,7 +57,10 @@ const DEFAULT_CONFIG: Config = {
   provider: "opencode",
 };
 
-const OPENCODE_CONFIG = (args: { promptPath: string }): OpenCodeConfig => ({
+const OPENCODE_CONFIG = (args: {
+  repoName: string;
+  config: Config;
+}): OpenCodeConfig => ({
   agent: {
     build: {
       disable: true,
@@ -69,7 +72,11 @@ const OPENCODE_CONFIG = (args: { promptPath: string }): OpenCodeConfig => ({
       disable: true,
     },
     docs: {
-      prompt: `{file:${args.promptPath}}`,
+      // prompt: `{file:${args.promptPath}}`,
+      prompt: getDocsAgentPrompt({
+        repoName: args.repoName,
+        repoPath: path.join(args.config.reposDirectory, args.repoName),
+      }),
       disable: false,
       description:
         "Get answers about libraries and frameworks by searching their source code",
@@ -148,41 +155,6 @@ const onStartLoadConfig = Effect.gen(function* () {
 const configService = Effect.gen(function* () {
   const config = yield* onStartLoadConfig;
 
-  const ensureDocsAgentPrompt = (args: { repoName: string }) =>
-    Effect.gen(function* () {
-      const { repoName } = args;
-
-      const promptPath = path.join(
-        config.promptsDirectory,
-        DOCS_PROMPT_FILENAME(repoName)
-      );
-
-      yield* Effect.tryPromise({
-        try: () => mkdir(config.promptsDirectory, { recursive: true }),
-        catch: (error) =>
-          new ConfigError({
-            message: "Failed to create prompts directory",
-            cause: error,
-          }),
-      });
-
-      const promptContent = getDocsAgentPrompt({
-        repoName,
-        repoPath: path.join(config.reposDirectory, repoName),
-      });
-
-      yield* Effect.tryPromise({
-        try: () => Bun.write(promptPath, promptContent),
-        catch: (error) =>
-          new ConfigError({
-            message: "Failed to write docs agent prompt",
-            cause: error,
-          }),
-      });
-
-      yield* Effect.log(`Wrote docs agent prompt at ${promptPath}`);
-    });
-
   const getRepo = ({
     repoName,
     config,
@@ -218,20 +190,12 @@ const configService = Effect.gen(function* () {
         yield* Effect.log(`Done with ${repo.name}`);
         return repo;
       }),
-    loadDocsAgentPrompt: (args: { repoName: string }) =>
-      Effect.gen(function* () {
-        const { repoName } = args;
-        yield* ensureDocsAgentPrompt({ repoName });
-      }),
     getOpenCodeConfig: (args: { repoName: string }) =>
       Effect.gen(function* () {
         const { repoName } = args;
-        const promptPath = path.join(
-          config.promptsDirectory,
-          DOCS_PROMPT_FILENAME(repoName)
-        );
-        return OPENCODE_CONFIG({ promptPath });
+        return OPENCODE_CONFIG({ repoName, config });
       }),
+    rawConfig: () => Effect.succeed(config),
   };
 });
 

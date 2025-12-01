@@ -11,22 +11,17 @@ import { OcService, type OcEvent } from "./services/oc.ts";
 
 const programLayer = Layer.mergeAll(OcService.Default);
 
+// TODO: setup really good outputs for the cli to give to agents...
 const logEvent = (event: OcEvent) => {
-  if (event.type === "message.part.updated") {
-    const part = event.properties.part as {
-      type: string;
-      text?: string;
-      tool?: string;
-      state?: { status?: string; title?: string };
-    };
-    // Only output final answer text, not reasoning/thinking
-    if (part.type === "text" && part.text) {
-      process.stdout.write(part.text);
-    }
-    // Show tool calls when completed
-    if (part.type === "tool" && part.state?.status === "completed") {
-      console.log(`\n[Tool] ${part.tool}: ${part.state.title ?? ""}`);
-    }
+  switch (event.type) {
+    case "message.updated":
+      console.log(event.properties.info);
+      break;
+    case "message.part.updated":
+      console.log(event.properties.part);
+      break;
+    default:
+      break;
   }
 };
 

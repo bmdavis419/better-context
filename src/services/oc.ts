@@ -8,11 +8,14 @@ export type { Event as OcEvent };
 const ocService = Effect.gen(function* () {
   const config = yield* ConfigService;
 
+  const rawConfig = yield* config.rawConfig();
+
   const getOpencodeInstance = ({ tech }: { tech: string }) =>
     Effect.gen(function* () {
       let portOffset = 0;
       const maxInstances = 5;
       const configObject = yield* config.getOpenCodeConfig({ repoName: tech });
+      yield* Effect.log(`OPENCODE CONFIG: ${JSON.stringify(configObject)}`);
       while (portOffset < maxInstances) {
         const result = yield* Effect.tryPromise(() =>
           createOpencode({
@@ -93,8 +96,8 @@ const ocService = Effect.gen(function* () {
         body: {
           agent: "docs",
           model: {
-            providerID: "opencode",
-            modelID: "claude-haiku-4-5",
+            providerID: rawConfig.provider,
+            modelID: rawConfig.model,
           },
           parts: [{ type: "text", text: args.text }],
         },
@@ -154,15 +157,7 @@ const ocService = Effect.gen(function* () {
       Effect.gen(function* () {
         const { question, tech } = args;
 
-        yield* Effect.all(
-          [
-            config.cloneOrUpdateOneRepoLocally(tech),
-            config.loadDocsAgentPrompt({ repoName: tech }),
-          ],
-          {
-            concurrency: 2,
-          }
-        );
+        yield* config.cloneOrUpdateOneRepoLocally(tech);
 
         const { client, server } = yield* getOpencodeInstance({ tech });
 
