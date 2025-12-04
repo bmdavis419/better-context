@@ -8,21 +8,24 @@ import { spawn } from "bun";
 import { Deferred, Duration, Effect, Stream } from "effect";
 import { ConfigService } from "./config.ts";
 import { OcError } from "../lib/errors.ts";
-import { validateProviderModel } from "./validation.ts";
+import { validateProviderAndModel } from "../lib/utils/validation.ts";
 
 const spawnOpencodeTui = async (args: {
   config: OpenCodeConfig;
   rawConfig: { provider: string; model: string };
 }) => {
-  const proc = spawn(["opencode", `--model=${args.rawConfig.provider}/${args.rawConfig.model}`], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-    env: {
-      ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(args.config),
-    },
-  });
+  const proc = spawn(
+    ["opencode", `--model=${args.rawConfig.provider}/${args.rawConfig.model}`],
+    {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+      env: {
+        ...process.env,
+        OPENCODE_CONFIG_CONTENT: JSON.stringify(args.config),
+      },
+    }
+  );
 
   await proc.exited;
 };
@@ -183,7 +186,9 @@ const ocService = Effect.gen(function* () {
 
         yield* config.cloneOrUpdateOneRepoLocally(tech);
 
-        const configObject = yield* config.getOpenCodeConfig({ repoName: tech });
+        const configObject = yield* config.getOpenCodeConfig({
+          repoName: tech,
+        });
 
         yield* Effect.tryPromise({
           try: () => spawnOpencodeTui({ config: configObject, rawConfig }),
@@ -209,8 +214,11 @@ const ocService = Effect.gen(function* () {
 
         const { client, server } = yield* getOpencodeInstance({ tech });
 
-        // Validate provider/model before proceeding
-        yield* validateProviderModel(client, rawConfig.provider, rawConfig.model);
+        yield* validateProviderAndModel(
+          client,
+          rawConfig.provider,
+          rawConfig.model
+        );
 
         const session = yield* Effect.promise(() => client.session.create());
 

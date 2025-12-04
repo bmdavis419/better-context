@@ -1,37 +1,20 @@
-import { TaggedError } from "effect/Data";
 import { Effect } from "effect";
 import type { OpencodeClient } from "@opencode-ai/sdk";
+import {
+  InvalidProviderError,
+  InvalidModelError,
+  ProviderNotConnectedError,
+} from "../errors";
 
-// Error types
-export class InvalidProviderError extends TaggedError("InvalidProviderError")<{
-  readonly providerId: string;
-  readonly availableProviders: string[];
-}> {}
-
-export class InvalidModelError extends TaggedError("InvalidModelError")<{
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly availableModels: string[];
-}> {}
-
-export class ProviderNotConnectedError extends TaggedError(
-  "ProviderNotConnectedError"
-)<{
-  readonly providerId: string;
-  readonly connectedProviders: string[];
-}> {}
-
-// Validation function
-export const validateProviderModel = (
+export const validateProviderAndModel = (
   client: OpencodeClient,
   providerId: string,
   modelId: string
-): Effect.Effect<
-  void,
-  InvalidProviderError | InvalidModelError | ProviderNotConnectedError
-> =>
+) =>
   Effect.gen(function* () {
-    const response = yield* Effect.tryPromise(() => client.provider.list()).pipe(
+    const response = yield* Effect.tryPromise(() =>
+      client.provider.list()
+    ).pipe(
       Effect.option // Convert errors to None, success to Some
     );
 

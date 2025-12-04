@@ -14,3 +14,21 @@ export class ConfigError extends TaggedError("ConfigError")<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
+
+export class InvalidProviderError extends TaggedError("InvalidProviderError")<{
+  readonly providerId: string;
+  readonly availableProviders: string[];
+}> {}
+
+export class InvalidModelError extends TaggedError("InvalidModelError")<{
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly availableModels: string[];
+}> {}
+
+export class ProviderNotConnectedError extends TaggedError(
+  "ProviderNotConnectedError"
+)<{
+  readonly providerId: string;
+  readonly connectedProviders: string[];
+}> {}
