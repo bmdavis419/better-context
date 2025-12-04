@@ -1,60 +1,29 @@
 import type { Config as OpenCodeConfig } from "@opencode-ai/sdk";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, ParseResult } from "effect";
+import { ArrayFormatter } from "effect/ParseResult";
 import * as path from "node:path";
 import { getDocsAgentPrompt } from "../lib/prompts.ts";
 import { ConfigError } from "../lib/errors.ts";
 import { cloneRepo, pullRepo } from "../lib/utils/git.ts";
 import { directoryExists, expandHome } from "../lib/utils/files.ts";
-
-const CONFIG_DIRECTORY = "~/.config/btca";
-const CONFIG_FILENAME = "btca.json";
+import {
+  ConfigSchema,
+  DEFAULT_CONFIG,
+  CONFIG_DIRECTORY,
+  CONFIG_FILENAME,
+  type Config,
+} from "./config-schema.ts";
 
 // TODO: figure out why grok code sucks so much
 
-const repoSchema = Schema.Struct({
-  name: Schema.String,
-  url: Schema.String,
-  branch: Schema.String,
-});
-
-type Repo = typeof repoSchema.Type;
-
-const configSchema = Schema.Struct({
-  promptsDirectory: Schema.String,
-  reposDirectory: Schema.String,
-  port: Schema.Number,
-  maxInstances: Schema.Number,
-  repos: Schema.Array(repoSchema),
-  model: Schema.String,
-  provider: Schema.String,
-});
-
-type Config = typeof configSchema.Type;
-
-const DEFAULT_CONFIG: Config = {
-  promptsDirectory: `${CONFIG_DIRECTORY}/prompts`,
-  reposDirectory: `${CONFIG_DIRECTORY}/repos`,
-  port: 3420,
-  maxInstances: 5,
-  repos: [
-    {
-      name: "svelte",
-      url: "https://github.com/sveltejs/svelte.dev",
-      branch: "main",
-    },
-    {
-      name: "effect",
-      url: "https://github.com/Effect-TS/effect",
-      branch: "main",
-    },
-    {
-      name: "nextjs",
-      url: "https://github.com/vercel/next.js",
-      branch: "canary",
-    },
-  ],
-  model: "big-pickle",
-  provider: "opencode",
+const formatParseErrors = (error: ParseResult.ParseError): string => {
+  const issues = ArrayFormatter.formatErrorSync(error);
+  const configPath = `${CONFIG_DIRECTORY}/${CONFIG_FILENAME}`;
+  const errorSummaries = issues.map((issue, i) => {
+    const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+    return `[${i + 1}] ${path}: ${issue.message}`;
+  });
+  return `${issues.length} error(s) in ${configPath}: ${errorSummaries.join("; ")}`;
 };
 
 const OPENCODE_CONFIG = (args: {
@@ -63,9 +32,6 @@ const OPENCODE_CONFIG = (args: {
 }): OpenCodeConfig => ({
   agent: {
     build: {
-      disable: true,
-    },
-    explore: {
       disable: true,
     },
     general: {
@@ -136,23 +102,28 @@ const onStartLoadConfig = Effect.gen(function* () {
       reposDirectory: expandHome(DEFAULT_CONFIG.reposDirectory),
     } satisfies Config;
   } else {
-    return yield* Effect.tryPromise({
+    const rawJson = yield* Effect.tryPromise({
       try: () => configFile.json(),
       catch: (error) =>
         new ConfigError({
           message: "Failed to load config",
           cause: error,
         }),
-    }).pipe(
-      Effect.flatMap(Schema.decode(configSchema)),
-      Effect.map((loadedConfig) => {
-        return {
-          ...loadedConfig,
-          promptsDirectory: expandHome(loadedConfig.promptsDirectory),
-          reposDirectory: expandHome(loadedConfig.reposDirectory),
-        } satisfies Config;
-      })
+    });
+
+    const loadedConfig = yield* Schema.decodeUnknown(ConfigSchema, {
+      errors: "all",
+    })(rawJson).pipe(
+      Effect.mapError(
+        (parseError) => new ConfigError({ message: formatParseErrors(parseError) })
+      )
     );
+
+    return {
+      ...loadedConfig,
+      promptsDirectory: expandHome(loadedConfig.promptsDirectory),
+      reposDirectory: expandHome(loadedConfig.reposDirectory),
+    } satisfies Config;
   }
 });
 
