@@ -60,7 +60,7 @@ Available <tech>: svelte, tailwindcss`;
 		{
 			id: 'opencode',
 			label: 'OpenCode',
-			cmd: 'btca config repos add -n opencode -u https://github.com/opencode-ai/opencode -b main'
+			cmd: 'btca config repos add -n opencode -u https://github.com/sst/opencode -b main'
 		},
 		{
 			id: 'neverthrow',
