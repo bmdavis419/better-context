@@ -1,13 +1,17 @@
 <script lang="ts">
 	import './layout.css';
+	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import favicon from '$lib/assets/favicon.svg';
 	import ogImage from '$lib/assets/og.png';
 	import { Bot, Github, Moon, Sun } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { setShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { setThemeStore } from '$lib/stores/ThemeStore.svelte';
+	import { dev } from '$app/environment';
 
 	let { children } = $props();
+
+	injectAnalytics({ mode: dev ? 'development' : 'production' });
 
 	const fullBleed = $derived(page.url.pathname === '/og');
 	const ogImageUrl = $derived(new URL(ogImage, page.url).href);
