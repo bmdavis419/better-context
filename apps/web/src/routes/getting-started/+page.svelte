@@ -6,7 +6,7 @@
 	const INSTALL_CMD = `bun add -g btca
 btca`;
 	const DEFAULT_REPOS = [
-		 {
+		{
 			name: 'svelte',
 			url: 'https://github.com/sveltejs/svelte.dev',
 			branch: 'main'
@@ -77,8 +77,7 @@ Available <tech>: svelte, tailwindcss`;
 	const MODEL_CMD = 'btca config model -p anthropic -m claude-haiku-4-5';
 
 	const FULL_CONFIG_JSON = `{
-  "promptsDirectory": "~/.config/btca/prompts",
-  "reposDirectory": "~/.config/btca/repos",
+  "reposDirectory": "~/.local/share/btca/repos",
   "port": 3420,
   "maxInstances": 5,
   "repos": [
