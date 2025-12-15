@@ -1,6 +1,7 @@
 # AGENTS.md
 
 <!-- effect-solutions:start -->
+
 ## Effect Solutions Usage
 
 The Effect Solutions CLI provides curated best practices and patterns for Effect TypeScript. Before working on Effect code, check if there's a relevant topic that covers your use case.
@@ -10,6 +11,7 @@ The Effect Solutions CLI provides curated best practices and patterns for Effect
 - `effect-solutions search <term>` - Search topics by keyword
 
 **Local Effect Source:** The Effect repository is cloned to `~/.local/share/effect-solutions/effect` for reference. Use this to explore APIs, find usage examples, and understand implementation details when the documentation isn't enough.
+
 <!-- effect-solutions:end -->
 
 ## Code Style
@@ -26,3 +28,13 @@ The Effect Solutions CLI provides curated best practices and patterns for Effect
 - Use Effect's error channel for typed errors.
 - Use `Effect.tryPromise` for async operations, `Effect.try` for sync.
 - Pipe errors through Effect combinators, don't throw.
+
+## btca
+
+Trigger: user says "use btca" (for codebase/docs questions).
+
+Run:
+
+- btca ask -t <tech> -q "<question>"
+
+Available <tech>: svelte, tailwindcss, opentui, runed

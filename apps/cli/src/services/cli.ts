@@ -27,7 +27,7 @@ const askCommand = Command.make(
 	({ question, tech }) =>
 		Effect.gen(function* () {
 			const oc = yield* OcService;
-			const eventStream = yield* oc.askQuestion({ tech, question });
+			const eventStream = yield* oc.askQuestion({ tech, question, suppressLogs: false });
 
 			let currentMessageId: string | null = null;
 
@@ -116,7 +116,8 @@ const serveCommand = Command.make('serve', { port: portOption }, ({ port }) =>
 
 					const eventStream = yield* oc.askQuestion({
 						tech: body.tech,
-						question: body.question
+						question: body.question,
+						suppressLogs: false
 					});
 
 					const chunks: string[] = [];
