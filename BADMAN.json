@@ -1,0 +1,13 @@
+{
+	"mcp": {
+		"morph-mcp": {
+			"type": "local",
+			"command": ["npx", "-y", "@morphllm/morphmcp"],
+			"environment": {
+				"MORPH_API_KEY": "asdf",
+				"ENABLED_TOOLS": "warpgrep_codebase_search"
+			}
+		}
+	},
+	"$schema": "https://opencode.ai/config.json"
+}

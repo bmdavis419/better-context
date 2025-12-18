@@ -32,8 +32,11 @@
 		"check": "turbo run check"
 	},
 	"devDependencies": {
+		"@morphllm/morphsdk": "^0.2.71",
+		"@opencode-ai/plugin": "^1.0.166",
 		"@types/bun": "latest",
 		"@typescript/native-preview": "^7.0.0-dev.20251215.1",
+		"effect": "^3.19.12",
 		"prettier": "^3.7.4",
 		"turbo": "^2.6.3",
 		"typescript": "^5.9.3"
