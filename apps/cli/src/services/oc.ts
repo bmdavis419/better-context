@@ -12,12 +12,14 @@ import { validateProviderAndModel } from '../lib/utils/validation.ts';
 
 const spawnOpencodeTui = async (args: {
 	config: OpenCodeConfig;
+	repoDir: string;
 	rawConfig: { provider: string; model: string };
 }) => {
 	const proc = spawn(['opencode', `--model=${args.rawConfig.provider}/${args.rawConfig.model}`], {
 		stdin: 'inherit',
 		stdout: 'inherit',
 		stderr: 'inherit',
+		cwd: args.repoDir,
 		env: {
 			...process.env,
 			OPENCODE_CONFIG_CONTENT: JSON.stringify(args.config)
@@ -38,13 +40,15 @@ const ocService = Effect.gen(function* () {
 		Effect.gen(function* () {
 			let portOffset = 0;
 			const maxInstances = 5;
-			const configObject = yield* config.getOpenCodeConfig({ repoName: tech });
+			const { ocConfig, repoDir } = yield* config.getOpenCodeConfig({ repoName: tech });
+
+			yield* Effect.sync(() => process.chdir(repoDir));
 
 			while (portOffset < maxInstances) {
 				const result = yield* Effect.tryPromise(() =>
 					createOpencode({
 						port: 3420 + portOffset,
-						config: configObject
+						config: ocConfig
 					})
 				).pipe(
 					Effect.catchAll((err) => {
@@ -172,12 +176,12 @@ const ocService = Effect.gen(function* () {
 
 				yield* config.cloneOrUpdateOneRepoLocally(tech, { suppressLogs: false });
 
-				const configObject = yield* config.getOpenCodeConfig({
+				const { ocConfig, repoDir } = yield* config.getOpenCodeConfig({
 					repoName: tech
 				});
 
 				yield* Effect.tryPromise({
-					try: () => spawnOpencodeTui({ config: configObject, rawConfig }),
+					try: () => spawnOpencodeTui({ config: ocConfig, repoDir, rawConfig }),
 					catch: (err) => new OcError({ message: 'TUI exited with error', cause: err })
 				});
 			}),

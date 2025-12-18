@@ -10,15 +10,9 @@ export interface Message {
 	content: string;
 }
 
-export type Mode =
-	| 'chat'
-	| 'add-repo'
-	| 'select-repo'
-	| 'remove-repo'
-	| 'config-model'
-	| 'loading';
+export type Mode = 'chat' | 'add-repo' | 'remove-repo' | 'config-model' | 'loading';
 
-export type CommandMode = 'add-repo' | 'select-repo' | 'remove-repo' | 'config-model' | 'chat' | 'ask' | 'clear';
+export type CommandMode = 'add-repo' | 'remove-repo' | 'config-model' | 'chat' | 'ask' | 'clear';
 
 export interface Command {
 	name: string;

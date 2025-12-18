@@ -70,18 +70,24 @@
 				</div>
 			</a>
 
-			<div class="flex items-center gap-2">
+			<div class="flex items-center gap-3">
 				<a
-					class="hidden rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900 sm:inline-flex"
+					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
 					href="/getting-started"
 				>
 					Getting started
 				</a>
 				<a
-					class="hidden rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900 sm:inline-flex"
+					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
 					href="/commands"
 				>
 					Commands
+				</a>
+				<a
+					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
+					href="/models"
+				>
+					Models
 				</a>
 				<a
 					class="hidden rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900 sm:inline-flex"

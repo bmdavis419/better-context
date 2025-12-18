@@ -2,11 +2,6 @@ import type { Command } from './types.ts';
 
 export const COMMANDS: Command[] = [
 	{
-		name: 'repo',
-		description: 'Switch to a different repo',
-		mode: 'select-repo'
-	},
-	{
 		name: 'add',
 		description: 'Add a new repo (wizard)',
 		mode: 'add-repo'

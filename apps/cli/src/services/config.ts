@@ -1,10 +1,11 @@
-import type { Config as OpenCodeConfig } from '@opencode-ai/sdk';
+import type { Config as OpenCodeConfig, ProviderConfig } from '@opencode-ai/sdk';
 import { FileSystem, Path } from '@effect/platform';
 import { Effect, Schema } from 'effect';
 import { getDocsAgentPrompt } from '../lib/prompts.ts';
 import { ConfigError } from '../lib/errors.ts';
 import { cloneRepo, pullRepo } from '../lib/utils/git.ts';
 import { directoryExists, expandHome } from '../lib/utils/files.ts';
+import { BLESSED_MODELS } from '@btca/shared';
 
 const CONFIG_DIRECTORY = '~/.config/btca';
 const CONFIG_FILENAME = 'btca.json';
@@ -93,14 +94,33 @@ const writeConfig = (config: Config) =>
 		return configToWrite;
 	});
 
+// models setup the way I like them, the ones I would recommend for use are:
+// gemini 3 flash with low reasoning, haiku 4.5 with no reasoning, big pickle (surprisingly good), and kimi K2
+const BTCA_PRESET_MODELS: Record<string, ProviderConfig> = {
+	opencode: {
+		models: {
+			'btca-gemini-3-flash': {
+				id: 'gemini-3-flash',
+				options: {
+					generationConfig: {
+						thinkingConfig: {
+							thinkingLevel: 'low'
+						}
+					}
+				}
+			}
+		}
+	}
+};
+
 const OPENCODE_CONFIG = (args: {
 	repoName: string;
-	reposDirectory: string;
 	specialNotes?: string;
 }): Effect.Effect<OpenCodeConfig, never, Path.Path> =>
 	Effect.gen(function* () {
 		const path = yield* Path.Path;
 		return {
+			provider: BTCA_PRESET_MODELS,
 			agent: {
 				build: {
 					disable: true
@@ -117,7 +137,6 @@ const OPENCODE_CONFIG = (args: {
 				docs: {
 					prompt: getDocsAgentPrompt({
 						repoName: args.repoName,
-						repoPath: path.join(args.reposDirectory, args.repoName),
 						specialNotes: args.specialNotes
 					}),
 					disable: false,
@@ -126,7 +145,7 @@ const OPENCODE_CONFIG = (args: {
 						webfetch: 'deny',
 						edit: 'deny',
 						bash: 'deny',
-						external_directory: 'allow',
+						external_directory: 'deny',
 						doom_loop: 'deny'
 					},
 					mode: 'primary',
@@ -254,11 +273,17 @@ const configService = Effect.gen(function* () {
 				const repo = yield* getRepo({ repoName: args.repoName, config }).pipe(
 					Effect.catchTag('ConfigError', () => Effect.succeed(undefined))
 				);
-				return yield* OPENCODE_CONFIG({
+				const ocConfig = yield* OPENCODE_CONFIG({
 					repoName: args.repoName,
-					reposDirectory: config.reposDirectory,
 					specialNotes: repo?.specialNotes
 				});
+
+				const repoDir = path.join(config.reposDirectory, args.repoName);
+
+				return {
+					ocConfig,
+					repoDir
+				};
 			}),
 		rawConfig: () => Effect.succeed(config),
 		getRepos: () => Effect.succeed(config.repos),
@@ -281,6 +306,7 @@ const configService = Effect.gen(function* () {
 				yield* writeConfig(config);
 				return repo;
 			}),
+		getBlessedModels: () => Effect.succeed(BLESSED_MODELS),
 		removeRepo: (repoName: string) =>
 			Effect.gen(function* () {
 				const existing = config.repos.find((r) => r.name === repoName);

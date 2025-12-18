@@ -1,7 +1,7 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "CLI tool for asking questions about technologies using OpenCode",
 	"type": "module",
 	"license": "MIT",
@@ -51,6 +51,7 @@
 		"typescript": "^5.9.3"
 	},
 	"dependencies": {
+		"@btca/shared": "workspace:*",
 		"@opentui/core": "^0.1.60",
 		"@opentui/react": "^0.1.60",
 		"react": "^19.2.3"

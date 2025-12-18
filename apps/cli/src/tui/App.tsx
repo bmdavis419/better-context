@@ -1,5 +1,6 @@
 import { useKeyboard } from '@opentui/react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import type { InputRenderable } from '@opentui/core';
 import { colors } from './theme.ts';
 import { filterCommands } from './commands.ts';
 import { services } from './services.ts';
@@ -8,7 +9,6 @@ import type { Mode, Message, Repo, Command } from './types.ts';
 import type { WizardStep } from './components/AddRepoWizard.tsx';
 import type { ModelConfigStep } from './components/ModelConfig.tsx';
 import { CommandPalette } from './components/CommandPalette.tsx';
-import { RepoSelector } from './components/RepoSelector.tsx';
 import { AddRepoWizard } from './components/AddRepoWizard.tsx';
 import { RemoveRepoPrompt } from './components/RemoveRepoPrompt.tsx';
 import { ModelConfig } from './components/ModelConfig.tsx';
@@ -16,23 +16,34 @@ import { ModelConfig } from './components/ModelConfig.tsx';
 declare const __VERSION__: string;
 const VERSION: string = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0-dev';
 
+const parseAtMention = (
+	input: string
+): { repoQuery: string; question: string; hasSpace: boolean } | null => {
+	if (!input.startsWith('@')) return null;
+	const spaceIndex = input.indexOf(' ');
+	if (spaceIndex === -1) {
+		return { repoQuery: input.slice(1), question: '', hasSpace: false };
+	}
+	return {
+		repoQuery: input.slice(1, spaceIndex),
+		question: input.slice(spaceIndex + 1),
+		hasSpace: true
+	};
+};
+
 export function App() {
-	// Core state
 	const [repos, setRepos] = useState<Repo[]>([]);
-	const [selectedRepo, setSelectedRepo] = useState(0);
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [modelConfig, setModelConfig] = useState({ provider: '', model: '' });
 
-	// Mode and input state
 	const [mode, setMode] = useState<Mode>('chat');
 	const [inputValue, setInputValue] = useState('');
 	const [commandIndex, setCommandIndex] = useState(0);
 
-	// Repo selector state
-	const [repoSelectorIndex, setRepoSelectorIndex] = useState(0);
-	const [repoSearchQuery, setRepoSearchQuery] = useState('');
+	const [repoMentionIndex, setRepoMentionIndex] = useState(0);
 
-	// Add repo wizard state
+	const inputRef = useRef<InputRenderable>(null);
+
 	const [wizardStep, setWizardStep] = useState<WizardStep>('name');
 	const [wizardValues, setWizardValues] = useState({
 		name: '',
@@ -42,38 +53,41 @@ export function App() {
 	});
 	const [wizardInput, setWizardInput] = useState('');
 
-	// Model config state
 	const [modelStep, setModelStep] = useState<ModelConfigStep>('provider');
 	const [modelValues, setModelValues] = useState({ provider: '', model: '' });
 	const [modelInput, setModelInput] = useState('');
 
-	// Loading state for ask command
+	const [removeRepoName, setRemoveRepoName] = useState('');
+
 	const [isLoading, setIsLoading] = useState(false);
 	const [loadingText, setLoadingText] = useState('');
 
-	// Load initial data
 	useEffect(() => {
 		services.getRepos().then(setRepos).catch(console.error);
 		services.getModel().then(setModelConfig).catch(console.error);
 	}, []);
 
-	// Derived state
 	const showCommandPalette = mode === 'chat' && inputValue.startsWith('/');
 	const commandQuery = inputValue.slice(1);
 	const filteredCommands = useMemo(() => filterCommands(commandQuery), [commandQuery]);
 	const clampedCommandIndex = Math.min(commandIndex, Math.max(0, filteredCommands.length - 1));
 
-	// Filtered repos for search
-	const filteredRepos = useMemo(() => {
-		if (!repoSearchQuery) return repos;
-		const query = repoSearchQuery.toLowerCase();
+	const atMention = useMemo(() => parseAtMention(inputValue), [inputValue]);
+	const showRepoMentionPalette = mode === 'chat' && atMention !== null && !atMention.hasSpace;
+	const filteredMentionRepos = useMemo(() => {
+		if (!atMention) return [];
+		const query = atMention.repoQuery.toLowerCase();
 		return repos.filter((repo) => repo.name.toLowerCase().includes(query));
-	}, [repos, repoSearchQuery]);
-	const clampedRepoIndex = Math.min(repoSelectorIndex, Math.max(0, filteredRepos.length - 1));
+	}, [repos, atMention]);
+	const clampedRepoMentionIndex = Math.min(
+		repoMentionIndex,
+		Math.max(0, filteredMentionRepos.length - 1)
+	);
 
 	const handleInputChange = (value: string) => {
 		setInputValue(value);
 		setCommandIndex(0);
+		setRepoMentionIndex(0);
 	};
 
 	const executeCommand = async (command: Command) => {
@@ -85,12 +99,7 @@ export function App() {
 			setWizardStep('name');
 			setWizardValues({ name: '', url: '', branch: '', notes: '' });
 			setWizardInput('');
-		} else if (command.mode === 'select-repo') {
-			setMode('select-repo');
-			setRepoSelectorIndex(selectedRepo);
-			setRepoSearchQuery('');
 		} else if (command.mode === 'clear') {
-			// Clear chat history
 			setMessages([]);
 			setMessages((prev) => [...prev, { role: 'system', content: 'Chat cleared.' }]);
 		} else if (command.mode === 'remove-repo') {
@@ -98,6 +107,7 @@ export function App() {
 				setMessages((prev) => [...prev, { role: 'system', content: 'No repos to remove' }]);
 				return;
 			}
+			setRemoveRepoName('');
 			setMode('remove-repo');
 		} else if (command.mode === 'config-model') {
 			setMode('config-model');
@@ -105,55 +115,41 @@ export function App() {
 			setModelValues({ provider: modelConfig.provider, model: modelConfig.model });
 			setModelInput(modelConfig.provider);
 		} else if (command.mode === 'chat') {
-			// Spawn OpenCode chat
-			if (repos.length === 0) {
-				setMessages((prev) => [
-					...prev,
-					{ role: 'system', content: 'No repos configured. Use /add to add a repo first.' }
-				]);
-				return;
-			}
-			const repoName = repos[selectedRepo]?.name;
-			if (!repoName) return;
-
 			setMessages((prev) => [
 				...prev,
-				{ role: 'system', content: `Starting chat session for ${repoName}...` }
+				{
+					role: 'system',
+					content: 'Use @reponame to start a chat. Example: @daytona How do I...?'
+				}
 			]);
-
-			try {
-				await services.spawnTui(repoName);
-				// After OpenCode exits, we're back in the TUI
-				setMessages((prev) => [
-					...prev,
-					{ role: 'system', content: 'Chat session ended. Welcome back!' }
-				]);
-			} catch (error) {
-				setMessages((prev) => [...prev, { role: 'system', content: `Error: ${error}` }]);
-			}
 		} else if (command.mode === 'ask') {
-			// Ask mode - next input will be the question
-			if (repos.length === 0) {
-				setMessages((prev) => [
-					...prev,
-					{ role: 'system', content: 'No repos configured. Use /add to add a repo first.' }
-				]);
-				return;
-			}
 			setMessages((prev) => [
 				...prev,
-				{ role: 'system', content: 'Enter your question and press Enter:' }
+				{
+					role: 'system',
+					content: 'Use @reponame to ask a question. Example: @daytona What is...?'
+				}
 			]);
-			// Stay in chat mode, next submit will be the question
-			setInputValue('');
 		}
+	};
+
+	const selectRepoMention = () => {
+		const selectedRepo = filteredMentionRepos[clampedRepoMentionIndex];
+		if (!selectedRepo) return;
+		const newValue = `@${selectedRepo.name} `;
+		setInputValue(newValue);
+		setRepoMentionIndex(0);
+		setTimeout(() => {
+			if (inputRef.current) {
+				inputRef.current.cursorPosition = newValue.length;
+			}
+		}, 0);
 	};
 
 	const handleChatSubmit = async () => {
 		const value = inputValue.trim();
 		if (!value) return;
 
-		// If showing command palette, execute selected command
 		if (showCommandPalette && filteredCommands.length > 0) {
 			const command = filteredCommands[clampedCommandIndex];
 			if (command) {
@@ -162,23 +158,41 @@ export function App() {
 			}
 		}
 
-		// If loading, ignore input
-		if (isLoading) return;
-
-		// Check if this is a question (after /ask was used)
-		// Or if user just types a regular message, treat it as a question
-		const repoName = repos[selectedRepo]?.name;
-		if (!repoName) {
-			setMessages((prev) => [
-				...prev,
-				{ role: 'system', content: 'No repo selected. Use /add to add a repo first.' }
-			]);
-			setInputValue('');
+		if (showRepoMentionPalette && filteredMentionRepos.length > 0) {
+			selectRepoMention();
 			return;
 		}
 
-		// Treat any non-command input as a question
-		setMessages((prev) => [...prev, { role: 'user', content: value }]);
+		if (isLoading) return;
+
+		const mention = parseAtMention(value);
+		if (!mention || !mention.question.trim()) {
+			setMessages((prev) => [
+				...prev,
+				{
+					role: 'system',
+					content: 'Use @reponame followed by your question. Example: @daytona How do I...?'
+				}
+			]);
+			return;
+		}
+
+		const targetRepo = repos.find((r) => r.name.toLowerCase() === mention.repoQuery.toLowerCase());
+		if (!targetRepo) {
+			setMessages((prev) => [
+				...prev,
+				{
+					role: 'system',
+					content: `Repo "${mention.repoQuery}" not found. Use /add to add a repo.`
+				}
+			]);
+			return;
+		}
+
+		setMessages((prev) => [
+			...prev,
+			{ role: 'user', content: `@${targetRepo.name} ${mention.question}` }
+		]);
 		setInputValue('');
 		setIsLoading(true);
 		setMode('loading');
@@ -187,7 +201,7 @@ export function App() {
 		let fullResponse = '';
 
 		try {
-			await services.askQuestion(repoName, value, (event) => {
+			await services.askQuestion(targetRepo.name, mention.question, (event) => {
 				if (
 					event.type === 'message.part.updated' &&
 					'part' in event.properties &&
@@ -199,7 +213,6 @@ export function App() {
 				}
 			});
 
-			// Copy to clipboard
 			await copyToClipboard(fullResponse);
 
 			setMessages((prev) => [
@@ -216,7 +229,6 @@ export function App() {
 		}
 	};
 
-	// Wizard handlers
 	const handleWizardSubmit = () => {
 		const value = wizardInput.trim();
 
@@ -238,7 +250,6 @@ export function App() {
 			setWizardValues((prev) => ({ ...prev, notes: value }));
 			setWizardStep('confirm');
 		} else if (wizardStep === 'confirm') {
-			// Submit the repo
 			const newRepo: Repo = {
 				name: wizardValues.name,
 				url: wizardValues.url,
@@ -264,7 +275,6 @@ export function App() {
 		}
 	};
 
-	// Model config handlers
 	const handleModelSubmit = () => {
 		const value = modelInput.trim();
 
@@ -299,40 +309,16 @@ export function App() {
 		}
 	};
 
-	const handleSelectRepo = () => {
-		// Find the actual repo index in the original repos array
-		const selectedRepoFromFiltered = filteredRepos[clampedRepoIndex];
-		if (!selectedRepoFromFiltered) return;
-
-		const actualIndex = repos.findIndex((r) => r.name === selectedRepoFromFiltered.name);
-		if (actualIndex === -1) return;
-
-		setSelectedRepo(actualIndex);
-		setMessages((prev) => [
-			...prev,
-			{ role: 'system', content: `Switched to repo: ${selectedRepoFromFiltered.name}` }
-		]);
-		setRepoSearchQuery('');
-		setMode('chat');
-	};
-
-	const handleRemoveRepo = async () => {
-		const repoName = repos[selectedRepo]?.name;
-		if (!repoName) return;
-
+	const handleRemoveRepo = async (repoName: string) => {
 		try {
 			await services.removeRepo(repoName);
 			setRepos((prev) => prev.filter((r) => r.name !== repoName));
-			const newRepos = repos.filter((r) => r.name !== repoName);
-			setRepos(newRepos);
-			if (selectedRepo >= newRepos.length) {
-				setSelectedRepo(Math.max(0, newRepos.length - 1));
-			}
 			setMessages((prev) => [...prev, { role: 'system', content: `Removed repo: ${repoName}` }]);
 		} catch (error) {
 			setMessages((prev) => [...prev, { role: 'system', content: `Error: ${error}` }]);
 		} finally {
 			setMode('chat');
+			setRemoveRepoName('');
 		}
 	};
 
@@ -341,22 +327,20 @@ export function App() {
 		setInputValue('');
 		setWizardInput('');
 		setModelInput('');
-		setRepoSearchQuery('');
+		setRemoveRepoName('');
 	};
 
 	useKeyboard((key) => {
-		// Escape always cancels current mode
 		if (key.name === 'escape') {
 			key.preventDefault();
 			if (mode !== 'chat' && mode !== 'loading') {
 				cancelMode();
-			} else if (showCommandPalette) {
+			} else if (showCommandPalette || showRepoMentionPalette) {
 				setInputValue('');
 			}
 			return;
 		}
 
-		// Mode-specific keyboard handling
 		if (mode === 'chat' && showCommandPalette) {
 			if (key.name === 'up') {
 				key.preventDefault();
@@ -365,30 +349,23 @@ export function App() {
 				key.preventDefault();
 				setCommandIndex((prev) => (prev === filteredCommands.length - 1 ? 0 : prev + 1));
 			}
-		} else if (mode === 'select-repo') {
+		} else if (mode === 'chat' && showRepoMentionPalette) {
 			if (key.name === 'up') {
 				key.preventDefault();
-				setRepoSelectorIndex((prev) => (prev === 0 ? filteredRepos.length - 1 : prev - 1));
+				setRepoMentionIndex((prev) => (prev === 0 ? filteredMentionRepos.length - 1 : prev - 1));
 			} else if (key.name === 'down') {
 				key.preventDefault();
-				setRepoSelectorIndex((prev) => (prev === filteredRepos.length - 1 ? 0 : prev + 1));
-			} else if (key.name === 'return') {
+				setRepoMentionIndex((prev) => (prev === filteredMentionRepos.length - 1 ? 0 : prev + 1));
+			} else if (key.name === 'tab') {
 				key.preventDefault();
-				handleSelectRepo();
-			} else if (key.name === 'backspace') {
-				key.preventDefault();
-				setRepoSearchQuery((prev) => prev.slice(0, -1));
-				setRepoSelectorIndex(0);
-			} else if (key.sequence && key.sequence.length === 1 && /[a-zA-Z0-9-_]/.test(key.sequence)) {
-				// Typing a letter/number filters the list
-				key.preventDefault();
-				setRepoSearchQuery((prev) => prev + key.sequence);
-				setRepoSelectorIndex(0);
+				selectRepoMention();
 			}
 		} else if (mode === 'remove-repo') {
 			if (key.name === 'y' || key.name === 'Y') {
 				key.preventDefault();
-				handleRemoveRepo();
+				if (removeRepoName) {
+					handleRemoveRepo(removeRepoName);
+				}
 			} else if (key.name === 'n' || key.name === 'N') {
 				key.preventDefault();
 				cancelMode();
@@ -406,8 +383,6 @@ export function App() {
 		}
 	});
 
-	const currentRepoName = repos[selectedRepo]?.name ?? 'No repo selected';
-
 	return (
 		<box
 			width="100%"
@@ -417,7 +392,6 @@ export function App() {
 				backgroundColor: colors.bg
 			}}
 		>
-			{/* Header */}
 			<box
 				style={{
 					height: 3,
@@ -440,7 +414,6 @@ export function App() {
 				<text fg={colors.textSubtle} content={`${modelConfig.provider}/${modelConfig.model}`} />
 			</box>
 
-			{/* Content area */}
 			<box
 				style={{
 					flexDirection: 'row',
@@ -448,33 +421,6 @@ export function App() {
 					width: '100%'
 				}}
 			>
-				{/* Sidebar */}
-				<box
-					style={{
-						width: 28,
-						backgroundColor: colors.bgSubtle,
-						border: true,
-						borderColor: colors.border,
-						flexDirection: 'column',
-						padding: 1
-					}}
-				>
-					<text fg={colors.textMuted} content=" Repos" />
-					<text content="" style={{ height: 1 }} />
-					{repos.length === 0 ? (
-						<text fg={colors.textSubtle} content="  No repos" />
-					) : (
-						repos.map((repo, i) => (
-							<text
-								key={repo.name}
-								fg={i === selectedRepo ? colors.accent : colors.textSubtle}
-								content={i === selectedRepo ? `▸ ${repo.name}` : `  ${repo.name}`}
-							/>
-						))
-					)}
-				</box>
-
-				{/* Chat area */}
 				<box
 					style={{
 						flexGrow: 1,
@@ -485,7 +431,7 @@ export function App() {
 						padding: 1
 					}}
 				>
-					<text fg={colors.textMuted} content={` Chat - ${currentRepoName}`} />
+					<text fg={colors.textMuted} content=" Chat" />
 					<text content="" style={{ height: 1 }} />
 					{messages.map((msg, i) => (
 						<box key={i} style={{ flexDirection: 'column', marginBottom: 1 }}>
@@ -512,13 +458,53 @@ export function App() {
 				</box>
 			</box>
 
-			{/* Overlays */}
 			{showCommandPalette && (
 				<CommandPalette
 					commands={filteredCommands}
 					selectedIndex={clampedCommandIndex}
 					colors={colors}
 				/>
+			)}
+
+			{showRepoMentionPalette && filteredMentionRepos.length > 0 && (
+				<box
+					style={{
+						position: 'absolute',
+						bottom: 5,
+						left: 1,
+						width: 40,
+						backgroundColor: colors.bgSubtle,
+						border: true,
+						borderColor: colors.accent,
+						flexDirection: 'column',
+						padding: 1
+					}}
+				>
+					<text fg={colors.textMuted} content=" Select repo:" />
+					{(() => {
+						const maxVisible = 8;
+						const start = Math.max(
+							0,
+							Math.min(
+								clampedRepoMentionIndex - Math.floor(maxVisible / 2),
+								filteredMentionRepos.length - maxVisible
+							)
+						);
+						const visibleRepos = filteredMentionRepos.slice(start, start + maxVisible);
+						return visibleRepos.map((repo, i) => {
+							const actualIndex = start + i;
+							return (
+								<text
+									key={repo.name}
+									fg={actualIndex === clampedRepoMentionIndex ? colors.accent : colors.text}
+									content={
+										actualIndex === clampedRepoMentionIndex ? `▸ @${repo.name}` : `  @${repo.name}`
+									}
+								/>
+							);
+						});
+					})()}
+				</box>
 			)}
 
 			{mode === 'add-repo' && (
@@ -532,18 +518,48 @@ export function App() {
 				/>
 			)}
 
-			{mode === 'select-repo' && (
-				<RepoSelector
-					repos={filteredRepos}
-					selectedIndex={clampedRepoIndex}
-					currentRepo={selectedRepo}
-					searchQuery={repoSearchQuery}
-					colors={colors}
-				/>
+			{mode === 'remove-repo' && !removeRepoName && (
+				<box
+					style={{
+						position: 'absolute',
+						top: '50%',
+						left: '50%',
+						width: 50,
+						backgroundColor: colors.bgSubtle,
+						border: true,
+						borderColor: colors.error,
+						flexDirection: 'column',
+						padding: 2
+					}}
+				>
+					<text fg={colors.error} content=" Remove Repo" />
+					<text content="" style={{ height: 1 }} />
+					<text fg={colors.text} content=" Type repo name to remove:" />
+					<text content="" style={{ height: 1 }} />
+					{repos.map((repo) => (
+						<text key={repo.name} fg={colors.textSubtle} content={`  @${repo.name}`} />
+					))}
+					<text content="" style={{ height: 1 }} />
+					<input
+						placeholder="repo name"
+						placeholderColor={colors.textSubtle}
+						textColor={colors.text}
+						value={removeRepoName}
+						onInput={setRemoveRepoName}
+						onSubmit={() => {
+							const repo = repos.find((r) => r.name.toLowerCase() === removeRepoName.toLowerCase());
+							if (repo) {
+								setRemoveRepoName(repo.name);
+							}
+						}}
+						focused={true}
+						style={{ height: 1, width: '100%', marginTop: 1 }}
+					/>
+				</box>
 			)}
 
-			{mode === 'remove-repo' && (
-				<RemoveRepoPrompt repoName={repos[selectedRepo]?.name ?? ''} colors={colors} />
+			{mode === 'remove-repo' && removeRepoName && (
+				<RemoveRepoPrompt repoName={removeRepoName} colors={colors} />
 			)}
 
 			{mode === 'config-model' && (
@@ -557,7 +573,6 @@ export function App() {
 				/>
 			)}
 
-			{/* Input area */}
 			<box
 				style={{
 					border: true,
@@ -569,10 +584,12 @@ export function App() {
 				}}
 			>
 				<input
+					ref={inputRef}
 					placeholder={
-						mode === 'loading' ? 'Please wait...' : 'Ask a question or / for commands...'
+						mode === 'loading' ? 'Please wait...' : '@repo question... or / for commands'
 					}
 					placeholderColor={colors.textSubtle}
+					backgroundColor={colors.bg}
 					textColor={colors.text}
 					value={inputValue}
 					onInput={handleInputChange}
@@ -585,7 +602,6 @@ export function App() {
 				/>
 			</box>
 
-			{/* Status bar */}
 			<box
 				style={{
 					height: 1,
@@ -604,19 +620,21 @@ export function App() {
 							? ' Streaming response...'
 							: showCommandPalette
 								? ' [Up/Down] Navigate  [Enter] Select  [Esc] Cancel'
-								: mode === 'add-repo'
-									? wizardStep === 'confirm'
-										? ' [Enter] Confirm  [Esc] Cancel'
-										: ' [Enter] Next  [Esc] Cancel'
-									: mode === 'select-repo'
-										? ' Type to search  [Up/Down] Navigate  [Enter] Select  [Esc] Cancel'
+								: showRepoMentionPalette
+									? ' [Up/Down] Navigate  [Tab/Enter] Select  [Esc] Cancel'
+									: mode === 'add-repo'
+										? wizardStep === 'confirm'
+											? ' [Enter] Confirm  [Esc] Cancel'
+											: ' [Enter] Next  [Esc] Cancel'
 										: mode === 'remove-repo'
-											? ' [Y] Yes  [N/Esc] Cancel'
+											? removeRepoName
+												? ' [Y] Yes  [N/Esc] Cancel'
+												: ' [Enter] Select  [Esc] Cancel'
 											: mode === 'config-model'
 												? modelStep === 'confirm'
 													? ' [Enter] Confirm  [Esc] Cancel'
 													: ' [Enter] Next  [Esc] Cancel'
-												: ' [/] Commands  [Enter] Ask  [Ctrl+C] Quit'
+												: ' [@repo] Ask question  [/] Commands  [Ctrl+C] Quit'
 					}
 				/>
 				<text fg={colors.textSubtle} content={`v${VERSION}`} />

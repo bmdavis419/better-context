@@ -1,5 +1,7 @@
 # Better Context (`btca`)
 
+<a href="https://www.npmjs.com/package/btca"><img alt="npm" src="https://img.shields.io/npm/v/btca?style=flat-square" /></a>
+
 https://btca.dev
 
 `btca` is a CLI for asking questions about libraries/frameworks by cloning their repos locally and searching the source directly.

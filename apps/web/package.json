@@ -31,6 +31,7 @@
 		"vite-plugin-devtools-json": "^1.0.0"
 	},
 	"dependencies": {
+		"@btca/shared": "workspace:*",
 		"@lucide/svelte": "^0.560.0",
 		"@vercel/analytics": "^1.6.1"
 	}
