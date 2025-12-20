@@ -11,13 +11,6 @@ permissions:
 jobs:
   build-binaries:
     runs-on: depot-ubuntu-24.04-arm-4
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux
-          - name: macos
-          - name: windows
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +28,7 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.name }}
+          name: binaries
           path: apps/cli/dist/btca-*
           retention-days: 1
 
@@ -54,7 +47,7 @@ jobs:
       - name: Setup Node.js for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '25'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Cache Bun dependencies
