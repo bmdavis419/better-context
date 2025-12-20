@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   packages: write
 
@@ -37,9 +37,11 @@ jobs:
           VERSION=$(jq -r '.version' apps/cli/package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: List binaries
-        run: ls -la apps/cli/dist/btca-*
-
       - name: Publish to npm
         run: npm publish --provenance --access public
         working-directory: apps/cli
+
+      - name: Create Git tag
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
