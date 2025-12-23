@@ -15,6 +15,13 @@ export const BLESSED_MODELS: BlessedModel[] = [
 		isDefault: false
 	},
 	{
+		provider: 'openrouter',
+		model: 'btca-glm-4-6',
+		description: 'GLM 4.6 on Cerebras through OpenRouter. Very fast, very good.',
+		providerSetupUrl: 'https://opencode.ai/docs/providers/#openrouter',
+		isDefault: false
+	},
+	{
 		provider: 'opencode',
 		model: 'big-pickle',
 		description: 'Big Pickle, surprisingly good (and free)',

@@ -45,6 +45,8 @@ export const CommandPalette: Component = () => {
 			});
 			appState.setModelInput(appState.selectedProvider());
 			appState.setMode('config-model');
+		} else if (command.mode === 'select-blessed-model') {
+			appState.setMode('select-blessed-model');
 		} else if (command.mode === 'chat') {
 			appState.addMessage({
 				role: 'system',

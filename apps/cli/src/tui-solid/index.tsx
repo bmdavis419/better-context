@@ -10,6 +10,7 @@ import { CommandPalette } from './components/command-palette.tsx';
 import { AddRepoWizard } from './components/add-repo-wizard.tsx';
 import { RemoveRepoPrompt } from './components/remove-repo-prompt.tsx';
 import { ModelConfig } from './components/model-config.tsx';
+import { BlessedModelSelect } from './components/blessed-model-select.tsx';
 
 export const MainUi: Component<{
 	heightPercent: Accessor<`${number}%`>;
@@ -46,6 +47,9 @@ export const MainUi: Component<{
 			</Show>
 			<Show when={appState.mode() === 'config-model'}>
 				<ModelConfig />
+			</Show>
+			<Show when={appState.mode() === 'select-blessed-model'}>
+				<BlessedModelSelect />
 			</Show>
 
 			<StatusBar />

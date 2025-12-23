@@ -111,6 +111,18 @@ const BTCA_PRESET_MODELS: Record<string, ProviderConfig> = {
 				}
 			}
 		}
+	},
+	openrouter: {
+		models: {
+			'btca-glm-4-6': {
+				id: 'z-ai/glm-4.6',
+				options: {
+					provider: {
+						only: ['cerebras']
+					}
+				}
+			}
+		}
 	}
 };
 
