@@ -1,13 +1,14 @@
 import { BunContext, BunRuntime } from '@effect/platform-bun';
 import { Cause, Effect, Exit } from 'effect';
 import { CliService } from './services/cli.ts';
+import { launchTui } from './tui-solid/index.tsx';
 
 // Check if no arguments provided (just "btca" or "bunx btca")
 const hasNoArgs = process.argv.length <= 2;
 
 if (hasNoArgs) {
 	// Launch the TUI
-	import('./tui/index.tsx').then(({ launchTui }) => launchTui());
+	launchTui();
 } else {
 	// Run the CLI with arguments
 	Effect.gen(function* () {

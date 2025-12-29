@@ -17,6 +17,7 @@
 	const ogImageUrl = $derived(new URL(ogImage, page.url).href);
 
 	setShikiStore();
+
 	const themeStore = setThemeStore();
 
 	const toggleTheme = () => {

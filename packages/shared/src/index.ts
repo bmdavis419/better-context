@@ -8,18 +8,17 @@ type BlessedModel = {
 
 export const BLESSED_MODELS: BlessedModel[] = [
 	{
-		provider: 'opencode',
-		model: 'btca-gemini-3-flash',
-		description:
-			'Gemini 3 Flash with low reasoning (the special btca version is already configured for you in btca)',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
+		provider: 'anthropic',
+		model: 'claude-haiku-4-5',
+		description: 'Claude Haiku 4.5, no reasoning. I HIGHLY recommend this model.',
+		providerSetupUrl: 'https://opencode.ai/docs/providers/#anthropic',
 		isDefault: false
 	},
 	{
-		provider: 'anthropic',
-		model: 'claude-haiku-4-5',
-		description: 'Claude Haiku 4.5, no reasoning',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#anthropic',
+		provider: 'openrouter',
+		model: 'btca-glm-4-6',
+		description: 'GLM 4.6 on Cerebras through OpenRouter. Very fast, very good.',
+		providerSetupUrl: 'https://opencode.ai/docs/providers/#openrouter',
 		isDefault: false
 	},
 	{
@@ -33,6 +32,14 @@ export const BLESSED_MODELS: BlessedModel[] = [
 		provider: 'opencode',
 		model: 'kimi-k2',
 		description: 'Kimi K2, no reasoning',
+		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'btca-gemini-3-flash',
+		description:
+			'Gemini 3 Flash with low reasoning (the special btca version is already configured for you in btca)',
 		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
 		isDefault: false
 	}

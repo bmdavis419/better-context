@@ -13,18 +13,13 @@ export const COMMANDS: Command[] = [
 	},
 	{
 		name: 'model',
-		description: 'Configure model & provider',
+		description: 'Select from recommended models',
+		mode: 'select-blessed-model'
+	},
+	{
+		name: 'custom',
+		description: 'Configure custom model & provider',
 		mode: 'config-model'
-	},
-	{
-		name: 'chat',
-		description: 'Start chat session (opens OpenCode)',
-		mode: 'chat'
-	},
-	{
-		name: 'ask',
-		description: 'Ask question, copy answer to clipboard',
-		mode: 'ask'
 	},
 	{
 		name: 'clear',

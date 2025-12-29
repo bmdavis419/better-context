@@ -1,13 +1,13 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "0.5.2",
+	"version": "0.5.9",
 	"description": "CLI tool for asking questions about technologies using OpenCode",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/bmdavis419/better-context"
+		"url": "git+https://github.com/davis7dotsh/better-context.git"
 	},
 	"keywords": [
 		"cli",
@@ -18,40 +18,48 @@
 		"bun": ">=1.1.0"
 	},
 	"bin": {
-		"btca": "./bin.js"
+		"btca": "bin.js"
 	},
 	"files": [
 		"bin.js",
-		"dist"
+		"dist/btca-darwin-arm64",
+		"dist/btca-darwin-x64",
+		"dist/btca-linux-arm64",
+		"dist/btca-linux-x64",
+		"dist/btca-windows-x64.exe"
 	],
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
-		"build": "bun run scripts/build.ts",
+		"build:js": "bun run scripts/build.ts",
 		"build:targets": "bun run scripts/build-binaries.ts",
-		"setup:platforms": "bun install --cpu=x64 --os=darwin && bun install --cpu=x64 --os=linux && bun install --cpu=arm64 --os=linux && bun install --cpu=x64 --os=win32",
-		"build:artifacts": "bun run setup:platforms && bun run build && bun run build:targets",
-		"prepublishOnly": "bun run build:artifacts",
+		"build": "bun run build:js && bun run build:targets",
 		"check": "tsgo --noEmit",
-		"prepare": "effect-language-service patch"
+		"prepare": "effect-language-service patch",
+		"dev": "bun run src/tui-solid/App.tsx"
 	},
 	"devDependencies": {
 		"@btca/shared": "workspace:*",
 		"@effect/cli": "^0.72.1",
-		"@effect/language-service": "^0.62.1",
-		"@effect/platform": "^0.93.5",
+		"@effect/language-service": "^0.62.4",
+		"@effect/platform": "^0.93.8",
 		"@effect/platform-bun": "^0.85.0",
 		"@effect/printer": "^0.47.0",
 		"@effect/printer-ansi": "^0.47.0",
 		"@effect/typeclass": "^0.38.0",
-		"@opencode-ai/sdk": "^1.0.119",
-		"@opentui/core": "^0.1.60",
-		"@opentui/react": "^0.1.60",
+		"@opencode-ai/sdk": "^1.0.182",
+		"@opentui/core": "^0.1.62",
 		"@types/bun": "latest",
-		"@types/react": "^19.2.7",
-		"effect": "^3.19.8",
-		"react": "^19.2.3",
-		"typescript": "^5.9.3"
+		"effect": "^3.19.13",
+		"typescript": "^5.9.3",
+		"@opentui/solid": "^0.1.62",
+		"solid-js": "^1.9.10"
+	},
+	"dependencies": {
+		"@shikijs/langs": "^3.20.0",
+		"@shikijs/themes": "^3.20.0",
+		"marked": "^17.0.1",
+		"shiki": "^3.20.0"
 	}
 }

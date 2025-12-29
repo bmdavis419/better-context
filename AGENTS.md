@@ -23,6 +23,10 @@ The Effect Solutions CLI provides curated best practices and patterns for Effect
 - **Bun APIs**: Prefer `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` over Node equivalents.
 - **Testing**: Use `bun:test` with `import { test, expect } from "bun:test"`.
 
+## Scripts
+
+- run `bun check` to check for errors
+
 ## Error Handling
 
 - Use Effect's error channel for typed errors.
@@ -31,10 +35,10 @@ The Effect Solutions CLI provides curated best practices and patterns for Effect
 
 ## btca
 
-Trigger: user says "use btca" (for codebase/docs questions).
+When the user says "use btca", use btca before you answer the question. It will give you up to date information about the technology.
 
 Run:
 
-- btca ask -t <tech> -q "<question>"
+- bun cli ask -t <tech> -q "<question>"
 
-Available <tech>: svelte, tailwindcss, opentui, runed
+Available <tech>: svelte, tailwindcss, opentui, runed, effect, shiki

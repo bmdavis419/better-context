@@ -14,7 +14,8 @@ const repoSchema = Schema.Struct({
 	name: Schema.String,
 	url: Schema.String,
 	branch: Schema.String,
-	specialNotes: Schema.String.pipe(Schema.optional)
+	specialNotes: Schema.String.pipe(Schema.optional),
+	searchPath: Schema.String.pipe(Schema.optional)
 });
 
 const configSchema = Schema.Struct({
@@ -110,6 +111,18 @@ const BTCA_PRESET_MODELS: Record<string, ProviderConfig> = {
 				}
 			}
 		}
+	},
+	openrouter: {
+		models: {
+			'btca-glm-4-6': {
+				id: 'z-ai/glm-4.6',
+				options: {
+					provider: {
+						only: ['cerebras']
+					}
+				}
+			}
+		}
 	}
 };
 
@@ -118,7 +131,6 @@ const OPENCODE_CONFIG = (args: {
 	specialNotes?: string;
 }): Effect.Effect<OpenCodeConfig, never, Path.Path> =>
 	Effect.gen(function* () {
-		const path = yield* Path.Path;
 		return {
 			provider: BTCA_PRESET_MODELS,
 			agent: {
@@ -250,7 +262,10 @@ const configService = Effect.gen(function* () {
 
 	return {
 		getConfigPath: () => Effect.succeed(configPath),
-		cloneOrUpdateOneRepoLocally: (repoName: string, options: { suppressLogs: boolean }) =>
+		cloneOrUpdateOneRepoLocally: (
+			repoName: string,
+			options: { suppressLogs: boolean; noSync?: boolean }
+		) =>
 			Effect.gen(function* () {
 				const repo = yield* getRepo({ repoName, config });
 				const repoDir = path.join(config.reposDirectory, repo.name);
@@ -258,27 +273,30 @@ const configService = Effect.gen(function* () {
 				const suppressLogs = options.suppressLogs;
 
 				const exists = yield* directoryExists(repoDir);
-				if (exists) {
+				if (exists && !options.noSync) {
 					if (!suppressLogs) yield* Effect.log(`Pulling latest changes for ${repo.name}...`);
 					yield* pullRepo({ repoDir, branch, quiet: suppressLogs });
-				} else {
+				} else if (!exists) {
 					if (!suppressLogs) yield* Effect.log(`Cloning ${repo.name}...`);
 					yield* cloneRepo({ repoDir, url: repo.url, branch, quiet: suppressLogs });
 				}
-				if (!suppressLogs) yield* Effect.log(`Done with ${repo.name}`);
+				if (!suppressLogs && !options.noSync) yield* Effect.log(`Done with ${repo.name}`);
 				return repo;
 			}),
 		getOpenCodeConfig: (args: { repoName: string }) =>
 			Effect.gen(function* () {
-				const repo = yield* getRepo({ repoName: args.repoName, config }).pipe(
-					Effect.catchTag('ConfigError', () => Effect.succeed(undefined))
-				);
+				const repo = yield* getRepo({ repoName: args.repoName, config });
+
 				const ocConfig = yield* OPENCODE_CONFIG({
 					repoName: args.repoName,
 					specialNotes: repo?.specialNotes
 				});
 
-				const repoDir = path.join(config.reposDirectory, args.repoName);
+				let repoDir = path.join(config.reposDirectory, args.repoName);
+
+				if (repo.searchPath) {
+					repoDir = path.join(repoDir, repo.searchPath);
+				}
 
 				return {
 					ocConfig,

@@ -1,5 +1,6 @@
 import {
 	createOpencode,
+	createOpencodeClient,
 	OpencodeClient,
 	type Event,
 	type Config as OpenCodeConfig
@@ -42,8 +43,6 @@ const ocService = Effect.gen(function* () {
 			const maxInstances = 30;
 			const { ocConfig, repoDir } = yield* config.getOpenCodeConfig({ repoName: tech });
 
-			yield* Effect.sync(() => process.chdir(repoDir));
-
 			while (portOffset < maxInstances) {
 				const result = yield* Effect.tryPromise(() =>
 					createOpencode({
@@ -65,7 +64,14 @@ const ocService = Effect.gen(function* () {
 					})
 				);
 				if (result !== null) {
-					return result;
+					const client = createOpencodeClient({
+						baseUrl: `http://localhost:${3420 + portOffset}`,
+						directory: repoDir
+					});
+					return {
+						client,
+						server: result.server
+					};
 				}
 			}
 			return yield* Effect.fail(
@@ -185,21 +191,16 @@ const ocService = Effect.gen(function* () {
 					catch: (err) => new OcError({ message: 'TUI exited with error', cause: err })
 				});
 			}),
-		holdOpenInstanceInBg: () =>
-			Effect.gen(function* () {
-				const { client, server } = yield* getOpencodeInstance({
-					tech: 'svelte'
-				});
-
-				yield* Effect.log(`OPENCODE SERVER IS UP AT ${server.url}`);
-
-				yield* Effect.sleep(Duration.days(1));
-			}),
-		askQuestion: (args: { question: string; tech: string; suppressLogs: boolean }) =>
+		askQuestion: (args: {
+			question: string;
+			tech: string;
+			suppressLogs: boolean;
+			noSync?: boolean;
+		}) =>
 			Effect.gen(function* () {
 				const { question, tech, suppressLogs } = args;
 
-				yield* config.cloneOrUpdateOneRepoLocally(tech, { suppressLogs });
+				yield* config.cloneOrUpdateOneRepoLocally(tech, { suppressLogs, noSync: args.noSync });
 
 				const { client, server } = yield* getOpencodeInstance({ tech });
 

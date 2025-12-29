@@ -1,5 +1,8 @@
 {
   "typescript.tsdk": "./node_modules/typescript/lib",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "workbench.colorCustomizations": {
     "titleBar.activeBackground": "#d35400",

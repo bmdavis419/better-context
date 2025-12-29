@@ -3,6 +3,27 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@font-face {
+	font-family: 'GeistMono';
+	src: url('/GeistMono[wght].woff2') format('woff2');
+	font-weight: 100 900;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: 'Geist';
+	src: url('/Geist[wght].woff2') format('woff2');
+	font-weight: 100 900;
+	font-style: normal;
+}
+
+@theme {
+	--font-family-geist:
+		'Geist', system-ui, -apple-system, 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue',
+		'Arial', sans-serif;
+	--font-family-geist-mono: 'GeistMono', monospace;
+}
+
 @layer base {
 	:root {
 		color-scheme: light;
@@ -15,6 +36,14 @@
 	html,
 	body {
 		height: 100%;
+		font-family: var(--font-family-geist);
+	}
+
+	/* Shiki code blocks */
+	pre.shiki,
+	pre.shiki code {
+		font-family: var(--font-family-geist-mono);
+		font-size: 16px;
 	}
 
 	body {

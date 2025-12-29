@@ -21,14 +21,15 @@ const programLayer = Layer.mergeAll(OcService.Default, ConfigService.Default, Sy
 // === Ask Subcommand ===
 const questionOption = Options.text('question').pipe(Options.withAlias('q'));
 const techOption = Options.text('tech').pipe(Options.withAlias('t'));
+const noSyncOption = Options.boolean('no-sync').pipe(Options.withAlias('n'));
 
 const askCommand = Command.make(
 	'ask',
-	{ question: questionOption, tech: techOption },
-	({ question, tech }) =>
+	{ question: questionOption, tech: techOption, noSync: noSyncOption },
+	({ question, tech, noSync }) =>
 		Effect.gen(function* () {
 			const oc = yield* OcService;
-			const eventStream = yield* oc.askQuestion({ tech, question, suppressLogs: false });
+			const eventStream = yield* oc.askQuestion({ tech, question, suppressLogs: false, noSync });
 
 			let currentMessageId: string | null = null;
 
@@ -78,14 +79,6 @@ const askCommand = Command.make(
 			}),
 			Effect.provide(programLayer)
 		)
-);
-
-// === Open Subcommand ===
-const openCommand = Command.make('open', {}, () =>
-	Effect.gen(function* () {
-		const oc = yield* OcService;
-		yield* oc.holdOpenInstanceInBg();
-	}).pipe(Effect.provide(programLayer))
 );
 
 // === Chat Subcommand ===
@@ -530,21 +523,21 @@ const unsyncCommand = Command.make('unsync', {}, () =>
 );
 
 // === Main Command ===
-const mainCommand = Command.make('btca', {}, () =>
-	Effect.sync(() => {
-		console.log(`btca v${VERSION}. run btca --help for more information.`);
-	})
-).pipe(
-	Command.withSubcommands([
-		askCommand,
-		serveCommand,
-		openCommand,
-		chatCommand,
-		configCommand,
-		syncCommand,
-		unsyncCommand
-	])
+const versionOption = Options.boolean('version').pipe(
+	Options.withAlias('v'),
+	Options.withDescription('Print the version'),
+	Options.withDefault(false)
 );
+
+const mainCommand = Command.make('btca', { version: versionOption }, ({ version }) =>
+	Effect.sync(() => {
+		if (version) {
+			console.log(VERSION);
+		} else {
+			console.log(`btca v${VERSION}. run btca --help for more information.`);
+		}
+	})
+).pipe(Command.withSubcommands([askCommand, serveCommand, chatCommand, configCommand, syncCommand, unsyncCommand]));
 
 const cliService = Effect.gen(function* () {
 	return {

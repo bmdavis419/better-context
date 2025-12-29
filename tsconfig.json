@@ -3,10 +3,9 @@
     // Environment setup & latest features
     "lib": [
       "ESNext",
-      "DOM"
     ],
-    "jsx": "react-jsx",
-    "jsxImportSource": "@opentui/react",
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",

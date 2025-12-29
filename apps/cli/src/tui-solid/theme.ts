@@ -9,6 +9,8 @@ export const colors = {
 	text: '#fafafa', // neutral-50
 	textMuted: '#a3a3a3', // neutral-400
 	textSubtle: '#737373', // neutral-500
+	textCommand: '#FFD700', // gold
+	textPasted: '#8B5CF6', // purple-500
 
 	// Borders
 	border: '#262626', // neutral-800
@@ -23,5 +25,18 @@ export const colors = {
 	info: '#3b82f6', // blue-500
 	error: '#ef4444' // red-500
 } as const;
+
+export const getColor = (type: 'text' | 'command' | 'mention' | 'pasted') => {
+	switch (type) {
+		case 'mention':
+			return colors.accent;
+		case 'command':
+			return colors.textCommand;
+		case 'pasted':
+			return colors.textPasted;
+		default:
+			return colors.text;
+	}
+};
 
 export type Colors = typeof colors;

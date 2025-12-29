@@ -1,5 +1,7 @@
 node_modules
 
+stats.html
+
 # Output
 .output
 .vercel

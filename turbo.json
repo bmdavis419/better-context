@@ -1,15 +1,15 @@
 {
-  "$schema": "https://turborepo.com/schema.json",
-  "tasks": {
-    "build": {
-      "outputs": [".svelte-kit/**", "dist/**"]
-    },
-    "dev": {
-      "persistent": true,
-      "cache": false
-    },
-    "check": {
-      "cache": false
-    }
-  }
+	"$schema": "https://turborepo.com/schema.json",
+	"tasks": {
+		"build": {
+			"outputs": [".svelte-kit/**", "dist/**", ".vercel/**"]
+		},
+		"dev": {
+			"persistent": true,
+			"cache": false
+		},
+		"check": {
+			"cache": false
+		}
+	}
 }

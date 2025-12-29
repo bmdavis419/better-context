@@ -1,7 +1,7 @@
 {
-	"name": "web",
+	"name": "@btca/web",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -17,11 +17,12 @@
 		"@sveltejs/adapter-vercel": "^6.2.0",
 		"@sveltejs/kit": "^2.48.5",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@tailwindcss/typography": "^0.5.19",
+		"@tailwindcss/vite": "^4.1.17",
 		"prettier": "^3.6.2",
 		"prettier-plugin-svelte": "^3.4.0",
 		"prettier-plugin-tailwindcss": "^0.7.1",
-		"@tailwindcss/typography": "^0.5.19",
-		"@tailwindcss/vite": "^4.1.17",
+		"rollup-plugin-visualizer": "^6.0.5",
 		"shiki": "^3.19.0",
 		"svelte": "^5.43.8",
 		"svelte-check": "^4.3.4",
@@ -33,6 +34,8 @@
 	"dependencies": {
 		"@btca/shared": "workspace:*",
 		"@lucide/svelte": "^0.560.0",
+		"@shikijs/langs": "^3.20.0",
+		"@shikijs/themes": "^3.20.0",
 		"@vercel/analytics": "^1.6.1"
 	}
 }

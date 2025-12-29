@@ -32,7 +32,7 @@ const __dirname = path.dirname(Bun.fileURLToPath(import.meta.url));
 const binPath = path.join(__dirname, 'dist', binaryName);
 const binFile = Bun.file(binPath);
 
-if (!binFile.exists()) {
+if (!(await binFile.exists())) {
 	console.error(
 		`[btca] Prebuilt binary not found for ${PLATFORM_ARCH}. ` +
 			'Try reinstalling, or open an issue if the problem persists.'
