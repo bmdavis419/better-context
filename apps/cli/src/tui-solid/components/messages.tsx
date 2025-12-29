@@ -169,7 +169,7 @@ const AssistantMessage: Component<{
 	);
 };
 
-// Thread resources overlay component
+// Thread resources overlay component - rendered outside scrollbox
 const ThreadResourcesOverlay: Component = () => {
 	const appState = useAppContext();
 	const thread = () => appState.currentThread();
@@ -201,80 +201,81 @@ export const Messages: Component = () => {
 	const appState = useAppContext();
 
 	return (
-		<scrollbox
-			style={{
-				flexGrow: 1,
-				rootOptions: {
-					border: true,
-					borderColor: colors.border
-				},
-				contentOptions: {
-					flexDirection: 'column',
-					padding: 1,
-					gap: 2
-				},
-				stickyScroll: true,
-				stickyStart: 'bottom'
-			}}
-		>
-			{/* Thread resources overlay - shows @resources in top right */}
+		<box style={{ flexGrow: 1, position: 'relative' }}>
+			{/* Thread resources overlay - positioned outside scrollbox so it stays fixed */}
 			<ThreadResourcesOverlay />
-
-			<For each={appState.messageHistory()}>
-				{(m, index) => {
-					if (m.role === 'user') {
-						return (
-							<box style={{ flexDirection: 'column', gap: 1 }}>
-								<text fg={colors.accent}>You </text>
-								<text>
-									<For each={m.content}>
-										{(part) => <span style={{ fg: getColor(part.type) }}>{part.content}</span>}
-									</For>
-								</text>
-							</box>
-						);
-					}
-					if (m.role === 'system') {
-						return (
-							<box style={{ flexDirection: 'column', gap: 1 }}>
-								<text fg={colors.info}>SYS </text>
-								<text fg={colors.text} content={`${m.content}`} />
-							</box>
-						);
-					}
-					if (m.role === 'assistant') {
-						const isLastAssistant = () => {
-							const history = appState.messageHistory();
-							for (let i = history.length - 1; i >= 0; i--) {
-								if (history[i]?.role === 'assistant') {
-									return i === index();
-								}
-							}
-							return false;
-						};
-						const isStreaming = () => appState.mode() === 'loading' && isLastAssistant();
-						const isCanceled = () => m.canceled === true;
-
-						return (
-							<box style={{ flexDirection: 'column', gap: 1 }}>
-								<box style={{ flexDirection: 'row' }}>
-									<text fg={isCanceled() ? colors.textMuted : colors.success}>
-										{isCanceled() ? 'AI [canceled] ' : 'AI '}
-									</text>
-									<Show when={isStreaming()}>
-										<LoadingSpinner />
-									</Show>
-								</box>
-								<AssistantMessage
-									content={m.content}
-									isStreaming={isStreaming()}
-									isCanceled={isCanceled()}
-								/>
-							</box>
-						);
-					}
+			<scrollbox
+				style={{
+					flexGrow: 1,
+					rootOptions: {
+						border: true,
+						borderColor: colors.border
+					},
+					contentOptions: {
+						flexDirection: 'column',
+						padding: 1,
+						gap: 2
+					},
+					stickyScroll: true,
+					stickyStart: 'bottom'
 				}}
-			</For>
-		</scrollbox>
+			>
+				<For each={appState.messageHistory()}>
+					{(m, index) => {
+						if (m.role === 'user') {
+							return (
+								<box style={{ flexDirection: 'column', gap: 1 }}>
+									<text fg={colors.accent}>You </text>
+									<text>
+										<For each={m.content}>
+											{(part) => <span style={{ fg: getColor(part.type) }}>{part.content}</span>}
+										</For>
+									</text>
+								</box>
+							);
+						}
+						if (m.role === 'system') {
+							return (
+								<box style={{ flexDirection: 'column', gap: 1 }}>
+									<text fg={colors.info}>SYS </text>
+									<text fg={colors.text} content={`${m.content}`} />
+								</box>
+							);
+						}
+						if (m.role === 'assistant') {
+							const isLastAssistant = () => {
+								const history = appState.messageHistory();
+								for (let i = history.length - 1; i >= 0; i--) {
+									if (history[i]?.role === 'assistant') {
+										return i === index();
+									}
+								}
+								return false;
+							};
+							const isStreaming = () => appState.mode() === 'loading' && isLastAssistant();
+							const isCanceled = () => m.canceled === true;
+
+							return (
+								<box style={{ flexDirection: 'column', gap: 1 }}>
+									<box style={{ flexDirection: 'row' }}>
+										<text fg={isCanceled() ? colors.textMuted : colors.success}>
+											{isCanceled() ? 'AI [canceled] ' : 'AI '}
+										</text>
+										<Show when={isStreaming()}>
+											<LoadingSpinner />
+										</Show>
+									</box>
+									<AssistantMessage
+										content={m.content}
+										isStreaming={isStreaming()}
+										isCanceled={isCanceled()}
+									/>
+								</box>
+							);
+						}
+					}}
+				</For>
+			</scrollbox>
+		</box>
 	);
 };

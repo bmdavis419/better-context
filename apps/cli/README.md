@@ -362,3 +362,8 @@ interface Thread {
 - Warm pool of sandboxes with popular resource combinations
 - Route new threads to best-match sandbox
 - Pre-warm based on usage patterns
+
+## ideas on how to improve TUI perf
+
+- gut the global store. just store the state for each piece where it needs to go, then have it interact with other services with a few simple functions (input should hold all of input, it's triggering too many re-renders)
+- make the db saving logic happen in the background
