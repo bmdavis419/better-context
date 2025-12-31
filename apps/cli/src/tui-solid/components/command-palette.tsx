@@ -1,14 +1,19 @@
-import { createSignal, createMemo, For, Show, type Component } from 'solid-js';
+import { createSignal, createMemo, For, Show, type Component, type Setter } from 'solid-js';
+import type { TextareaRenderable } from '@opentui/core';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
-import { useAppContext } from '../context/app-context.tsx';
 import { COMMANDS, filterCommands } from '../commands.ts';
-import type { Command } from '../types.ts';
+import type { Command, InputState } from '../types.ts';
 
-export const CommandPalette: Component = () => {
-	const appState = useAppContext();
+interface CommandPaletteProps {
+	inputState: InputState;
+	setInputState: Setter<InputState>;
+	inputRef: TextareaRenderable | null;
+	onExecute: (command: Command) => void;
+}
 
-	const input = () => appState.inputState()[0]?.content;
+export const CommandPalette: Component<CommandPaletteProps> = (props) => {
+	const input = () => props.inputState[0]?.content;
 
 	const filteredCommands = createMemo(() => {
 		const curInput = input();
@@ -18,47 +23,6 @@ export const CommandPalette: Component = () => {
 	});
 
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
-
-	const executeCommand = (command: Command) => {
-		appState.setInputState([]);
-
-		if (command.mode === 'add-repo') {
-			appState.setMode('add-repo');
-			appState.setWizardStep('name');
-			appState.setWizardValues({ name: '', url: '', branch: '', notes: '' });
-			appState.setWizardInput('');
-		} else if (command.mode === 'clear') {
-			appState.clearMessages();
-			appState.addMessage({ role: 'system', content: 'Chat cleared.' });
-		} else if (command.mode === 'remove-repo') {
-			if (appState.repos().length === 0) {
-				appState.addMessage({ role: 'system', content: 'No repos to remove' });
-				return;
-			}
-			appState.setRemoveRepoName('');
-			appState.setMode('remove-repo');
-		} else if (command.mode === 'config-model') {
-			appState.setModelStep('provider');
-			appState.setModelValues({
-				provider: appState.selectedProvider(),
-				model: appState.selectedModel()
-			});
-			appState.setModelInput(appState.selectedProvider());
-			appState.setMode('config-model');
-		} else if (command.mode === 'select-blessed-model') {
-			appState.setMode('select-blessed-model');
-		} else if (command.mode === 'chat') {
-			appState.addMessage({
-				role: 'system',
-				content: 'Use @reponame to start a chat. Example: @daytona How do I...?'
-			});
-		} else if (command.mode === 'ask') {
-			appState.addMessage({
-				role: 'system',
-				content: 'Use @reponame to ask a question. Example: @daytona What is...?'
-			});
-		}
-	};
 
 	useKeyboard((key) => {
 		switch (key.name) {
@@ -79,10 +43,12 @@ export const CommandPalette: Component = () => {
 			case 'tab': {
 				const curSelectedCommand = filteredCommands()[selectedIndex()];
 				if (curSelectedCommand) {
-					appState.setInputState([{ content: '/' + curSelectedCommand.name, type: 'command' }]);
-					const inputRef = appState.inputRef();
+					props.setInputState([{ content: '/' + curSelectedCommand.name, type: 'command' }]);
+					const inputRef = props.inputRef;
 					if (inputRef) {
-						inputRef.cursorPosition = curSelectedCommand.name.length + 2;
+						const newText = '/' + curSelectedCommand.name;
+						inputRef.setText(newText);
+						inputRef.editBuffer.setCursor(0, newText.length);
 					}
 				}
 				break;
@@ -90,12 +56,12 @@ export const CommandPalette: Component = () => {
 			case 'return': {
 				const selectedCommand = filteredCommands()[selectedIndex()];
 				if (selectedCommand) {
-					executeCommand(selectedCommand);
+					props.onExecute(selectedCommand);
 				}
 				break;
 			}
 			case 'escape':
-				appState.setInputState([]);
+				props.setInputState([]);
 				break;
 			default:
 				break;

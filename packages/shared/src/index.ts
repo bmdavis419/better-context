@@ -15,10 +15,17 @@ export const BLESSED_MODELS: BlessedModel[] = [
 		isDefault: false
 	},
 	{
-		provider: 'openrouter',
-		model: 'btca-glm-4-6',
-		description: 'GLM 4.6 on Cerebras through OpenRouter. Very fast, very good.',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#openrouter',
+		provider: 'opencode',
+		model: 'minimax-m2.1-free',
+		description: 'Minimax M2.1: very fast, very cheap, pretty good',
+		providerSetupUrl: 'https://opencode.ai/docs/zen',
+		isDefault: false
+	},
+	{
+		provider: 'opencode',
+		model: 'glm-4.7-free',
+		description: 'GLM 4.7 through opencode zen',
+		providerSetupUrl: 'https://opencode.ai/docs/zen',
 		isDefault: false
 	},
 	{
@@ -32,14 +39,6 @@ export const BLESSED_MODELS: BlessedModel[] = [
 		provider: 'opencode',
 		model: 'kimi-k2',
 		description: 'Kimi K2, no reasoning',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
-		isDefault: false
-	},
-	{
-		provider: 'opencode',
-		model: 'btca-gemini-3-flash',
-		description:
-			'Gemini 3 Flash with low reasoning (the special btca version is already configured for you in btca)',
 		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
 		isDefault: false
 	}

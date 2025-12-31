@@ -1,3 +1,5 @@
+import type { BtcaChunk } from '../core/index.ts';
+
 export interface Repo {
 	name: string;
 	url: string;
@@ -5,6 +7,25 @@ export interface Repo {
 	specialNotes?: string | undefined;
 	searchPath?: string | undefined;
 }
+
+// Thread types for TUI state
+export type QuestionStatus = 'completed' | 'canceled';
+
+export interface ThreadQuestion {
+	id: string;
+	prompt: string;
+	answer: string;
+	resources: string[]; // resources added by THIS question only
+	status: QuestionStatus;
+}
+
+export interface ThreadState {
+	id: string;
+	resources: string[]; // accumulated resources across all questions
+	questions: ThreadQuestion[];
+}
+
+export type CancelState = 'none' | 'pending';
 
 export type InputState = (
 	| {
@@ -18,6 +39,10 @@ export type InputState = (
 	  }
 )[];
 
+export type AssistantContent =
+	| { type: 'text'; content: string }
+	| { type: 'chunks'; chunks: BtcaChunk[] };
+
 export type Message =
 	| {
 			role: 'user';
@@ -25,16 +50,22 @@ export type Message =
 	  }
 	| {
 			role: 'assistant';
-			content: string;
+			content: AssistantContent;
+			canceled?: boolean; // true if this response was canceled
 	  }
 	| {
 			role: 'system';
 			content: string;
 	  };
 
-export type Mode = 'chat' | 'add-repo' | 'remove-repo' | 'config-model' | 'select-blessed-model' | 'loading';
-
-export type CommandMode = 'add-repo' | 'remove-repo' | 'config-model' | 'select-blessed-model' | 'chat' | 'ask' | 'clear';
+export type CommandMode =
+	| 'add-repo'
+	| 'remove-repo'
+	| 'config-model'
+	| 'select-blessed-model'
+	| 'chat'
+	| 'ask'
+	| 'clear';
 
 export interface Command {
 	name: string;

@@ -48,6 +48,7 @@ export const createThreadService = (config: ThreadServiceConfig) => {
 				model: string;
 				prompt: string;
 				answer: string;
+				status?: 'completed' | 'canceled';
 				metadata: QuestionMetadata;
 			}
 		): Effect.Effect<Question, ThreadRepositoryError> =>
@@ -64,17 +65,18 @@ export const createThreadService = (config: ThreadServiceConfig) => {
 
 				return yield* repository.appendQuestion(threadId, {
 					...question,
+					status: question.status ?? 'completed',
 					threadId,
 					order
 				});
 			}),
 
 		/**
-		 * Update a question (e.g., after streaming completes)
+		 * Update a question (e.g., after streaming completes or when canceled)
 		 */
 		updateQuestion: (
 			questionId: string,
-			updates: Partial<Pick<Question, 'answer' | 'metadata'>>
+			updates: Partial<Pick<Question, 'answer' | 'metadata' | 'status'>>
 		): Effect.Effect<void, ThreadRepositoryError> => repository.updateQuestion(questionId, updates),
 
 		/**
@@ -114,6 +116,7 @@ export const createThreadService = (config: ThreadServiceConfig) => {
 			model: string;
 			prompt: string;
 			answer: string;
+			status?: 'completed' | 'canceled';
 			metadata: QuestionMetadata;
 		}): Effect.Effect<{ thread: Thread; question: Question }, ThreadRepositoryError> =>
 			Effect.gen(function* () {
@@ -121,6 +124,7 @@ export const createThreadService = (config: ThreadServiceConfig) => {
 
 				const q = yield* repository.appendQuestion(thread.id, {
 					...question,
+					status: question.status ?? 'completed',
 					threadId: thread.id,
 					order: 0
 				});

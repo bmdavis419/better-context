@@ -1,25 +1,35 @@
-import { createSignal, createMemo, For, type Component } from 'solid-js';
+import { createSignal, createMemo, For, type Component, type Setter } from 'solid-js';
+import type { TextareaRenderable } from '@opentui/core';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
-import { useAppContext } from '../context/app-context.tsx';
+import { useConfigContext } from '../context/config-context.tsx';
+import type { InputState } from '../types.ts';
 
-export const RepoMentionPalette: Component = () => {
-	const appState = useAppContext();
+interface RepoMentionPaletteProps {
+	inputState: InputState;
+	setInputState: Setter<InputState>;
+	inputRef: TextareaRenderable | null;
+	cursorPosition: number;
+}
+
+export const RepoMentionPalette: Component<RepoMentionPaletteProps> = (props) => {
+	const config = useConfigContext();
 
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
 
 	const maxVisible = 8;
 
-	const getDisplayLength = (item: ReturnType<typeof appState.inputState>[number]) =>
+	const getDisplayLength = (item: InputState[number]) =>
 		item.type === 'pasted' ? `[~${item.lines} lines]`.length : item.content.length;
 
 	const curInputIdx = () => {
-		const inputRef = appState.inputRef();
+		const inputRef = props.inputRef;
 		if (!inputRef) return 0;
-		const currentInputIndex = inputRef.cursorPosition;
+		const cursor = inputRef.logicalCursor;
+		const currentInputIndex = cursor.col; // For single-line, col is the position
 		let curIdx = 0;
 		let totalLength = 0;
-		const curInputState = appState.inputState();
+		const curInputState = props.inputState;
 		while (curIdx < curInputState.length) {
 			const curItem = curInputState[curIdx]!;
 			const maxIdx = totalLength + getDisplayLength(curItem);
@@ -33,8 +43,8 @@ export const RepoMentionPalette: Component = () => {
 	};
 
 	const filteredRepos = createMemo(() => {
-		const repos = appState.repos();
-		const curInput = appState.inputState()[curInputIdx()]?.content;
+		const repos = config.repos();
+		const curInput = props.inputState[curInputIdx()]?.content;
 		if (!curInput) return repos;
 		const trimmedInput = curInput.toLowerCase().trim().slice(1);
 		return repos.filter((repo) => repo.name.toLowerCase().includes(trimmedInput));
@@ -55,21 +65,26 @@ export const RepoMentionPalette: Component = () => {
 		const selectedRepo = filteredRepos()[selectedIndex()];
 		if (selectedRepo) {
 			const idx = curInputIdx();
-			const currentState = appState.inputState();
+			const currentState = props.inputState;
 			const newContent = '@' + selectedRepo.name + ' ';
 			const newState = [
 				...currentState.slice(0, idx),
 				{ content: newContent, type: 'mention' as const },
 				...currentState.slice(idx + 1)
 			];
-			appState.setInputState(newState);
-			const inputRef = appState.inputRef();
+			props.setInputState(newState);
+			const inputRef = props.inputRef;
 			if (inputRef) {
 				let newCursorPos = 0;
 				for (let i = 0; i <= idx; i++) {
 					newCursorPos += i === idx ? newContent.length : getDisplayLength(currentState[i]!);
 				}
-				inputRef.cursorPosition = newCursorPos;
+				// Calculate the new text and update textarea
+				const newText = newState
+					.map((p) => (p.type === 'pasted' ? `[~${p.lines} lines]` : p.content))
+					.join('');
+				inputRef.setText(newText);
+				inputRef.editBuffer.setCursor(0, newCursorPos);
 			}
 		}
 	};

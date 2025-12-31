@@ -1,44 +1,54 @@
 import type { Component } from 'solid-js';
 import { colors } from '../theme';
-import { useAppContext } from '../context/app-context';
+import type { CancelState } from '../types.ts';
+import type { ActiveWizard, WizardStep } from './input-section.tsx';
 
 declare const __VERSION__: string;
 const VERSION: string = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0-dev';
 
-export const StatusBar: Component = () => {
-	const appState = useAppContext();
+interface StatusBarProps {
+	activeWizard: ActiveWizard;
+	wizardStep: WizardStep;
+	cursorIn: string;
+	isStreaming: boolean;
+	cancelState: CancelState;
+	hasConfirmPrompt?: boolean;
+}
 
+export const StatusBar: Component<StatusBarProps> = (props) => {
 	const getHelpText = () => {
-		const mode = appState.mode();
-		const cursorIn = appState.cursorIsCurrentlyIn();
-
-		if (mode === 'loading') {
-			return ' Streaming response...';
+		if (props.isStreaming) {
+			if (props.cancelState === 'pending') {
+				return ' Press [Esc] again to confirm cancel';
+			}
+			return ' Streaming... [Esc] to cancel';
 		}
 
-		if (mode === 'add-repo') {
-			return appState.wizardStep() === 'confirm'
+		if (props.activeWizard === 'add-repo') {
+			return props.wizardStep === 'confirm'
 				? ' [Enter] Confirm  [Esc] Cancel'
 				: ' [Enter] Next  [Esc] Cancel';
 		}
 
-		if (mode === 'remove-repo') {
-			return appState.removeRepoName()
-				? ' [Y] Yes  [N/Esc] Cancel'
-				: ' [Enter] Select  [Esc] Cancel';
+		if (props.activeWizard === 'remove-repo') {
+			return props.hasConfirmPrompt ? ' [Y] Yes  [N/Esc] Cancel' : ' [Enter] Select  [Esc] Cancel';
 		}
 
-		if (mode === 'config-model') {
-			return appState.modelStep() === 'confirm'
+		if (props.activeWizard === 'config-model') {
+			return props.wizardStep === 'confirm'
 				? ' [Enter] Confirm  [Esc] Cancel'
 				: ' [Enter] Next  [Esc] Cancel';
 		}
 
-		if (cursorIn === 'command') {
+		if (props.activeWizard === 'blessed-model') {
 			return ' [Up/Down] Navigate  [Enter] Select  [Esc] Cancel';
 		}
 
-		if (cursorIn === 'mention') {
+		if (props.cursorIn === 'command') {
+			return ' [Up/Down] Navigate  [Enter] Select  [Esc] Cancel';
+		}
+
+		if (props.cursorIn === 'mention') {
 			return ' [Up/Down] Navigate  [Tab/Enter] Select  [Esc] Cancel';
 		}
 

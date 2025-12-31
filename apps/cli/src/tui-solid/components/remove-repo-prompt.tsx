@@ -1,19 +1,51 @@
-import { Show, For, createSignal, createMemo, createEffect, type Component } from 'solid-js';
+import {
+	Show,
+	For,
+	createSignal,
+	createMemo,
+	createEffect,
+	type Component,
+	type Setter
+} from 'solid-js';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
-import { useAppContext } from '../context/app-context.tsx';
+import { useConfigContext } from '../context/config-context.tsx';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
 
-export const RemoveRepoPrompt: Component = () => {
-	const appState = useAppContext();
+interface RemoveRepoPromptProps {
+	onClose: () => void;
+	onConfirmPromptChange: Setter<boolean>;
+}
 
+export const RemoveRepoPrompt: Component<RemoveRepoPromptProps> = (props) => {
+	const config = useConfigContext();
+	const messages = useMessagesContext();
+
+	// All state is LOCAL
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
 	const [filterText, setFilterText] = createSignal('');
+	const [removeRepoName, setRemoveRepoName] = createSignal('');
 
 	const maxVisible = 8;
 
+	// Notify parent when confirm prompt is shown/hidden
+	createEffect(() => {
+		props.onConfirmPromptChange(removeRepoName() !== '');
+	});
+
+	useKeyboard((key) => {
+		if (key.name === 'c' && key.ctrl) {
+			if (removeRepoName().length === 0) {
+				props.onClose();
+			} else {
+				setRemoveRepoName('');
+			}
+		}
+	});
+
 	const filteredRepos = createMemo(() => {
-		const repos = appState.repos();
+		const repos = config.repos();
 		const filter = filterText().toLowerCase();
 		if (!filter) return repos;
 		return repos.filter((repo) => repo.name.toLowerCase().includes(filter));
@@ -37,43 +69,39 @@ export const RemoveRepoPrompt: Component = () => {
 	});
 
 	const handleRemoveRepo = async () => {
-		const repoName = appState.removeRepoName();
+		const repoName = removeRepoName();
 		if (!repoName) return;
 
 		try {
 			await services.removeRepo(repoName);
-			appState.removeRepo(repoName);
-			appState.addMessage({ role: 'system', content: `Removed repo: ${repoName}` });
+			config.removeRepo(repoName);
+			messages.addSystemMessage(`Removed repo: ${repoName}`);
 		} catch (error) {
-			appState.addMessage({ role: 'system', content: `Error: ${error}` });
+			messages.addSystemMessage(`Error: ${error}`);
 		} finally {
-			appState.setMode('chat');
-			appState.setRemoveRepoName('');
-			setFilterText('');
+			props.onClose();
 		}
-	};
-
-	const cancelMode = () => {
-		appState.setMode('chat');
-		appState.setRemoveRepoName('');
-		setFilterText('');
 	};
 
 	const selectRepo = () => {
 		const selectedRepo = filteredRepos()[selectedIndex()];
 		if (selectedRepo) {
-			appState.setRemoveRepoName(selectedRepo.name);
+			setRemoveRepoName(selectedRepo.name);
 		}
 	};
 
 	useKeyboard((key) => {
 		if (key.name === 'escape') {
-			cancelMode();
-		} else if (appState.removeRepoName()) {
+			if (removeRepoName()) {
+				setRemoveRepoName('');
+			} else {
+				props.onClose();
+			}
+		} else if (removeRepoName()) {
 			if (key.name === 'y' || key.raw === 'Y') {
 				handleRemoveRepo();
 			} else if (key.name === 'n' || key.raw === 'N') {
-				cancelMode();
+				props.onClose();
 			}
 		} else {
 			switch (key.name) {
@@ -108,7 +136,7 @@ export const RemoveRepoPrompt: Component = () => {
 
 	return (
 		<Show
-			when={appState.removeRepoName()}
+			when={removeRepoName()}
 			fallback={
 				<box
 					style={{
@@ -166,7 +194,7 @@ export const RemoveRepoPrompt: Component = () => {
 				<text content="" style={{ height: 1 }} />
 				<text fg={colors.text}>
 					{`Are you sure you want to remove "`}
-					<span style={{ fg: colors.accent }}>{appState.removeRepoName()}</span>
+					<span style={{ fg: colors.accent }}>{removeRepoName()}</span>
 					{`" from your configuration?`}
 				</text>
 				<text content="" style={{ height: 1 }} />

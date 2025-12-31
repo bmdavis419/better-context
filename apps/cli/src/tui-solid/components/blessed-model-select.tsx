@@ -1,19 +1,25 @@
 import { For, createSignal, createMemo, type Component } from 'solid-js';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
-import { useAppContext } from '../context/app-context.tsx';
+import { useConfigContext } from '../context/config-context.tsx';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
 import { BLESSED_MODELS } from '@btca/shared';
 
-export const BlessedModelSelect: Component = () => {
-	const appState = useAppContext();
+interface BlessedModelSelectProps {
+	onClose: () => void;
+}
+
+export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) => {
+	const config = useConfigContext();
+	const messages = useMessagesContext();
 
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
 
 	// Find if current model matches a blessed model
 	const currentModelIndex = createMemo(() => {
-		const provider = appState.selectedProvider();
-		const model = appState.selectedModel();
+		const provider = config.selectedProvider();
+		const model = config.selectedModel();
 		return BLESSED_MODELS.findIndex((m) => m.provider === provider && m.model === model);
 	});
 
@@ -23,25 +29,20 @@ export const BlessedModelSelect: Component = () => {
 
 		try {
 			const result = await services.updateModel(selectedModel.provider, selectedModel.model);
-			appState.setProvider(result.provider);
-			appState.setModel(result.model);
-			appState.addMessage({
-				role: 'system',
-				content: `Model updated: ${result.provider}/${result.model}`
-			});
+			config.setProvider(result.provider);
+			config.setModel(result.model);
+			messages.addSystemMessage(`Model updated: ${result.provider}/${result.model}`);
 		} catch (error) {
-			appState.addMessage({ role: 'system', content: `Error: ${error}` });
+			messages.addSystemMessage(`Error: ${error}`);
 		} finally {
-			appState.setMode('chat');
+			props.onClose();
 		}
 	};
 
 	useKeyboard((key) => {
-		if (appState.mode() !== 'select-blessed-model') return;
-
 		switch (key.name) {
 			case 'escape':
-				appState.setMode('chat');
+				props.onClose();
 				break;
 			case 'up':
 				if (selectedIndex() > 0) {

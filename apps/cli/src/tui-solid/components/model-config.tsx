@@ -1,11 +1,12 @@
-import { createEffect, Show, type Component } from 'solid-js';
+import { createEffect, createSignal, Show, type Component, type Setter } from 'solid-js';
 import { colors } from '../theme.ts';
-import { useKeyboard } from '@opentui/solid';
-import { useAppContext, type ModelConfigStep } from '../context/app-context.tsx';
+import { useKeyboard, usePaste } from '@opentui/solid';
+import { useConfigContext } from '../context/config-context.tsx';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
+import type { WizardStep } from './input-section.tsx';
 
-// Track if we just opened the modal to prevent the same keypress from triggering submit
-let justOpened = false;
+type ModelConfigStep = 'provider' | 'model' | 'confirm';
 
 const STEP_INFO: Record<ModelConfigStep, { title: string; hint: string; placeholder: string }> = {
 	provider: {
@@ -25,61 +26,92 @@ const STEP_INFO: Record<ModelConfigStep, { title: string; hint: string; placehol
 	}
 };
 
-export const ModelConfig: Component = () => {
-	const appState = useAppContext();
+// Track if we just opened the modal to prevent the same keypress from triggering submit
+let justOpened = false;
 
-	const info = () => STEP_INFO[appState.modelStep()];
+interface ModelConfigProps {
+	onClose: () => void;
+	onStepChange: Setter<WizardStep>;
+}
 
-	// Reset justOpened flag when mode changes to config-model
+export const ModelConfig: Component<ModelConfigProps> = (props) => {
+	const config = useConfigContext();
+	const messages = useMessagesContext();
+
+	// All state is LOCAL
+	const [step, setStep] = createSignal<ModelConfigStep>('provider');
+	const [values, setValues] = createSignal({
+		provider: config.selectedProvider(),
+		model: config.selectedModel()
+	});
+	const [modelInput, setModelInput] = createSignal(config.selectedProvider());
+
+	const info = () => STEP_INFO[step()];
+
+	// Notify parent of step changes for status bar
 	createEffect(() => {
-		if (appState.mode() === 'config-model') {
-			justOpened = true;
-			// Clear the flag after a tick to allow subsequent keypresses
-			setTimeout(() => {
-				justOpened = false;
-			}, 0);
+		props.onStepChange(step());
+	});
+
+	// Reset justOpened flag when component mounts
+	createEffect(() => {
+		justOpened = true;
+		setTimeout(() => {
+			justOpened = false;
+		}, 0);
+	});
+
+	useKeyboard((key) => {
+		if (key.name === 'c' && key.ctrl) {
+			if (modelInput().length === 0) {
+				props.onClose();
+			} else {
+				setModelInput('');
+			}
+		}
+	});
+
+	usePaste(({ text }) => {
+		const currentStep = step();
+		if (currentStep === 'provider' || currentStep === 'model') {
+			setModelInput(text.trim());
 		}
 	});
 
 	const handleSubmit = async () => {
 		// Skip if this is the same keypress that opened the modal
 		if (justOpened) return;
-		const step = appState.modelStep();
-		const value = appState.modelInput().trim();
+		const currentStep = step();
+		const value = modelInput().trim();
 
-		if (step === 'provider') {
+		if (currentStep === 'provider') {
 			if (!value) return;
-			appState.setModelValues({ ...appState.modelValues(), provider: value });
-			appState.setModelStep('model');
-			appState.setModelInput(appState.selectedModel());
-		} else if (step === 'model') {
+			setValues({ ...values(), provider: value });
+			setStep('model');
+			setModelInput(config.selectedModel());
+		} else if (currentStep === 'model') {
 			if (!value) return;
-			appState.setModelValues({ ...appState.modelValues(), model: value });
-			appState.setModelStep('confirm');
-		} else if (step === 'confirm') {
-			const values = appState.modelValues();
+			setValues({ ...values(), model: value });
+			setStep('confirm');
+		} else if (currentStep === 'confirm') {
+			const vals = values();
 			try {
-				const result = await services.updateModel(values.provider, values.model);
-				appState.setProvider(result.provider);
-				appState.setModel(result.model);
-				appState.addMessage({
-					role: 'system',
-					content: `Model updated: ${result.provider}/${result.model}`
-				});
+				const result = await services.updateModel(vals.provider, vals.model);
+				config.setProvider(result.provider);
+				config.setModel(result.model);
+				messages.addSystemMessage(`Model updated: ${result.provider}/${result.model}`);
 			} catch (error) {
-				appState.addMessage({ role: 'system', content: `Error: ${error}` });
+				messages.addSystemMessage(`Error: ${error}`);
 			} finally {
-				appState.setMode('chat');
+				props.onClose();
 			}
 		}
 	};
 
 	useKeyboard((key) => {
-		if (appState.mode() !== 'config-model') return;
 		if (key.name === 'escape') {
-			appState.setMode('chat');
-			appState.setModelInput('');
-		} else if (key.name === 'return' && appState.modelStep() === 'confirm') {
+			props.onClose();
+		} else if (key.name === 'return' && step() === 'confirm') {
 			handleSubmit();
 		}
 	});
@@ -104,15 +136,15 @@ export const ModelConfig: Component = () => {
 			<text content="" style={{ height: 1 }} />
 
 			<Show
-				when={appState.modelStep() === 'confirm'}
+				when={step() === 'confirm'}
 				fallback={
 					<box style={{}}>
 						<input
 							placeholder={info().placeholder}
 							placeholderColor={colors.textSubtle}
 							textColor={colors.text}
-							value={appState.modelInput()}
-							onInput={appState.setModelInput}
+							value={modelInput()}
+							onInput={setModelInput}
 							onSubmit={handleSubmit}
 							focused
 							style={{ width: '100%' }}
@@ -123,11 +155,11 @@ export const ModelConfig: Component = () => {
 				<box style={{ flexDirection: 'column', paddingLeft: 1 }}>
 					<box style={{ flexDirection: 'row' }}>
 						<text fg={colors.textMuted} content="Provider: " style={{ width: 12 }} />
-						<text fg={colors.text} content={appState.modelValues().provider} />
+						<text fg={colors.text} content={values().provider} />
 					</box>
 					<box style={{ flexDirection: 'row' }}>
 						<text fg={colors.textMuted} content="Model:    " style={{ width: 12 }} />
-						<text fg={colors.text} content={appState.modelValues().model} />
+						<text fg={colors.text} content={values().model} />
 					</box>
 					<text content="" style={{ height: 1 }} />
 					<text fg={colors.success} content=" Press Enter to confirm, Esc to cancel" />

@@ -1,22 +1,31 @@
 import { colors } from './theme.ts';
-import { MainInput } from './components/main-input.tsx';
-import { StatusBar } from './components/status-bar.tsx';
 import { Messages } from './components/messages.tsx';
-import { Show, type Accessor, type Component } from 'solid-js';
+import { type Accessor, type Component } from 'solid-js';
 import { Header } from './components/header.tsx';
-import { RepoMentionPalette } from './components/repo-mention-palette.tsx';
-import { useAppContext } from './context/app-context.tsx';
-import { CommandPalette } from './components/command-palette.tsx';
-import { AddRepoWizard } from './components/add-repo-wizard.tsx';
-import { RemoveRepoPrompt } from './components/remove-repo-prompt.tsx';
-import { ModelConfig } from './components/model-config.tsx';
-import { BlessedModelSelect } from './components/blessed-model-select.tsx';
+import { InputSection } from './components/input-section.tsx';
+
+const WarningBanner: Component = () => {
+	return (
+		<box
+			style={{
+				height: 1,
+				width: '100%',
+				backgroundColor: colors.error,
+				flexDirection: 'row',
+				justifyContent: 'center',
+				alignItems: 'center'
+			}}
+		>
+			<text fg={colors.bg}>
+				{' WARNING: This software is under active development and may contain bugs '}
+			</text>
+		</box>
+	);
+};
 
 export const MainUi: Component<{
 	heightPercent: Accessor<`${number}%`>;
 }> = (props) => {
-	const appState = useAppContext();
-
 	return (
 		<box
 			width="100%"
@@ -26,33 +35,10 @@ export const MainUi: Component<{
 				backgroundColor: colors.bg
 			}}
 		>
+			<WarningBanner />
 			<Header />
 			<Messages />
-			<MainInput />
-
-			{/* Command and Mention Palettes */}
-			<Show when={appState.mode() === 'chat' && appState.cursorIsCurrentlyIn() === 'mention'}>
-				<RepoMentionPalette />
-			</Show>
-			<Show when={appState.mode() === 'chat' && appState.cursorIsCurrentlyIn() === 'command'}>
-				<CommandPalette />
-			</Show>
-
-			{/* Wizard Modals */}
-			<Show when={appState.mode() === 'add-repo'}>
-				<AddRepoWizard />
-			</Show>
-			<Show when={appState.mode() === 'remove-repo'}>
-				<RemoveRepoPrompt />
-			</Show>
-			<Show when={appState.mode() === 'config-model'}>
-				<ModelConfig />
-			</Show>
-			<Show when={appState.mode() === 'select-blessed-model'}>
-				<BlessedModelSelect />
-			</Show>
-
-			<StatusBar />
+			<InputSection />
 		</box>
 	);
 };

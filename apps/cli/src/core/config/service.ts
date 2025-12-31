@@ -9,9 +9,7 @@ import {
 	DEFAULT_MODEL,
 	DEFAULT_PROVIDER,
 	DEFAULT_RESOURCES,
-	LegacyConfigSchema,
-	StoredConfigSchema,
-	legacyRepoToResource
+	StoredConfigSchema
 } from './types.ts';
 import type { ResourceDefinition } from '../resource/types.ts';
 import { expandHome } from '../../lib/utils/files.ts';

@@ -12,6 +12,8 @@ export interface QuestionMetadata {
 	durationMs: number;
 }
 
+export type QuestionStatus = 'completed' | 'canceled';
+
 export interface Question {
 	id: string;
 	threadId: string;
@@ -20,6 +22,7 @@ export interface Question {
 	model: string; // snapshot at ask time
 	prompt: string; // user's question
 	answer: string; // agent's response
+	status: QuestionStatus; // whether the question was completed or canceled
 	metadata: QuestionMetadata;
 	createdAt: Date;
 	order: number; // position in thread (0-indexed)
@@ -69,13 +72,15 @@ export const createQuestion = (args: {
 	model: string;
 	prompt: string;
 	order: number;
+	status?: QuestionStatus;
 }): Omit<Question, 'id' | 'answer' | 'metadata' | 'createdAt'> => ({
 	threadId: args.threadId,
 	resources: args.resources,
 	provider: args.provider,
 	model: args.model,
 	prompt: args.prompt,
-	order: args.order
+	order: args.order,
+	status: args.status ?? 'completed'
 });
 
 /**
