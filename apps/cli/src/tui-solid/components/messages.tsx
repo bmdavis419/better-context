@@ -1,11 +1,21 @@
 import { For, Show, Switch, Match, createSignal, onCleanup, type Component } from 'solid-js';
-import { useAppContext } from '../context/app-context';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { colors, getColor } from '../theme';
 import { MarkdownText } from './markdown-text.tsx';
 import type { BtcaChunk } from '../../core/index.ts';
 import type { AssistantContent } from '../types.ts';
 
 const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/**
+ * Strip conversation history markers from displayed text.
+ * The history is passed to the agent for context but shouldn't be shown in the UI.
+ */
+const stripConversationHistory = (text: string): string => {
+	// Remove the conversation history block if present
+	const historyRegex = /=== CONVERSATION HISTORY ===[\s\S]*?=== END HISTORY ===/g;
+	return text.replace(historyRegex, '').trim();
+};
 
 const LoadingSpinner: Component = () => {
 	const [frameIndex, setFrameIndex] = createSignal(0);
@@ -80,9 +90,11 @@ const TextChunk: Component<{
 	chunk: Extract<BtcaChunk, { type: 'text' }>;
 	isStreaming: boolean;
 }> = (props) => {
+	const displayText = () => stripConversationHistory(props.chunk.text);
+
 	return (
-		<Show when={!props.isStreaming} fallback={<text>{props.chunk.text}</text>}>
-			<MarkdownText content={props.chunk.text} />
+		<Show when={!props.isStreaming} fallback={<text>{displayText()}</text>}>
+			<MarkdownText content={displayText()} />
 		</Show>
 	);
 };
@@ -118,29 +130,15 @@ const AssistantMessage: Component<{
 	isCanceled?: boolean;
 }> = (props) => {
 	const textColor = () => (props.isCanceled ? colors.textMuted : undefined);
+	const getTextContent = () =>
+		stripConversationHistory((props.content as { type: 'text'; content: string }).content);
 
 	return (
 		<Switch>
 			<Match when={props.content.type === 'text'}>
-				<Show
-					when={!props.isStreaming}
-					fallback={
-						<text fg={textColor()}>
-							{(props.content as { type: 'text'; content: string }).content}
-						</text>
-					}
-				>
-					<Show
-						when={props.isCanceled}
-						fallback={
-							<MarkdownText
-								content={(props.content as { type: 'text'; content: string }).content}
-							/>
-						}
-					>
-						<text fg={textColor()}>
-							{(props.content as { type: 'text'; content: string }).content}
-						</text>
+				<Show when={!props.isStreaming} fallback={<text fg={textColor()}>{getTextContent()}</text>}>
+					<Show when={props.isCanceled} fallback={<MarkdownText content={getTextContent()} />}>
+						<text fg={textColor()}>{getTextContent()}</text>
 					</Show>
 				</Show>
 			</Match>
@@ -158,7 +156,9 @@ const AssistantMessage: Component<{
 										<ChunkRenderer chunk={chunk} isStreaming={props.isStreaming && isLastChunk()} />
 									}
 								>
-									<text fg={textColor()}>{(chunk as { text: string }).text}</text>
+									<text fg={textColor()}>
+										{stripConversationHistory((chunk as { text: string }).text)}
+									</text>
 								</Show>
 							);
 						}}
@@ -171,8 +171,8 @@ const AssistantMessage: Component<{
 
 // Thread resources overlay component - rendered outside scrollbox
 const ThreadResourcesOverlay: Component = () => {
-	const appState = useAppContext();
-	const thread = () => appState.currentThread();
+	const messagesState = useMessagesContext();
+	const thread = () => messagesState.currentThread();
 
 	return (
 		<Show when={thread() && thread()!.resources.length > 0}>
@@ -198,7 +198,7 @@ const ThreadResourcesOverlay: Component = () => {
 };
 
 export const Messages: Component = () => {
-	const appState = useAppContext();
+	const messagesState = useMessagesContext();
 
 	return (
 		<box style={{ flexGrow: 1, position: 'relative' }}>
@@ -220,7 +220,7 @@ export const Messages: Component = () => {
 					stickyStart: 'bottom'
 				}}
 			>
-				<For each={appState.messageHistory()}>
+				<For each={messagesState.messages()}>
 					{(m, index) => {
 						if (m.role === 'user') {
 							return (
@@ -244,7 +244,7 @@ export const Messages: Component = () => {
 						}
 						if (m.role === 'assistant') {
 							const isLastAssistant = () => {
-								const history = appState.messageHistory();
+								const history = messagesState.messages();
 								for (let i = history.length - 1; i >= 0; i--) {
 									if (history[i]?.role === 'assistant') {
 										return i === index();
@@ -252,7 +252,7 @@ export const Messages: Component = () => {
 								}
 								return false;
 							};
-							const isStreaming = () => appState.mode() === 'loading' && isLastAssistant();
+							const isStreaming = () => messagesState.isStreaming() && isLastAssistant();
 							const isCanceled = () => m.canceled === true;
 
 							return (

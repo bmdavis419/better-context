@@ -1,24 +1,43 @@
-import { Show, For, createSignal, createMemo, createEffect, type Component } from 'solid-js';
+import {
+	Show,
+	For,
+	createSignal,
+	createMemo,
+	createEffect,
+	type Component,
+	type Setter
+} from 'solid-js';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
-import { useAppContext } from '../context/app-context.tsx';
+import { useConfigContext } from '../context/config-context.tsx';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
 
-export const RemoveRepoPrompt: Component = () => {
-	const appState = useAppContext();
+interface RemoveRepoPromptProps {
+	onClose: () => void;
+	onConfirmPromptChange: Setter<boolean>;
+}
 
+export const RemoveRepoPrompt: Component<RemoveRepoPromptProps> = (props) => {
+	const config = useConfigContext();
+	const messages = useMessagesContext();
+
+	// All state is LOCAL
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
 	const [filterText, setFilterText] = createSignal('');
 	const [removeRepoName, setRemoveRepoName] = createSignal('');
 
 	const maxVisible = 8;
 
+	// Notify parent when confirm prompt is shown/hidden
+	createEffect(() => {
+		props.onConfirmPromptChange(removeRepoName() !== '');
+	});
+
 	useKeyboard((key) => {
 		if (key.name === 'c' && key.ctrl) {
-			const mode = appState.mode();
-			if (mode !== 'remove-repo') return;
 			if (removeRepoName().length === 0) {
-				appState.setMode('chat');
+				props.onClose();
 			} else {
 				setRemoveRepoName('');
 			}
@@ -26,7 +45,7 @@ export const RemoveRepoPrompt: Component = () => {
 	});
 
 	const filteredRepos = createMemo(() => {
-		const repos = appState.repos();
+		const repos = config.repos();
 		const filter = filterText().toLowerCase();
 		if (!filter) return repos;
 		return repos.filter((repo) => repo.name.toLowerCase().includes(filter));
@@ -55,21 +74,13 @@ export const RemoveRepoPrompt: Component = () => {
 
 		try {
 			await services.removeRepo(repoName);
-			appState.removeRepo(repoName);
-			appState.addMessage({ role: 'system', content: `Removed repo: ${repoName}` });
+			config.removeRepo(repoName);
+			messages.addSystemMessage(`Removed repo: ${repoName}`);
 		} catch (error) {
-			appState.addMessage({ role: 'system', content: `Error: ${error}` });
+			messages.addSystemMessage(`Error: ${error}`);
 		} finally {
-			appState.setMode('chat');
-			setRemoveRepoName('');
-			setFilterText('');
+			props.onClose();
 		}
-	};
-
-	const cancelMode = () => {
-		appState.setMode('chat');
-		setRemoveRepoName('');
-		setFilterText('');
 	};
 
 	const selectRepo = () => {
@@ -81,12 +92,16 @@ export const RemoveRepoPrompt: Component = () => {
 
 	useKeyboard((key) => {
 		if (key.name === 'escape') {
-			cancelMode();
+			if (removeRepoName()) {
+				setRemoveRepoName('');
+			} else {
+				props.onClose();
+			}
 		} else if (removeRepoName()) {
 			if (key.name === 'y' || key.raw === 'Y') {
 				handleRemoveRepo();
 			} else if (key.name === 'n' || key.raw === 'N') {
-				cancelMode();
+				props.onClose();
 			}
 		} else {
 			switch (key.name) {

@@ -1,17 +1,20 @@
-import { createSignal, Show, type Component } from 'solid-js';
+import { createSignal, createEffect, Show, type Component, type Setter } from 'solid-js';
 import { colors } from '../theme.ts';
 import { useKeyboard, usePaste } from '@opentui/solid';
-import { useAppContext, type WizardStep } from '../context/app-context.tsx';
+import { useConfigContext } from '../context/config-context.tsx';
+import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
 import type { Repo } from '../types.ts';
+import type { WizardStep } from './input-section.tsx';
 
-const STEP_INFO: Record<WizardStep, { title: string; hint: string; placeholder: string }> = {
+type AddRepoWizardStep = 'name' | 'url' | 'branch' | 'notes' | 'confirm';
+
+const STEP_INFO: Record<AddRepoWizardStep, { title: string; hint: string; placeholder: string }> = {
 	name: {
 		title: 'Step 1/4: Resource Name',
 		hint: 'Enter a unique name for this resource (e.g., "react", "svelteDocs")',
 		placeholder: 'resourceName'
 	},
-	// TODO: update this to have a prompt to pick local or repo
 	url: {
 		title: 'Step 2/4: Repository URL',
 		hint: 'Enter the GitHub repository URL',
@@ -34,75 +37,87 @@ const STEP_INFO: Record<WizardStep, { title: string; hint: string; placeholder: 
 	}
 };
 
-export const AddResourceWizard: Component = () => {
-	const appState = useAppContext();
+interface AddResourceWizardProps {
+	onClose: () => void;
+	onStepChange: Setter<WizardStep>;
+}
 
+export const AddResourceWizard: Component<AddResourceWizardProps> = (props) => {
+	const config = useConfigContext();
+	const messages = useMessagesContext();
+
+	// All wizard state is LOCAL
+	const [step, setStep] = createSignal<AddRepoWizardStep>('name');
+	const [values, setValues] = createSignal({ name: '', url: '', branch: '', notes: '' });
 	const [wizardInput, setWizardInput] = createSignal('');
 
-	const info = () => STEP_INFO[appState.wizardStep()];
+	const info = () => STEP_INFO[step()];
+
+	// Notify parent of step changes for status bar
+	createEffect(() => {
+		props.onStepChange(step());
+	});
 
 	useKeyboard((key) => {
 		if (key.name === 'c' && key.ctrl) {
-			const mode = appState.mode();
-			if (mode !== 'add-repo') return;
 			if (wizardInput().length === 0) {
-				appState.setMode('chat');
+				props.onClose();
 			} else {
 				setWizardInput('');
 			}
 		}
 	});
+
 	usePaste(({ text }) => {
 		setWizardInput(text);
 	});
 
 	const handleSubmit = async () => {
-		const step = appState.wizardStep();
+		const currentStep = step();
 		const value = wizardInput().trim();
 
-		if (step === 'name') {
+		if (currentStep === 'name') {
 			if (!value) return;
-			appState.setWizardValues({ ...appState.wizardValues(), name: value });
-			appState.setWizardStep('url');
+			setValues({ ...values(), name: value });
+			setStep('url');
 			setWizardInput('');
-		} else if (step === 'url') {
+		} else if (currentStep === 'url') {
 			if (!value) return;
-			appState.setWizardValues({ ...appState.wizardValues(), url: value });
-			appState.setWizardStep('branch');
+			setValues({ ...values(), url: value });
+			setStep('branch');
 			setWizardInput('main');
-		} else if (step === 'branch') {
-			appState.setWizardValues({ ...appState.wizardValues(), branch: value || 'main' });
-			appState.setWizardStep('notes');
+		} else if (currentStep === 'branch') {
+			setValues({ ...values(), branch: value || 'main' });
+			setStep('notes');
 			setWizardInput('');
-		} else if (step === 'notes') {
-			appState.setWizardValues({ ...appState.wizardValues(), notes: value });
-			appState.setWizardStep('confirm');
-		} else if (step === 'confirm') {
-			const values = appState.wizardValues();
+		} else if (currentStep === 'notes') {
+			setValues({ ...values(), notes: value });
+			setStep('confirm');
+		} else if (currentStep === 'confirm') {
+			const vals = values();
 			const newRepo: Repo = {
-				name: values.name,
-				url: values.url,
-				branch: values.branch || 'main',
-				...(values.notes && { specialNotes: values.notes })
+				name: vals.name,
+				url: vals.url,
+				branch: vals.branch || 'main',
+				...(vals.notes && { specialNotes: vals.notes })
 			};
 
 			try {
 				await services.addRepo(newRepo);
-				appState.addRepo(newRepo);
-				appState.addMessage({ role: 'system', content: `Added repo: ${newRepo.name}` });
+				config.addRepo(newRepo);
+				messages.addSystemMessage(`Added repo: ${newRepo.name}`);
 			} catch (error) {
-				appState.addMessage({ role: 'system', content: `Error: ${error}` });
+				messages.addSystemMessage(`Error: ${error}`);
 			} finally {
-				appState.setMode('chat');
+				props.onClose();
 			}
 		}
 	};
 
 	useKeyboard((key) => {
 		if (key.name === 'escape') {
-			appState.setMode('chat');
-			setWizardInput('');
-		} else if (key.name === 'return' && appState.wizardStep() === 'confirm') {
+			props.onClose();
+		} else if (key.name === 'return' && step() === 'confirm') {
 			handleSubmit();
 		}
 	});
@@ -127,7 +142,7 @@ export const AddResourceWizard: Component = () => {
 			<text content="" style={{ height: 1 }} />
 
 			<Show
-				when={appState.wizardStep() === 'confirm'}
+				when={step() === 'confirm'}
 				fallback={
 					<box style={{}}>
 						<input
@@ -146,20 +161,20 @@ export const AddResourceWizard: Component = () => {
 				<box style={{ flexDirection: 'column', paddingLeft: 1 }}>
 					<box style={{ flexDirection: 'row' }}>
 						<text fg={colors.textMuted} content="Name:   " style={{ width: 10 }} />
-						<text fg={colors.text} content={appState.wizardValues().name} />
+						<text fg={colors.text} content={values().name} />
 					</box>
 					<box style={{ flexDirection: 'row' }}>
 						<text fg={colors.textMuted} content="URL:    " style={{ width: 10 }} />
-						<text fg={colors.text} content={appState.wizardValues().url} />
+						<text fg={colors.text} content={values().url} />
 					</box>
 					<box style={{ flexDirection: 'row' }}>
 						<text fg={colors.textMuted} content="Branch: " style={{ width: 10 }} />
-						<text fg={colors.text} content={appState.wizardValues().branch || 'main'} />
+						<text fg={colors.text} content={values().branch || 'main'} />
 					</box>
-					<Show when={appState.wizardValues().notes}>
+					<Show when={values().notes}>
 						<box style={{ flexDirection: 'row' }}>
 							<text fg={colors.textMuted} content="Notes:  " style={{ width: 10 }} />
-							<text fg={colors.text} content={appState.wizardValues().notes} />
+							<text fg={colors.text} content={values().notes} />
 						</box>
 					</Show>
 					<text content="" style={{ height: 1 }} />

@@ -1,11 +1,23 @@
-import { createEffect, createSignal, For, Show, type Component } from 'solid-js';
+import { createEffect, createSignal, For, Show, type Component, type Setter } from 'solid-js';
 import type { KeyEvent, TextareaRenderable } from '@opentui/core';
 import { colors, getColor } from '../theme';
-import { useAppContext } from '../context/app-context';
 import { usePaste, useTerminalDimensions } from '@opentui/solid';
+import type { InputState, CancelState, ThreadState } from '../types.ts';
 
-export const MainInput: Component = () => {
-	const appState = useAppContext();
+interface MainInputProps {
+	inputState: InputState;
+	setInputState: Setter<InputState>;
+	cursorPosition: number;
+	setCursorPosition: Setter<number>;
+	inputRef: TextareaRenderable | null;
+	setInputRef: Setter<TextareaRenderable | null>;
+	focused: boolean;
+	isStreaming: boolean;
+	cancelState: CancelState;
+	currentThread: ThreadState | null;
+}
+
+export const MainInput: Component<MainInputProps> = (props) => {
 	const terminalDimensions = useTerminalDimensions();
 	let textareaRef: TextareaRenderable | null = null;
 
@@ -15,8 +27,7 @@ export const MainInput: Component = () => {
 	const getPasteDisplay = (lines: number) => `[~${lines} lines]`;
 
 	const getValue = () =>
-		appState
-			.inputState()
+		props.inputState
 			.map((p) => (p.type === 'pasted' ? getPasteDisplay(p.lines) : p.content))
 			.join('');
 
@@ -24,23 +35,19 @@ export const MainInput: Component = () => {
 
 	// Get dynamic placeholder based on current state
 	const getPlaceholder = () => {
-		const mode = appState.mode();
-		const cancelStateVal = appState.cancelState();
-		const thread = appState.currentThread();
-
-		if (mode === 'loading' && cancelStateVal === 'pending') {
+		if (props.isStreaming && props.cancelState === 'pending') {
 			return 'confirm with esc to cancel';
 		}
-		if (mode === 'loading') {
+		if (props.isStreaming) {
 			return 'press esc to cancel';
 		}
-		if (thread && thread.resources.length > 0) {
+		if (props.currentThread && props.currentThread.resources.length > 0) {
 			return 'ask a follow-up... or @repo to add context';
 		}
 		return '@repo question... or / for commands';
 	};
 
-	const getPartValueLength = (p: ReturnType<typeof appState.inputState>[number]) =>
+	const getPartValueLength = (p: InputState[number]) =>
 		p.type === 'pasted' ? getPasteDisplay(p.lines).length : p.content.length;
 
 	// Calculate available width for text (accounting for border and padding)
@@ -71,11 +78,11 @@ export const MainInput: Component = () => {
 	});
 
 	usePaste((text) => {
-		if (appState.mode() !== 'chat') return;
-		const curInput = appState.inputState();
+		if (!props.focused) return;
+		const curInput = props.inputState;
 		const lines = text.text.split('\n').length;
 		const newInput = [...curInput, { type: 'pasted' as const, content: text.text, lines }];
-		appState.setInputState(newInput);
+		props.setInputState(newInput);
 
 		queueMicrotask(() => {
 			if (textareaRef) {
@@ -85,7 +92,7 @@ export const MainInput: Component = () => {
 				textareaRef.setText(newValue);
 				textareaRef.gotoBufferEnd();
 				const cursor = textareaRef.logicalCursor;
-				appState.setCursorPosition(cursor.row * getAvailableWidth() + cursor.col);
+				props.setCursorPosition(cursor.row * getAvailableWidth() + cursor.col);
 			}
 		});
 	});
@@ -126,15 +133,15 @@ export const MainInput: Component = () => {
 
 	function handleContentChange(newValue: string) {
 		setDisplayValue(newValue);
-		const currentParts = appState.inputState();
+		const currentParts = props.inputState;
 		const pastedBlocks = currentParts.filter((p) => p.type === 'pasted');
 
 		if (pastedBlocks.length === 0) {
-			appState.setInputState(parseTextSegment(newValue));
+			props.setInputState(parseTextSegment(newValue));
 			return;
 		}
 
-		const result: ReturnType<typeof appState.inputState> = [];
+		const result: InputState = [];
 		let remaining = newValue;
 
 		for (let i = 0; i < pastedBlocks.length; i++) {
@@ -158,7 +165,7 @@ export const MainInput: Component = () => {
 			result.push(...parseTextSegment(remaining));
 		}
 
-		appState.setInputState(result);
+		props.setInputState(result);
 	}
 
 	function handleKeyDown(event: KeyEvent) {
@@ -182,7 +189,7 @@ export const MainInput: Component = () => {
 			}
 			absolutePos += cursor.col;
 
-			const parts = appState.inputState();
+			const parts = props.inputState;
 
 			let offset = 0;
 			for (let i = 0; i < parts.length; i++) {
@@ -193,7 +200,7 @@ export const MainInput: Component = () => {
 					if (part.type === 'pasted') {
 						event.preventDefault();
 						const newParts = [...parts.slice(0, i), ...parts.slice(i + 1)];
-						appState.setInputState(newParts);
+						props.setInputState(newParts);
 
 						// Update textarea content
 						const newValue = newParts
@@ -203,7 +210,7 @@ export const MainInput: Component = () => {
 
 						// Position cursor at where the pasted block was
 						textareaRef.editBuffer.setCursor(0, offset);
-						appState.setCursorPosition(offset);
+						props.setCursorPosition(offset);
 						return;
 					}
 					break;
@@ -215,7 +222,7 @@ export const MainInput: Component = () => {
 		queueMicrotask(() => {
 			if (!textareaRef) return;
 			const cursor = textareaRef.logicalCursor;
-			appState.setCursorPosition(cursor.col);
+			props.setCursorPosition(cursor.col);
 		});
 	}
 
@@ -250,7 +257,7 @@ export const MainInput: Component = () => {
 					const pos = row * availableWidth + col;
 					textareaRef.editBuffer.setCursor(0, Math.min(pos, getValue().length));
 					queueMicrotask(() => {
-						appState.setCursorPosition(pos);
+						props.setCursorPosition(pos);
 					});
 				}}
 			>
@@ -258,7 +265,7 @@ export const MainInput: Component = () => {
 					when={!isEmpty()}
 					fallback={<span style={{ fg: colors.textSubtle }}>{getPlaceholder()}</span>}
 				>
-					<For each={appState.inputState()}>
+					<For each={props.inputState}>
 						{(part) => {
 							if (part.type === 'pasted') {
 								return (
@@ -278,11 +285,11 @@ export const MainInput: Component = () => {
 				id="main-input"
 				ref={(r: TextareaRenderable) => {
 					textareaRef = r;
-					appState.setInputRef(r);
+					props.setInputRef(r);
 				}}
 				initialValue=""
 				wrapMode="char"
-				focused={appState.mode() === 'chat'}
+				focused={props.focused}
 				onContentChange={() => {
 					if (textareaRef) {
 						handleContentChange(textareaRef.plainText);
@@ -290,7 +297,7 @@ export const MainInput: Component = () => {
 				}}
 				onKeyDown={handleKeyDown}
 				onCursorChange={(e) => {
-					appState.setCursorPosition(e.visualColumn);
+					props.setCursorPosition(e.visualColumn);
 				}}
 				// Make textarea text transparent so styled overlay shows through
 				textColor="transparent"

@@ -11,27 +11,18 @@
 		},
 		{
 			name: 'btca ask',
-			description: 'Ask a single question about a technology and get an answer from its source code.',
-			example: 'btca ask -t svelte -q "How do stores work in Svelte 5?"'
+			description:
+				'Ask a single question about configured resources and get an answer from their source code.',
+			example: 'btca ask -r runed -q "How does useDebounce work?"'
 		},
 		{
 			name: 'btca chat',
-			description: 'Open an interactive TUI session for multi-turn conversations about a technology.',
-			example: 'btca chat -t tailwindcss'
-		},
-		{
-			name: 'btca serve',
-			description: 'Start an HTTP server that exposes a /question endpoint for programmatic access.',
-			example: 'btca serve -p 8080'
-		},
-		{
-			name: 'btca open',
-			description: 'Keep an OpenCode instance running in the background for faster subsequent queries.',
-			example: 'btca open'
+			description: 'Open an interactive TUI session for multi-turn conversations about resources.',
+			example: 'btca chat -r runed'
 		},
 		{
 			name: 'btca config',
-			description: 'Display the path to the config file.',
+			description: 'Display the path to the config file and available subcommands.',
 			example: 'btca config'
 		},
 		{
@@ -40,25 +31,47 @@
 			example: 'btca config model -p anthropic -m claude-haiku-4-5'
 		},
 		{
-			name: 'btca config repos list',
-			description: 'List all configured repositories that btca can search.',
-			example: 'btca config repos list'
+			name: 'btca config resources list',
+			description: 'List all configured resources (git repos or local paths) that btca can search.',
+			example: 'btca config resources list'
 		},
 		{
-			name: 'btca config repos add',
-			description: 'Add a new repository to the config for btca to search.',
-			example: 'btca config repos add -n react -u https://github.com/facebook/react -b main'
+			name: 'btca config resources add (git)',
+			description: 'Add a new git repository as a resource.',
+			example:
+				'btca config resources add -n runed -t git -u https://github.com/svecosystem/runed -b main'
 		},
 		{
-			name: 'btca config repos remove',
-			description: 'Remove a repository from the configuration.',
-			example: 'btca config repos remove -n react'
+			name: 'btca config resources add (local)',
+			description: 'Add a local directory as a resource.',
+			example: 'btca config resources add -n myproject -t local --path /path/to/project'
 		},
 		{
-			name: 'btca config repos clear',
-			description: 'Delete all locally downloaded repositories to free up disk space.',
-			example: 'btca config repos clear'
+			name: 'btca config resources remove',
+			description: 'Remove a resource from the configuration.',
+			example: 'btca config resources remove -n runed'
+		},
+		{
+			name: 'btca config collections list',
+			description: 'List all indexed collections.',
+			example: 'btca config collections list'
+		},
+		{
+			name: 'btca config collections clear',
+			description: 'Clear all collections or a specific one with --key.',
+			example: 'btca config collections clear'
 		}
+		// TODO: add these back later once threads are in a better state...
+		// {
+		// 	name: 'btca config threads list',
+		// 	description: 'List all conversation threads.',
+		// 	example: 'btca config threads list'
+		// },
+		// {
+		// 	name: 'btca config threads delete',
+		// 	description: 'Delete a conversation thread by ID.',
+		// 	example: 'btca config threads delete --id abc123'
+		// }
 	] as const;
 
 	const shikiStore = getShikiStore();

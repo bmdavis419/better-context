@@ -58,15 +58,6 @@ export type Message =
 			content: string;
 	  };
 
-export type Mode =
-	| 'chat'
-	| 'add-repo'
-	| 'remove-repo'
-	| 'config-model'
-	| 'select-blessed-model'
-	| 'loading'
-	| 'cancel-pending'; // ESC pressed once during loading, waiting for confirmation
-
 export type CommandMode =
 	| 'add-repo'
 	| 'remove-repo'

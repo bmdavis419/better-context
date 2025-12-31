@@ -1,201 +1,14 @@
 import { createSignal, type Component } from 'solid-js';
-import type { ParentProps } from 'solid-js';
-import { AppProvider } from './context/app-context';
+import { ConfigProvider } from './context/config-context.tsx';
+import { MessagesProvider } from './context/messages-context.tsx';
 import { render, useKeyboard, useRenderer } from '@opentui/solid';
 import { MainUi } from '.';
 import { ConsolePosition } from '@opentui/core';
-import { useAppContext } from './context/app-context.tsx';
-import { services } from './services.ts';
-import { copyToClipboard } from './clipboard.ts';
-
-/**
- * Parse all @mentions from input text.
- * Returns the list of mentioned repos and the question with mentions stripped.
- */
-const parseAllMentions = (input: string): { repos: string[]; question: string } => {
-	const mentionRegex = /@(\w+)/g;
-	const repos: string[] = [];
-	let match;
-
-	while ((match = mentionRegex.exec(input)) !== null) {
-		repos.push(match[1]!);
-	}
-
-	// Remove @mentions from the question
-	const question = input.replace(mentionRegex, '').trim().replace(/\s+/g, ' ');
-
-	return { repos: [...new Set(repos)], question };
-};
-
-const AppWrapper: Component<ParentProps> = (props) => {
-	return <AppProvider>{props.children}</AppProvider>;
-};
 
 const App: Component = () => {
 	const renderer = useRenderer();
-	const appState = useAppContext();
 
 	const [heightPercent, setHeightPercent] = createSignal<`${number}%`>('100%');
-
-	const getInputText = () => {
-		return appState
-			.inputState()
-			.map((s) => s.content)
-			.join('');
-	};
-
-	const handleChatSubmit = async () => {
-		const inputText = getInputText().trim();
-		if (!inputText) return;
-
-		// If showing palettes, let them handle the return key
-		if (
-			appState.cursorIsCurrentlyIn() === 'command' ||
-			appState.cursorIsCurrentlyIn() === 'mention'
-		) {
-			return;
-		}
-
-		if (appState.isLoading()) {
-			return;
-		}
-
-		const parsed = parseAllMentions(inputText);
-		const thread = appState.currentThread();
-
-		// Validate: need resources either from input OR existing thread
-		if (parsed.repos.length === 0 && (!thread || thread.resources.length === 0)) {
-			appState.addMessage({
-				role: 'system',
-				content: 'Use @reponame to add context. Example: @svelte How do I...?'
-			});
-			return;
-		}
-
-		// Check for empty question
-		if (!parsed.question.trim()) {
-			appState.addMessage({
-				role: 'system',
-				content: 'Please enter a question after the @mention.'
-			});
-			return;
-		}
-
-		// Validate all mentioned repos exist
-		const availableRepos = appState.repos();
-		const validRepos: string[] = [];
-		const invalidRepos: string[] = [];
-
-		for (const repoName of parsed.repos) {
-			const found = availableRepos.find((r) => r.name.toLowerCase() === repoName.toLowerCase());
-			if (found) {
-				validRepos.push(found.name);
-			} else {
-				invalidRepos.push(repoName);
-			}
-		}
-
-		if (invalidRepos.length > 0) {
-			appState.addMessage({
-				role: 'system',
-				content: `Repo(s) not found: ${invalidRepos.join(', ')}. Use /add to add a repo.`
-			});
-			return;
-		}
-
-		// Lazily initialize thread on first question
-		if (!thread) {
-			await appState.initializeThread();
-		}
-
-		// Add new resources to thread (accumulate)
-		if (validRepos.length > 0) {
-			appState.addResourcesToThread(validRepos);
-		}
-
-		// Get accumulated resources for API call
-		const currentThread = appState.currentThread()!;
-		const allResources = currentThread.resources;
-
-		// Build thread context from previous Q&A
-		const threadContext = services.buildThreadContext(currentThread.questions);
-
-		// Add user message to UI
-		appState.addMessage({
-			role: 'user',
-			content: appState.inputState()
-		});
-
-		// Add placeholder assistant message
-		appState.addMessage({
-			role: 'assistant',
-			content: { type: 'chunks', chunks: [] }
-		});
-
-		appState.setInputState([]);
-		appState.setIsLoading(true);
-		appState.setMode('loading');
-		appState.setCancelState('none');
-
-		// Add question to thread (with empty answer initially)
-		await appState.addQuestionToThread({
-			prompt: parsed.question,
-			answer: '',
-			resources: validRepos, // only NEW resources added by this question
-			status: 'completed'
-		});
-
-		try {
-			const finalChunks = await services.askQuestion(
-				allResources,
-				parsed.question,
-				(update) => {
-					if (update.type === 'add') {
-						appState.addChunkToLastAssistant(update.chunk);
-					} else {
-						appState.updateChunkInLastAssistant(update.id, update.chunk);
-					}
-				},
-				threadContext
-			);
-
-			// Check if canceled during streaming
-			if (appState.cancelState() === 'pending' || appState.mode() === 'cancel-pending') {
-				// Already handled in cancel flow
-				return;
-			}
-
-			// Gather final answer text
-			const textChunks = finalChunks.filter((c) => c.type === 'text');
-			const fullResponse = textChunks.map((c) => c.text).join('\n\n');
-
-			// Update question with final answer
-			await appState.updateLastQuestionAnswer(fullResponse);
-
-			if (fullResponse) {
-				await copyToClipboard(fullResponse);
-				appState.addMessage({ role: 'system', content: 'Answer copied to clipboard!' });
-			}
-		} catch (error) {
-			// Check if this was a cancellation
-			if (appState.cancelState() === 'pending' || appState.mode() === 'cancel-pending') {
-				// Already handled in cancel flow
-			} else {
-				appState.addMessage({ role: 'system', content: `Error: ${error}` });
-			}
-		} finally {
-			appState.setIsLoading(false);
-			appState.setMode('chat');
-			appState.setCancelState('none');
-		}
-	};
-
-	const cancelMode = () => {
-		appState.setMode('chat');
-		appState.setInputState([]);
-		appState.setWizardInput('');
-		appState.setRemoveRepoName('');
-	};
 
 	useKeyboard((key) => {
 		// Debug console toggle
@@ -210,77 +23,16 @@ const App: Component = () => {
 			return;
 		}
 
-		// Ctrl+C handling
-		if (key.name === 'c' && key.ctrl) {
-			const mode = appState.mode();
-			if (mode === 'chat' || mode === 'loading') {
-				if (appState.inputState().length > 0) {
-					appState.setInputState([]);
-				} else {
-					renderer.destroy();
-				}
-			}
-			return;
-		}
-
+		// Ctrl+Q to quit
 		if (key.name === 'q' && key.ctrl) {
 			renderer.destroy();
 			return;
 		}
 
-		// Escape handling for modes
-		if (key.name === 'escape') {
-			const mode = appState.mode();
-
-			// Cancel flow during loading
-			if (mode === 'loading') {
-				if (appState.cancelState() === 'none') {
-					// First ESC - enter pending state
-					appState.setCancelState('pending');
-				} else {
-					// Second ESC - confirm cancel
-					(async () => {
-						appState.setCancelState('none');
-						appState.setMode('cancel-pending');
-
-						// Cancel the request (kills OpenCode server)
-						await services.cancelCurrentRequest();
-
-						// Mark question as canceled with partial answer
-						await appState.markLastQuestionCanceled();
-
-						// Mark last assistant message as canceled
-						appState.markLastAssistantMessageCanceled();
-
-						// Add system message
-						appState.addMessage({ role: 'system', content: 'Request canceled.' });
-
-						appState.setMode('chat');
-						appState.setIsLoading(false);
-					})();
-				}
-				return;
-			}
-
-			// Handle other non-chat modes
-			if (mode !== 'chat' && mode !== 'cancel-pending') {
-				cancelMode();
-			} else if (
-				appState.cursorIsCurrentlyIn() === 'command' ||
-				appState.cursorIsCurrentlyIn() === 'mention'
-			) {
-				appState.setInputState([]);
-			}
-			return;
-		}
-
-		// Return key for chat submission (only in chat mode, not in palettes)
-		if (
-			key.name === 'return' &&
-			appState.mode() === 'chat' &&
-			(appState.cursorIsCurrentlyIn() === 'text' || appState.cursorIsCurrentlyIn() === 'pasted')
-		) {
-			handleChatSubmit();
+		// Ctrl+C to quit (when no input to clear - handled in InputSection)
+		if (key.name === 'c' && key.ctrl) {
+			// If we reach here, InputSection didn't handle it (no input to clear)
+			renderer.destroy();
 			return;
 		}
 	});
@@ -290,9 +42,11 @@ const App: Component = () => {
 
 render(
 	() => (
-		<AppWrapper>
-			<App />
-		</AppWrapper>
+		<ConfigProvider>
+			<MessagesProvider>
+				<App />
+			</MessagesProvider>
+		</ConfigProvider>
 	),
 	{
 		targetFps: 30,

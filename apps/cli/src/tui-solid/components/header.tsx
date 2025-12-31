@@ -1,9 +1,9 @@
 import type { Component } from 'solid-js';
 import { colors } from '../theme';
-import { useAppContext } from '../context/app-context';
+import { useConfigContext } from '../context/config-context.tsx';
 
 export const Header: Component = () => {
-	const appState = useAppContext();
+	const config = useConfigContext();
 
 	return (
 		<box
@@ -45,7 +45,7 @@ export const Header: Component = () => {
 			</text>
 			<text
 				fg={colors.textSubtle}
-				content={`${appState.selectedProvider()}/${appState.selectedModel()}`}
+				content={`${config.selectedProvider()}/${config.selectedModel()}`}
 			/>
 		</box>
 	);

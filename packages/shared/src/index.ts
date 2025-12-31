@@ -41,13 +41,5 @@ export const BLESSED_MODELS: BlessedModel[] = [
 		description: 'Kimi K2, no reasoning',
 		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
 		isDefault: false
-	},
-	{
-		provider: 'opencode',
-		model: 'btca-gemini-3-flash',
-		description:
-			'Gemini 3 Flash with low reasoning (the special btca version is already configured for you in btca)',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
-		isDefault: false
 	}
 ];
