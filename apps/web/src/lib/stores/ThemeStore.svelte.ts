@@ -60,4 +60,3 @@ export const setThemeStore = () => {
 	const newStore = new ThemeStore();
 	return internalSet(newStore);
 };
-

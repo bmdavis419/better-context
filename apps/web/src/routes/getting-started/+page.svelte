@@ -133,8 +133,8 @@ Available resources: svelte, tailwindcss`;
 		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
 			Use <code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">ask</code> for
 			a single question, or
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">chat</code> for an
-			interactive session.
+			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">chat</code> for an interactive
+			session.
 		</p>
 
 		<div class="mt-4 grid gap-4 md:grid-cols-2">

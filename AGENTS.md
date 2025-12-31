@@ -1,5 +1,27 @@
 # AGENTS.md
 
+## Critical Rules
+
+- **ONLY use `bun`** - never npm/yarn
+- **NEVER run dev/build commands** (`bun dev`, `bun build`)
+
+## Commands
+
+### Root Commands
+
+- Type check all: `bun run check:all`
+- Format all: `bun run format:all`
+
+### Package-Specific Commands
+
+After making changes in a specific package, run its check script:
+
+| Package           | Check Command          | Format Command          |
+| ----------------- | ---------------------- | ----------------------- |
+| `apps/cli`        | `bun run check:cli`    | `bun run format:cli`    |
+| `apps/web`        | `bun run check:web`    | `bun run format:web`    |
+| `packages/shared` | `bun run check:shared` | `bun run format:shared` |
+
 <!-- effect-solutions:start -->
 
 ## Effect Solutions Usage
@@ -22,10 +44,6 @@ The Effect Solutions CLI provides curated best practices and patterns for Effect
 - **Imports**: External packages first, then local. Use `.ts` extensions for local imports.
 - **Bun APIs**: Prefer `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` over Node equivalents.
 - **Testing**: Use `bun:test` with `import { test, expect } from "bun:test"`.
-
-## Scripts
-
-- run `bun check` to check for errors
 
 ## Error Handling
 

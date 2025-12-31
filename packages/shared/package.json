@@ -7,10 +7,13 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
-	"devDependencies": {
-		"@types/bun": "latest"
+	"scripts": {
+		"check": "tsgo --noEmit",
+		"format": "prettier --write ."
 	},
-	"peerDependencies": {
-		"typescript": "^5"
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20251231.1",
+		"prettier": "^3.7.4"
 	}
 }

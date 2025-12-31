@@ -2,13 +2,17 @@
 	"$schema": "https://turborepo.com/schema.json",
 	"tasks": {
 		"build": {
+			"dependsOn": ["^build"],
 			"outputs": [".svelte-kit/**", "dist/**", ".vercel/**"]
+		},
+		"format": {
+			"dependsOn": ["^format"]
+		},
+		"check": {
+			"dependsOn": ["^check"]
 		},
 		"dev": {
 			"persistent": true,
-			"cache": false
-		},
-		"check": {
 			"cache": false
 		}
 	}

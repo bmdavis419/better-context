@@ -36,7 +36,7 @@
 		"build:targets": "bun run scripts/build-binaries.ts",
 		"build": "bun run build:js && bun run build:targets",
 		"check": "tsgo --noEmit",
-		"prepare": "effect-language-service patch",
+		"format": "prettier --write .",
 		"dev": "bun run src/tui-solid/App.tsx",
 		"db:generate": "drizzle-kit generate",
 		"db:sync": "bun run db:generate && bun scripts/sync-schema-sql.ts",
@@ -45,7 +45,7 @@
 	"devDependencies": {
 		"@btca/shared": "workspace:*",
 		"@effect/cli": "^0.72.1",
-		"@effect/language-service": "^0.62.5",
+		"@effect/language-service": "^0.63.2",
 		"@effect/platform": "^0.93.8",
 		"@effect/platform-bun": "^0.85.0",
 		"@effect/printer": "^0.47.0",
@@ -57,13 +57,14 @@
 		"@shikijs/langs": "^3.20.0",
 		"@shikijs/themes": "^3.20.0",
 		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20251231.1",
 		"better-sqlite3": "^12.5.0",
 		"drizzle-kit": "^0.31.8",
 		"drizzle-orm": "^0.45.1",
 		"effect": "^3.19.13",
 		"marked": "^17.0.1",
+		"prettier": "^3.7.4",
 		"shiki": "^3.20.0",
-		"solid-js": "^1.9.10",
-		"typescript": "^5.9.3"
+		"solid-js": "^1.9.10"
 	}
 }
