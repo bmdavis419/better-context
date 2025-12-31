@@ -1,0 +1,108 @@
+# btca (Better Context)
+
+> A Bun-powered CLI that answers questions about libraries/frameworks by cloning their repositories locally and querying them (source-first, no web browsing).
+
+`btca` is designed for "what does the code/docs actually do?" questions: it keeps answers up to date by reading the real repository you configure as a *resource*.
+
+It ships:
+- A CLI (built with Effect + Bun)
+- An interactive terminal UI (TUI) for multi-resource Q&A
+- This docs website (`btca.dev`)
+
+## What btca can do
+
+- Ask a single question about configured resources and stream the answer
+- Launch a built-in TUI for multi-turn conversation with `@resource` mentions
+- Manage local config (resources + model/provider)
+- Track conversation threads and indexed collections
+
+## Quickstart
+
+- Install (recommended):
+  - `bun add -g btca`
+- Ask a question:
+  - `btca ask -r svelte -q 'How do runes work in Svelte 5?'`
+- Run the interactive TUI:
+  - `btca chat`
+- Print config path:
+  - `btca config`
+
+## Command reference (CLI)
+
+- `btca` (no args): print version info.
+- `btca --help`: show help.
+- `btca --version` / `btca -v`: print version.
+
+- `btca ask -q '<question>' [-t <tech>] [-r <resource>...]`
+  - Ask one question and stream the answer.
+  - `-t` is shorthand for a single resource.
+  - `-r` can be repeated for multiple resources.
+  - Supports @mentions in the question to specify resources.
+
+- `btca chat [-r <resource>...]`
+  - Launch the interactive TUI for multi-turn conversation.
+
+- `btca config`
+  - Prints the config file path and available subcommands.
+
+- `btca config model`
+  - Show current provider/model.
+- `btca config model -p <provider> -m <model>`
+  - Set provider/model (both must be provided together).
+
+- `btca config resources list`
+  - List configured resources.
+- `btca config resources add -n <name> -t <type> [-u <url>] [-b <branch>] [--path <path>] [--notes '<specialNotes>'] [--search-path '<path>']`
+  - Add a resource. Type is `git` (default) or `local`.
+  - Git resources require `-u <url>`, optional `-b <branch>` (default: main).
+  - Local resources require `--path <path>`.
+- `btca config resources remove [-n <name>]`
+  - Remove a resource from config (with confirmation).
+
+- `btca config collections list`
+  - List all indexed collections.
+- `btca config collections clear [--key <key>]`
+  - Clear all collections, or a specific one with `--key`.
+
+- `btca config threads list`
+  - List conversation threads.
+- `btca config threads delete [--id <id>]`
+  - Delete a thread.
+
+## Command reference (built-in TUI)
+
+In the TUI you typically:
+- Ask: `@resource Your question here`
+- Use slash commands (via `/`):
+  - `/add` (resource wizard)
+  - `/remove` (remove resource from config)
+  - `/model` (pick a recommended model)
+  - `/custom` (set custom provider/model)
+  - `/clear` (clear chat history)
+
+The TUI streams the answer and copies it to your clipboard on completion.
+
+## Configuration (`~/.config/btca/btca.json`)
+
+On first run, btca creates a default config at `~/.config/btca/btca.json`.
+
+Key fields:
+- `resources[]`: array of resources:
+  - Git resources: `name`, `type: "git"`, `url`, `branch`
+  - Local resources: `name`, `type: "local"`, `path`
+  - `specialNotes` (optional): instructions to guide answering
+  - `searchPath` (optional, git only): limit search to a subdirectory
+- `provider` + `model`: provider/model IDs used for answers
+
+## Documentation (btca.dev)
+
+- [Getting started](https://btca.dev/getting-started): install, defaults, config example
+- [Commands](https://btca.dev/commands): command list + examples
+- [Models](https://btca.dev/models): recommended models + provider setup links
+
+## Source code & repo layout
+
+- [GitHub repository](https://github.com/bmdavis419/better-context)
+- `apps/cli/`: btca CLI + TUI (Bun + Effect)
+- `apps/web/`: btca.dev SvelteKit site (static)
+- `packages/shared/`: shared constants (e.g. model list)

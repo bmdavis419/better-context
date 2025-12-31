@@ -1,0 +1,84 @@
+---
+description: Use btca to fetch up-to-date answers about external libraries/frameworks by searching their official repos locally (source-first, no web browsing).
+alwaysApply: true
+---
+
+# better-context (btca)
+
+btca is a Bun-powered CLI for getting **up-to-date** answers about libraries/frameworks by **cloning/pulling their repositories locally** and querying the code/docs.
+
+## When to use btca
+
+Use btca when the user asks about an **external technology** (not this repo), for example:
+
+- How a library/framework works internally
+- Exact API behavior, defaults, edge cases, version-specific changes
+- "What does the source/docs say?" questions that must be current
+
+## How to use btca (workflow)
+
+1. Pick the correct resource (repo name)
+
+- If unsure what's configured: `btca config resources list`
+- If missing: add it with `btca config resources add -n svelte -t git -u https://github.com/sveltejs/svelte -b main`
+
+2. Ask a single, precise question
+
+- `btca ask -t <tech> -q '<question>'`
+- Or use `-r <resource>` for multiple: `btca ask -r svelte -r effect -q '<question>'`
+- You can also use @mentions in the question: `btca ask -q 'How do @svelte stores work?'`
+
+## Commands (CLI)
+
+- `btca`
+  - Print version info.
+- `btca --help`
+  - Show help.
+- `btca --version` / `btca -v`
+  - Print version.
+
+- `btca ask -q '<question>' [-t <tech>] [-r <resource>...]`
+  - Ask one question and stream the answer.
+  - `-t` is shorthand for a single resource.
+  - `-r` can be repeated for multiple resources.
+  - Supports @mentions in the question to specify resources.
+
+- `btca chat [-r <resource>...]`
+  - Launch the interactive TUI for multi-turn conversation.
+
+- `btca config`
+  - Print config file path + available config commands.
+
+- `btca config model`
+  - Show the current provider/model.
+- `btca config model -p <provider> -m <model>`
+  - Set provider + model (both required together).
+
+- `btca config resources list`
+  - List configured resources.
+- `btca config resources add -n <name> -t <type> [-u <url>] [-b <branch>] [--path <path>] [--notes '<specialNotes>'] [--search-path '<path>']`
+  - Add a resource. Type is `git` (default) or `local`.
+  - Git resources require `-u <url>`, optional `-b <branch>` (default: main).
+  - Local resources require `--path <path>`.
+- `btca config resources remove [-n <name>]`
+  - Remove a resource from the config (with confirmation).
+
+- `btca config collections list`
+  - List all indexed collections.
+- `btca config collections clear [--key <key>]`
+  - Clear all collections, or a specific one with `--key`.
+
+- `btca config threads list`
+  - List conversation threads.
+- `btca config threads delete [--id <id>]`
+  - Delete a thread.
+
+## Example (recommended pattern)
+
+Ask btca to answer from the repo:
+
+- `btca ask -r svelte -q 'How do runes work in Svelte 5?'`
+
+Multi-resource query:
+
+- `btca ask -r svelte -r effect -q 'Compare error handling patterns'`
