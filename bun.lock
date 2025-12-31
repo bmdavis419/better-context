@@ -15,7 +15,7 @@
     },
     "apps/cli": {
       "name": "btca",
-      "version": "0.6.3",
+      "version": "0.6.4",
       "bin": {
         "btca": "bin.js",
       },
