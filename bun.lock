@@ -15,7 +15,7 @@
     },
     "apps/cli": {
       "name": "btca",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "bin": {
         "btca": "bin.js",
       },
@@ -321,7 +321,7 @@
 
     "@msgpackr-extract/msgpackr-extract-win32-x64": ["@msgpackr-extract/msgpackr-extract-win32-x64@3.0.3", "", { "os": "win32", "cpu": "x64" }, "sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ=="],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.220", "", {}, "sha512-OllJJ+SjTSzbccGAat2uj5Vka56B2bxm+9SkFpFV0BXquaJA21KRdt1TgJOQnnzo6A/Zlwbx+ecmJ+Xai01JZA=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.221", "", {}, "sha512-midJuagLLYTQ5GzAyYn66W0f8VesB2PU17iYYUk5nqgvb8c9fXPG4ri/hGvTazge0crwEJXf4Ko1ybWAwVtwpg=="],
 
     "@opentui/core": ["@opentui/core@0.1.67", "", { "dependencies": { "bun-ffi-structs": "0.1.2", "diff": "8.0.2", "jimp": "1.6.0", "yoga-layout": "3.2.1" }, "optionalDependencies": { "@dimforge/rapier2d-simd-compat": "^0.17.3", "@opentui/core-darwin-arm64": "0.1.67", "@opentui/core-darwin-x64": "0.1.67", "@opentui/core-linux-arm64": "0.1.67", "@opentui/core-linux-x64": "0.1.67", "@opentui/core-win32-arm64": "0.1.67", "@opentui/core-win32-x64": "0.1.67", "bun-webgpu": "0.1.4", "planck": "^1.4.2", "three": "0.177.0" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-zmfyA10QUbzT6ohacPoHmGiYzuJrDSCfQWRWrKtao0BrHj9bii73qWy3V/eR4ibVueoRREwxJs5GlBOSvK6IoA=="],
 
