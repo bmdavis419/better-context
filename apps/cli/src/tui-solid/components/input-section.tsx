@@ -15,9 +15,12 @@ import { BlessedModelSelect } from './blessed-model-select.tsx';
 
 export type ActiveWizard = 'none' | 'add-repo' | 'remove-repo' | 'config-model' | 'blessed-model';
 export type WizardStep =
+	| 'type'
 	| 'name'
 	| 'url'
 	| 'branch'
+	| 'searchPath'
+	| 'path'
 	| 'notes'
 	| 'confirm'
 	| 'provider'
@@ -123,7 +126,7 @@ export const InputSection: Component = () => {
 		switch (command.mode) {
 			case 'add-repo':
 				setActiveWizard('add-repo');
-				setCurrentWizardStep('name');
+				setCurrentWizardStep('type');
 				break;
 			case 'remove-repo':
 				if (config.repos().length === 0) {

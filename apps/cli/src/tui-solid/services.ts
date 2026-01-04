@@ -9,7 +9,7 @@ import {
 	type ChunkUpdate,
 	type BtcaChunk
 } from '../core/index.ts';
-import { isGitResource, type GitResource } from '../core/resource/types.ts';
+import { isGitResource, type GitResource, type LocalResource } from '../core/resource/types.ts';
 import type { Repo, ThreadQuestion, QuestionStatus } from './types.ts';
 
 // Create a managed runtime with BunContext
@@ -68,6 +68,24 @@ export const services = {
 		};
 		await runtime.runPromise(core.config.addResource(resource));
 		return repo;
+	},
+
+	/**
+	 * Add a local resource
+	 */
+	addLocalResource: async (resource: {
+		name: string;
+		path: string;
+		specialNotes?: string;
+	}): Promise<void> => {
+		const core = await getServices();
+		const localResource: LocalResource = {
+			type: 'local',
+			name: resource.name,
+			path: resource.path,
+			...(resource.specialNotes && { specialNotes: resource.specialNotes })
+		};
+		await runtime.runPromise(core.config.addResource(localResource));
 	},
 
 	/**
