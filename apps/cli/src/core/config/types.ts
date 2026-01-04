@@ -5,6 +5,7 @@ import { GitResourceSchema, ResourceDefinitionSchema } from '../resource/types.t
 export const CONFIG_DIRECTORY = '~/.config/btca';
 export const CONFIG_FILENAME = 'btca.json';
 export const DEFAULT_DATA_DIRECTORY = '~/.local/share/btca';
+export const CONFIG_SCHEMA_URL = 'https://btca.dev/btca.schema.json';
 
 // Legacy repo schema (for migration)
 export const LegacyRepoSchema = Schema.Struct({
@@ -28,6 +29,7 @@ export const LegacyConfigSchema = Schema.Struct({
 
 // New config schema with resources instead of repos
 export const StoredConfigSchema = Schema.Struct({
+	$schema: Schema.optional(Schema.String), // JSON schema URL for LSP support
 	dataDirectory: Schema.optional(Schema.String), // defaults to ~/.local/share/btca
 	resources: Schema.Array(ResourceDefinitionSchema),
 	model: Schema.String,

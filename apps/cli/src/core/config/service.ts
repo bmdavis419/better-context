@@ -5,6 +5,7 @@ import {
 	type Config,
 	CONFIG_DIRECTORY,
 	CONFIG_FILENAME,
+	CONFIG_SCHEMA_URL,
 	DEFAULT_DATA_DIRECTORY,
 	DEFAULT_MODEL,
 	DEFAULT_PROVIDER,
@@ -72,6 +73,7 @@ interface MigratedResource {
 }
 
 interface MigratedConfig {
+	$schema: string;
 	resources: MigratedResource[];
 	model: string;
 	provider: string;
@@ -109,6 +111,7 @@ const migrateConfig = (parsed: Record<string, unknown>): MigratedConfig => {
 	});
 
 	const result: MigratedConfig = {
+		$schema: CONFIG_SCHEMA_URL,
 		resources,
 		model: String(parsed.model ?? DEFAULT_MODEL),
 		provider: String(parsed.provider ?? DEFAULT_PROVIDER)
@@ -144,6 +147,7 @@ const loadConfig = Effect.gen(function* () {
 			.pipe(Effect.catchAll(() => Effect.void));
 
 		const defaultStored: typeof StoredConfigSchema.Type = {
+			$schema: CONFIG_SCHEMA_URL,
 			resources: DEFAULT_RESOURCES,
 			model: DEFAULT_MODEL,
 			provider: DEFAULT_PROVIDER
@@ -241,6 +245,7 @@ const createConfigService = Effect.gen(function* () {
 
 	const saveConfig = Effect.gen(function* () {
 		const stored: typeof StoredConfigSchema.Type = {
+			$schema: CONFIG_SCHEMA_URL,
 			dataDirectory: collapseHome(config.dataDirectory),
 			resources: config.resources,
 			model: config.model,

@@ -1,0 +1,109 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://btca.dev/btca.schema.json",
+	"title": "btca Configuration",
+	"description": "Configuration file for btca (Better Context Agent)",
+	"type": "object",
+	"properties": {
+		"$schema": {
+			"type": "string",
+			"description": "JSON Schema reference for IDE support"
+		},
+		"dataDirectory": {
+			"type": "string",
+			"description": "Directory for storing btca data (resources, collections). Defaults to ~/.local/share/btca",
+			"default": "~/.local/share/btca"
+		},
+		"model": {
+			"type": "string",
+			"description": "The model to use for AI interactions",
+			"default": "big-pickle"
+		},
+		"provider": {
+			"type": "string",
+			"description": "The AI provider to use",
+			"default": "opencode"
+		},
+		"resources": {
+			"type": "array",
+			"description": "List of resources (documentation repositories or local directories) to use for context",
+			"items": {
+				"oneOf": [
+					{
+						"$ref": "#/$defs/gitResource"
+					},
+					{
+						"$ref": "#/$defs/localResource"
+					}
+				]
+			},
+			"default": []
+		}
+	},
+	"required": ["model", "provider", "resources"],
+	"additionalProperties": false,
+	"$defs": {
+		"gitResource": {
+			"type": "object",
+			"title": "Git Resource",
+			"description": "A resource cloned from a remote git repository",
+			"properties": {
+				"type": {
+					"type": "string",
+					"const": "git",
+					"description": "Resource type identifier"
+				},
+				"name": {
+					"type": "string",
+					"description": "Unique name for this resource"
+				},
+				"url": {
+					"type": "string",
+					"description": "Git repository URL",
+					"format": "uri"
+				},
+				"branch": {
+					"type": "string",
+					"description": "Git branch to use",
+					"default": "main"
+				},
+				"searchPath": {
+					"type": "string",
+					"description": "Subdirectory within the repo to focus searches on"
+				},
+				"specialNotes": {
+					"type": "string",
+					"description": "Additional context or notes about this resource for the AI"
+				}
+			},
+			"required": ["type", "name", "url", "branch"],
+			"additionalProperties": false
+		},
+		"localResource": {
+			"type": "object",
+			"title": "Local Resource",
+			"description": "A resource from a local directory (symlinked)",
+			"properties": {
+				"type": {
+					"type": "string",
+					"const": "local",
+					"description": "Resource type identifier"
+				},
+				"name": {
+					"type": "string",
+					"description": "Unique name for this resource"
+				},
+				"path": {
+					"type": "string",
+					"description": "Absolute path to the local directory"
+				},
+				"specialNotes": {
+					"type": "string",
+					"description": "Additional context or notes about this resource for the AI"
+				}
+			},
+			"required": ["type", "name", "path"],
+			"additionalProperties": false
+		}
+	}
+}
