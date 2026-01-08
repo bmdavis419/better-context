@@ -49,7 +49,28 @@ btca open
 
 ## Config
 
-On first run, `btca` creates a default config at `~/.config/btca/btca.json`. That’s where the repo list + model/provider live.
+On first run, `btca` creates a default config at `~/.config/btca/btca.json`. That's where the repo list + model/provider live.
+
+### Adding resources
+
+Default resources: svelte, effect, nextjs. Add more:
+
+```bash
+# Git repo
+btca config resources add -n react -u https://github.com/facebook/react -b main
+
+# With search path (limits where agent searches)
+btca config resources add -n nextjs-docs -u https://github.com/vercel/next.js -b canary --search-path docs
+
+# Local directory
+btca config resources add -n myproject --type local --path ~/code/myproject
+```
+
+List/remove:
+```bash
+btca config resources list
+btca config resources remove -n react
+```
 
 ## stuff I want to add
 

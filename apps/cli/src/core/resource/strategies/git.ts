@@ -3,6 +3,11 @@ import { Effect } from 'effect';
 import type { GitResource } from '../types.ts';
 import { ResourceError } from '../errors.ts';
 import { directoryExists } from '../../../lib/utils/files.ts';
+import {
+	validateBranchName,
+	validateGitUrl,
+	validateSearchPath
+} from '../../validation/resource.ts';
 
 /** Run a git command, fails with ResourceError if non-zero exit */
 const runGit = (args: string[], options: { cwd?: string; quiet?: boolean }) =>
@@ -49,8 +54,16 @@ const cloneRepo = (args: {
 	Effect.gen(function* () {
 		const { repoDir, url, branch, searchPath, quiet } = args;
 
-		yield* runGit(['init', repoDir], { quiet });
-		yield* runGit(['remote', 'add', 'origin', url], { cwd: repoDir, quiet });
+		// Validate inputs to prevent injection attacks
+		yield* validateGitUrl(url);
+		yield* validateBranchName(branch);
+		if (searchPath) {
+			yield* validateSearchPath(searchPath);
+		}
+
+		// Use '--' delimiter to prevent git option injection
+		yield* runGit(['init', '--', repoDir], { quiet });
+		yield* runGit(['remote', 'add', 'origin', '--', url], { cwd: repoDir, quiet });
 
 		if (searchPath) {
 			yield* runGit(['config', 'core.sparseCheckout', 'true'], { cwd: repoDir, quiet });
@@ -58,13 +71,17 @@ const cloneRepo = (args: {
 		}
 
 		yield* runGit(['fetch', '--depth', '1', 'origin', branch], { cwd: repoDir, quiet });
-		yield* runGit(['checkout', branch], { cwd: repoDir, quiet });
+		yield* runGit(['checkout', '--', branch], { cwd: repoDir, quiet });
 	});
 
 /** Pull latest changes for a git repo */
 const pullRepo = (args: { repoDir: string; branch: string; quiet?: boolean }) =>
 	Effect.gen(function* () {
 		const { repoDir, branch, quiet } = args;
+
+		// Validate branch name to prevent injection attacks
+		yield* validateBranchName(branch);
+
 		yield* runGit(['fetch', '--depth', '1', 'origin', branch], { cwd: repoDir, quiet });
 		yield* runGit(['reset', '--hard', `origin/${branch}`], { cwd: repoDir, quiet });
 	});
