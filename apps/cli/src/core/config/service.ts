@@ -13,7 +13,17 @@ import {
 	StoredConfigSchema
 } from './types.ts';
 import type { ResourceDefinition } from '../resource/types.ts';
+import { isGitResource } from '../resource/types.ts';
 import { expandHome } from '../../lib/utils/files.ts';
+import {
+	validateResourceName,
+	validateGitUrl,
+	validateBranchName,
+	validateSearchPath,
+	validateResourceNotes,
+	validateProviderName,
+	validateModelName
+} from '../validation/resource.ts';
 
 export class ConfigError extends TaggedError('ConfigError')<{
 	readonly message: string;
@@ -300,6 +310,10 @@ const createConfigService = Effect.gen(function* () {
 			provider: string;
 		}): Effect.Effect<{ model: string; provider: string }, ConfigError, FileSystem.FileSystem> =>
 			Effect.gen(function* () {
+				// Validate model and provider names
+				yield* validateProviderName(args.provider);
+				yield* validateModelName(args.model);
+
 				config = { ...config, model: args.model, provider: args.provider };
 				yield* saveConfig;
 				return { model: config.model, provider: config.provider };
@@ -312,6 +326,29 @@ const createConfigService = Effect.gen(function* () {
 			resource: ResourceDefinition
 		): Effect.Effect<ResourceDefinition, ConfigError, FileSystem.FileSystem> =>
 			Effect.gen(function* () {
+				// Validate resource name to prevent path traversal and git injection
+				yield* validateResourceName(resource.name);
+
+				// Validate git-specific fields
+				if (isGitResource(resource)) {
+					yield* validateGitUrl(resource.url).pipe(
+						Effect.mapError((e) => new ConfigError({ message: e.message, cause: e }))
+					);
+					yield* validateBranchName(resource.branch).pipe(
+						Effect.mapError((e) => new ConfigError({ message: e.message, cause: e }))
+					);
+					if (resource.searchPath) {
+						yield* validateSearchPath(resource.searchPath).pipe(
+							Effect.mapError((e) => new ConfigError({ message: e.message, cause: e }))
+						);
+					}
+				}
+
+				// Validate notes field if present
+				if (resource.specialNotes) {
+					yield* validateResourceNotes(resource.specialNotes);
+				}
+
 				const existing = config.resources.find((r) => r.name === resource.name);
 				if (existing) {
 					return yield* Effect.fail(
