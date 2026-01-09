@@ -8,10 +8,10 @@ type BlessedModel = {
 
 export const BLESSED_MODELS: BlessedModel[] = [
 	{
-		provider: 'anthropic',
+		provider: 'opencode',
 		model: 'claude-haiku-4-5',
 		description: 'Claude Haiku 4.5, no reasoning. I HIGHLY recommend this model.',
-		providerSetupUrl: 'https://opencode.ai/docs/providers/#anthropic',
+		providerSetupUrl: 'https://opencode.ai/docs/providers/#opencode-zen',
 		isDefault: false
 	},
 	{

@@ -28,7 +28,7 @@
 		{
 			name: 'btca config model',
 			description: 'View or set the AI model and provider used for answering questions.',
-			example: 'btca config model -p anthropic -m claude-haiku-4-5'
+			example: 'btca config model -p opencode -m claude-haiku-4-5'
 		},
 		{
 			name: 'btca config resources list',
