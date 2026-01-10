@@ -6,8 +6,8 @@
 	const INSTALL_CMD = `bun add -g btca opencode-ai && btca`;
 	const CURSOR_CMD = `mkdir -p .cursor/rules && curl -fsSL "https://btca.dev/rule" -o .cursor/rules/better_context.mdc && echo "Rule file created."`;
 
-	const ASK_CMD = `btca ask -r svelte -q "How does the $state rune work?"`;
-	const CHAT_CMD = `btca chat -r svelte`;
+	const ASK_CMD = `btca ask --resource svelte --question "How does the $state rune work?"`;
+	const CHAT_CMD = `btca chat --resource svelte`;
 
 	const shikiStore = getShikiStore();
 	const themeStore = getThemeStore();

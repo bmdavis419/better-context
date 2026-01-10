@@ -20,19 +20,19 @@ btca --help
 Ask a question:
 
 ```bash
-btca ask -t svelte -q "How do stores work in Svelte 5?"
+btca ask --resource svelte --question "How do stores work in Svelte 5?"
 ```
 
 Open the TUI:
 
 ```bash
-btca chat -t svelte
+btca chat --resource svelte
 ```
 
 Run as a server:
 
 ```bash
-btca serve -p 8080
+btca serve --port 8080
 ```
 
 Then POST `/question` with:
@@ -57,19 +57,19 @@ Default resources: svelte, effect, nextjs. Add more:
 
 ```bash
 # Git repo
-btca config resources add -n react -u https://github.com/facebook/react -b main
+btca config resources add --name react --url https://github.com/facebook/react --branch main
 
 # With search path (limits where agent searches)
-btca config resources add -n nextjs-docs -u https://github.com/vercel/next.js -b canary --search-path docs
+btca config resources add --name nextjs-docs --url https://github.com/vercel/next.js --branch canary --search-path docs
 
 # Local directory
-btca config resources add -n myproject --type local --path ~/code/myproject
+btca config resources add --name myproject --type local --path ~/code/myproject
 ```
 
 List/remove:
 ```bash
 btca config resources list
-btca config resources remove -n react
+btca config resources remove --name react
 ```
 
 ## stuff I want to add
