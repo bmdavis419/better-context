@@ -1,3 +1,5 @@
+import { Hono } from 'hono';
+import type { Context as HonoContext, Next } from 'hono';
 import { z } from 'zod';
 
 import { Agent } from './agent/service.ts';
@@ -47,31 +49,6 @@ class RequestError extends Error {
 	}
 }
 
-const json = (body: unknown, status = 200, headers?: Record<string, string>) =>
-	new Response(JSON.stringify(body), {
-		status,
-		headers: {
-			'content-type': 'application/json',
-			...headers
-		}
-	});
-
-const sse = (stream: ReadableStream<Uint8Array>) =>
-	new Response(stream, {
-		headers: {
-			'content-type': 'text/event-stream',
-			'cache-control': 'no-cache',
-			connection: 'keep-alive'
-		}
-	});
-
-const errorToJsonResponse = (error: unknown) => {
-	const tag = getErrorTag(error);
-	const message = getErrorMessage(error);
-	const status = tag === 'CollectionError' || tag === 'ResourceError' ? 400 : 500;
-	return json({ error: message, tag }, status);
-};
-
 const decodeJson = async <T>(req: Request, schema: z.ZodType<T>): Promise<T> => {
 	let body: unknown;
 	try {
@@ -106,27 +83,63 @@ const start = async () => {
 	const agent = Agent.create(config);
 
 	// ─────────────────────────────────────────────────────────────────────────
-	// Route Handlers
+	// Create Hono App
 	// ─────────────────────────────────────────────────────────────────────────
 
-	const handleHealth = () =>
-		json({
+	const app = new Hono();
+
+	// Request context middleware
+	app.use('*', async (c: HonoContext, next: Next) => {
+		const requestId = crypto.randomUUID();
+		return Context.run({ requestId, txDepth: 0 }, async () => {
+			Metrics.info('http.request', { method: c.req.method, path: c.req.path });
+			try {
+				await next();
+			} finally {
+				Metrics.info('http.response', {
+					path: c.req.path,
+					status: c.res.status
+				});
+			}
+		});
+	});
+
+	// Error handler
+	app.onError((err: Error, c: HonoContext) => {
+		Metrics.error('http.error', { error: Metrics.errorInfo(err) });
+		const tag = getErrorTag(err);
+		const message = getErrorMessage(err);
+		const status = tag === 'CollectionError' || tag === 'ResourceError' ? 400 : 500;
+		return c.json({ error: message, tag }, status);
+	});
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Routes
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// GET / - Health check
+	app.get('/', (c: HonoContext) => {
+		return c.json({
 			ok: true,
 			service: 'btca-server',
 			version: '0.0.1'
 		});
+	});
 
-	const handleConfig = () =>
-		json({
+	// GET /config
+	app.get('/config', (c: HonoContext) => {
+		return c.json({
 			provider: config.provider,
 			model: config.model,
 			resourcesDirectory: config.resourcesDirectory,
 			collectionsDirectory: config.collectionsDirectory,
 			resourceCount: config.resources.length
 		});
+	});
 
-	const handleResources = () =>
-		json({
+	// GET /resources
+	app.get('/resources', (c: HonoContext) => {
+		return c.json({
 			resources: config.resources.map((r) => ({
 				name: r.name,
 				type: r.type,
@@ -136,9 +149,11 @@ const start = async () => {
 				specialNotes: r.specialNotes ?? null
 			}))
 		});
+	});
 
-	const handleQuestion = async (req: Request) => {
-		const decoded = await decodeJson(req, QuestionRequestSchema);
+	// POST /question
+	app.post('/question', async (c: HonoContext) => {
+		const decoded = await decodeJson(c.req.raw, QuestionRequestSchema);
 		const resourceNames =
 			decoded.resources && decoded.resources.length > 0
 				? decoded.resources
@@ -163,16 +178,17 @@ const start = async () => {
 			model: result.model
 		});
 
-		return json({
+		return c.json({
 			answer: result.answer,
 			model: result.model,
 			resources: resourceNames,
 			collection: { key: collectionKey, path: collection.path }
 		});
-	};
+	});
 
-	const handleQuestionStream = async (req: Request) => {
-		const decoded = await decodeJson(req, QuestionRequestSchema);
+	// POST /question/stream
+	app.post('/question/stream', async (c: HonoContext) => {
+		const decoded = await decodeJson(c.req.raw, QuestionRequestSchema);
 		const resourceNames =
 			decoded.resources && decoded.resources.length > 0
 				? decoded.resources
@@ -208,71 +224,25 @@ const start = async () => {
 		Metrics.info('question.stream.start', { collectionKey });
 		const stream = StreamService.createSseStream({ meta, eventStream });
 
-		return sse(stream);
-	};
+		return new Response(stream, {
+			headers: {
+				'content-type': 'text/event-stream',
+				'cache-control': 'no-cache',
+				connection: 'keep-alive'
+			}
+		});
+	});
 
 	// ─────────────────────────────────────────────────────────────────────────
-	// Router
+	// Start Server
 	// ─────────────────────────────────────────────────────────────────────────
 
 	Bun.serve({
 		port: 8080,
-		fetch: (req) => {
-			const requestId = crypto.randomUUID();
-			return Context.run({ requestId, txDepth: 0 }, async () => {
-				const url = new URL(req.url);
-				const method = req.method;
-				const path = url.pathname;
-
-				Metrics.info('http.request', { method, path });
-
-				let response: Response = new Response('Internal Server Error', { status: 500 });
-				try {
-					// GET /
-					if (method === 'GET' && path === '/') {
-						response = handleHealth();
-						return response;
-					}
-
-					// GET /config
-					if (method === 'GET' && path === '/config') {
-						response = handleConfig();
-						return response;
-					}
-
-					// GET /resources
-					if (method === 'GET' && path === '/resources') {
-						response = handleResources();
-						return response;
-					}
-
-					// POST /question
-					if (method === 'POST' && path === '/question') {
-						response = await handleQuestion(req);
-						return response;
-					}
-
-					// POST /question/stream
-					if (method === 'POST' && path === '/question/stream') {
-						response = await handleQuestionStream(req);
-						return response;
-					}
-
-					response = new Response('Not Found', { status: 404 });
-					return response;
-				} catch (cause) {
-					Metrics.error('http.error', { error: Metrics.errorInfo(cause) });
-					response = errorToJsonResponse(cause);
-					return response;
-				} finally {
-					Metrics.info('http.response', {
-						path,
-						status: response?.status
-					});
-				}
-			});
-		}
+		fetch: app.fetch
 	});
+
+	Metrics.info('server.started', { port: 8080 });
 };
 
 await start();
