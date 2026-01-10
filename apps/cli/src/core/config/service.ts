@@ -329,11 +329,14 @@ const createConfigService = Effect.gen(function* () {
 				// Validate resource name to prevent path traversal and git injection
 				yield* validateResourceName(resource.name);
 
-				// Validate git-specific fields
+				let normalizedResource = resource;
+
 				if (isGitResource(resource)) {
-					yield* validateGitUrl(resource.url).pipe(
+					const normalizedUrl = yield* validateGitUrl(resource.url).pipe(
 						Effect.mapError((e) => new ConfigError({ message: e.message, cause: e }))
 					);
+					normalizedResource = { ...resource, url: normalizedUrl };
+
 					yield* validateBranchName(resource.branch).pipe(
 						Effect.mapError((e) => new ConfigError({ message: e.message, cause: e }))
 					);
@@ -345,19 +348,19 @@ const createConfigService = Effect.gen(function* () {
 				}
 
 				// Validate notes field if present
-				if (resource.specialNotes) {
-					yield* validateResourceNotes(resource.specialNotes);
+				if (normalizedResource.specialNotes) {
+					yield* validateResourceNotes(normalizedResource.specialNotes);
 				}
 
-				const existing = config.resources.find((r) => r.name === resource.name);
+				const existing = config.resources.find((r) => r.name === normalizedResource.name);
 				if (existing) {
 					return yield* Effect.fail(
-						new ConfigError({ message: `Resource "${resource.name}" already exists` })
+						new ConfigError({ message: `Resource "${normalizedResource.name}" already exists` })
 					);
 				}
-				config = { ...config, resources: [...config.resources, resource] };
+				config = { ...config, resources: [...config.resources, normalizedResource] };
 				yield* saveConfig;
-				return resource;
+				return normalizedResource;
 			}),
 
 		/**

@@ -460,14 +460,14 @@ const configResourcesAddCommand = Command.make(
 				resource = localResource;
 			}
 
-			yield* services.config.addResource(resource);
-			console.log(`Added ${type} resource "${resourceName}"`);
+			const addedResource = yield* services.config.addResource(resource);
+			console.log(`Added ${type} resource "${addedResource.name}"`);
 
-			if (isGitResource(resource)) {
-				console.log(`  URL: ${resource.url}`);
-				console.log(`  Branch: ${resource.branch}`);
+			if (isGitResource(addedResource)) {
+				console.log(`  URL: ${addedResource.url}`);
+				console.log(`  Branch: ${addedResource.branch}`);
 			} else {
-				console.log(`  Path: ${resource.path}`);
+				console.log(`  Path: ${addedResource.path}`);
 			}
 		}).pipe(
 			Effect.catchTag('ConfigError', (e) =>

@@ -106,6 +106,33 @@ export const validateBranchName = (branch: string): Effect.Effect<void, Resource
 	return Effect.void;
 };
 
+// https://github.com/owner/repo.git -> https://github.com/owner/repo
+// https://github.com/owner/repo/blob/main/file.txt -> https://github.com/owner/repo
+// https://github.com/owner/repo/tree/branch/path -> https://github.com/owner/repo
+const normalizeGitHubUrl = (url: string): Effect.Effect<string, ResourceError> =>
+	Effect.gen(function* () {
+		const parsed = yield* Effect.try({
+			try: () => new URL(url),
+			catch: () =>
+				new ResourceError({
+					message: `Could not parse GitHub URL. Expected format: https://github.com/owner/repo`
+				})
+		});
+
+		const pathSegments = parsed.pathname.split('/').filter((s) => s.length > 0);
+		if (pathSegments.length < 2) {
+			return yield* Effect.fail(
+				new ResourceError({
+					message: `Invalid GitHub URL: missing owner or repository. Expected format: https://github.com/owner/repo`
+				})
+			);
+		}
+
+		const owner = pathSegments[0];
+		const repo = pathSegments[1]?.replace(/\.git$/, '');
+		return `https://github.com/${owner}/${repo}`;
+	});
+
 /**
  * Validate a git URL to prevent unsafe git operations.
  *
@@ -115,9 +142,9 @@ export const validateBranchName = (branch: string): Effect.Effect<void, Resource
  * - No localhost or private IP addresses
  *
  * @param url - The git URL to validate
- * @returns Effect that succeeds if valid, fails with ResourceError if invalid
+ * @returns Effect that succeeds with normalized URL if valid, fails with ResourceError if invalid
  */
-export const validateGitUrl = (url: string): Effect.Effect<void, ResourceError> => {
+export const validateGitUrl = (url: string): Effect.Effect<string, ResourceError> => {
 	// Reject empty URLs
 	if (!url || url.trim().length === 0) {
 		return Effect.fail(
@@ -174,7 +201,11 @@ export const validateGitUrl = (url: string): Effect.Effect<void, ResourceError> 
 		);
 	}
 
-	return Effect.void;
+	if (parsed.hostname.toLowerCase() !== 'github.com') {
+		return Effect.succeed(url);
+	}
+
+	return normalizeGitHubUrl(url);
 };
 
 /**
