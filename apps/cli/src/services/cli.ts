@@ -12,6 +12,7 @@ import {
 import type { ResourceDefinition, GitResource, LocalResource } from '../core/resource/types.ts';
 import { isGitResource } from '../core/resource/types.ts';
 import { removeDirectory } from '../lib/utils/files.ts';
+import { dim } from '../lib/utils/colors.ts';
 
 declare const __VERSION__: string;
 const VERSION: string = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '0.0.0-dev';
@@ -78,10 +79,15 @@ const selectResources = (availableResources: string[]): Effect.Effect<string[]> 
 		return [...new Set(selected)];
 	});
 
-const selectSingleResource = (availableResources: string[]) =>
+const selectSingleResource = (availableResources: ResourceDefinition[]) =>
 	Prompt.select({
 		message: 'Select resource',
-		choices: availableResources.map((name) => ({ title: name, value: name }))
+		choices: availableResources.map((resource) => ({
+			title: isGitResource(resource)
+				? `${resource.name} ${dim(resource.url)}`
+				: `${resource.name} ${dim(resource.path)}`,
+			value: resource.name
+		}))
 	}).pipe(Effect.catchIf(Terminal.isQuitException, () => Effect.interrupt));
 
 /**
@@ -492,7 +498,7 @@ const configResourcesRemoveCommand = Command.make(
 			const resources = yield* services.config.getResources();
 			const names = resources.map((r) => r.name);
 
-			if (names.length === 0) {
+			if (resources.length === 0) {
 				console.log('No resources configured.');
 				return;
 			}
@@ -501,7 +507,7 @@ const configResourcesRemoveCommand = Command.make(
 			const resourceName = yield* Option.orElse(name, () => positionalName).pipe(
 				Option.match({
 					onSome: Effect.succeed,
-					onNone: () => selectSingleResource(names)
+					onNone: () => selectSingleResource(resources)
 				})
 			);
 
