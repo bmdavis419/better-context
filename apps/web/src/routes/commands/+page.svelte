@@ -13,12 +13,12 @@
 			name: 'btca ask',
 			description:
 				'Ask a single question about configured resources and get an answer from their source code.',
-			example: 'btca ask -r runed -q "How does useDebounce work?"'
+			example: 'btca ask --resource runed --question "How does useDebounce work?"'
 		},
 		{
 			name: 'btca chat',
 			description: 'Open an interactive TUI session for multi-turn conversations about resources.',
-			example: 'btca chat -r runed'
+			example: 'btca chat --resource runed'
 		},
 		{
 			name: 'btca config',
@@ -28,7 +28,7 @@
 		{
 			name: 'btca config model',
 			description: 'View or set the AI model and provider used for answering questions.',
-			example: 'btca config model -p opencode -m claude-haiku-4-5'
+			example: 'btca config model --provider opencode --model claude-haiku-4-5'
 		},
 		{
 			name: 'btca config resources list',
@@ -39,17 +39,17 @@
 			name: 'btca config resources add (git)',
 			description: 'Add a new git repository as a resource.',
 			example:
-				'btca config resources add -n runed -t git -u https://github.com/svecosystem/runed -b main'
+				'btca config resources add --name runed --type git --url https://github.com/svecosystem/runed --branch main'
 		},
 		{
 			name: 'btca config resources add (local)',
 			description: 'Add a local directory as a resource.',
-			example: 'btca config resources add -n myproject -t local --path /path/to/project'
+			example: 'btca config resources add --name myproject --type local --path /path/to/project'
 		},
 		{
 			name: 'btca config resources remove',
 			description: 'Remove a resource from the configuration.',
-			example: 'btca config resources remove -n runed'
+			example: 'btca config resources remove --name runed'
 		},
 		{
 			name: 'btca config collections list',
