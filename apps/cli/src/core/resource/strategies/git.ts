@@ -57,8 +57,7 @@ const cloneRepo = (args: {
 
 		yield* fs.makeDirectory(repoDir, { recursive: true });
 
-		// Validate inputs to prevent injection attacks
-		yield* validateGitUrl(url);
+		const normalizedUrl = yield* validateGitUrl(url);
 		yield* validateBranchName(branch);
 		if (searchPath) {
 			yield* validateSearchPath(searchPath);
@@ -66,7 +65,7 @@ const cloneRepo = (args: {
 
 		// Use '--' delimiter to prevent git option injection
 		yield* runGit(['init', '--', repoDir], { quiet });
-		yield* runGit(['remote', 'add', 'origin', '--', url], { cwd: repoDir, quiet });
+		yield* runGit(['remote', 'add', 'origin', '--', normalizedUrl], { cwd: repoDir, quiet });
 
 		if (searchPath) {
 			yield* runGit(['config', 'core.sparseCheckout', 'true'], { cwd: repoDir, quiet });
