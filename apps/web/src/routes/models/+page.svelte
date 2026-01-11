@@ -12,58 +12,37 @@
 		`btca config model -p ${provider} -m ${model}`;
 </script>
 
-<section class="flex flex-col gap-10">
-	<div class="flex flex-col gap-4">
-		<div class="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-			<span
-				class="inline-flex items-center rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300"
-				>Configuration</span
-			>
-			<span class="hidden sm:inline">Set your preferred AI model.</span>
+<section class="flex flex-col gap-14">
+	<header class="flex flex-col gap-5">
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Configuration</span>
+			<span class="hidden sm:inline bc-muted">Pick a model. Keep the receipts.</span>
 		</div>
 
-		<h1
-			class="text-balance text-4xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50 sm:text-5xl"
-		>
-			Models
-		</h1>
+		<h1 class="bc-h1 text-balance text-5xl sm:text-6xl">Models</h1>
 
-		<p
-			class="max-w-2xl text-pretty text-base leading-relaxed text-neutral-700 dark:text-neutral-300 sm:text-lg"
-		>
+		<p class="bc-prose max-w-2xl text-pretty text-base sm:text-lg">
 			Any model that works with OpenCode works with btca. Under the hood btca uses the OpenCode SDK,
-			which will read your local config.
+			which reads your local config.
 		</p>
-	</div>
+	</header>
 
-	<div class="flex flex-col gap-6">
+	<div class="flex flex-col gap-4">
 		{#each BLESSED_MODELS as model}
-			<div
-				class="rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="flex flex-col gap-3">
+			<div class="bc-card bc-ring bc-cardHover p-6">
+				<div class="flex flex-col gap-4">
 					<div class="flex flex-wrap items-center gap-2">
-						<code
-							class="rounded bg-neutral-900/5 px-2 py-1 text-sm font-semibold text-neutral-900 dark:bg-white/10 dark:text-neutral-50"
-							>{model.model}</code
-						>
-						<span
-							class="rounded-full border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400"
-							>{model.provider}</span
-						>
+						<code class="bc-tag">{model.model}</code>
+						<span class="bc-badge">{model.provider}</span>
 						{#if model.isDefault}
-							<span
-								class="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-700 dark:border-orange-500/25 dark:text-orange-300"
-								>Default</span
-							>
+							<span class="bc-badge bc-badgeAccent">Default</span>
 						{/if}
 					</div>
-					<p class="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-						{model.description}
-					</p>
-					<div
-						class="relative min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 dark:border-neutral-800 dark:bg-neutral-950/40"
-					>
+
+					<p class="text-sm bc-prose">{model.description}</p>
+
+					<div class="bc-codeFrame">
 						<div class="flex items-center justify-between gap-3 p-4">
 							<div class="min-w-0 flex-1 overflow-x-auto">
 								{#if shikiStore.highlighter}
@@ -76,25 +55,22 @@
 										}
 									)}
 								{:else}
-									<pre
-										class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
+									<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code
 											>{getCommand(model.provider, model.model)}</code
 										></pre>
 								{/if}
 							</div>
-							<CopyButton
-								text={getCommand(model.provider, model.model)}
-								label="Copy command to set this model"
-							/>
+							<CopyButton text={getCommand(model.provider, model.model)} label="Copy command" />
 						</div>
 					</div>
+
 					<a
 						href={model.providerSetupUrl}
 						target="_blank"
 						rel="noreferrer"
-						class="text-sm text-orange-600 hover:underline dark:text-orange-400"
+						class="text-sm text-[color:hsl(var(--bc-accent))]"
 					>
-						Provider setup instructions &rarr;
+						Provider setup instructions →
 					</a>
 				</div>
 			</div>

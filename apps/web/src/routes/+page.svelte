@@ -9,135 +9,195 @@
 	const ASK_CMD = `btca ask -r svelte -q "How does the $state rune work?"`;
 	const CHAT_CMD = `btca chat -r svelte`;
 
+	const DEMO = `btca ask -r svelte -q "How does the $state rune work?"
+
+# clones & indexes the repo locally
+# searches real files (not docs)
+# answers with citations + snippets`;
+
 	const shikiStore = getShikiStore();
 	const themeStore = getThemeStore();
 	const shikiTheme = $derived(themeStore.theme === 'dark' ? 'dark-plus' : 'light-plus');
 </script>
 
-<section class="flex flex-col gap-10">
-	<div class="flex flex-col gap-4">
-		<div class="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-			<span
-				class="inline-flex items-center rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300"
-				>AI Powered Docs Search</span
-			>
-			<span class="hidden sm:inline"
-				>Ask a Question, Search the Actual Codebase, Get a Real Answer.</span
-			>
-		</div>
+<section class="flex flex-col gap-14">
+	<section class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+		<div class="flex flex-col gap-5">
+			<div class="bc-kicker bc-reveal" style="--delay: 0ms">
+				<span class="bc-kickerDot"></span>
+				<span>Agent-grade docs search</span>
+				<span class="hidden sm:inline bc-muted">Local-first · Source-backed · Fast</span>
+			</div>
 
-		<h1
-			class="text-balance text-4xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50 sm:text-5xl"
-		>
-			Up to Date Info About any Technology
-		</h1>
-
-		<p
-			class="max-w-2xl text-pretty text-base leading-relaxed text-neutral-700 dark:text-neutral-300 sm:text-lg"
-		>
-			<code class="rounded bg-neutral-900/5 px-1.5 py-1 text-sm dark:bg-white/10">btca</code>
-			is a CLI for asking questions about libraries/frameworks by cloning their repos locally and searching
-			the source directly
-		</p>
-
-		<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-			<a
-				href="/getting-started"
-				class="inline-flex items-center justify-center rounded-2xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-sm shadow-orange-600/20 hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-500"
+			<h1
+				class="bc-h1 text-balance text-5xl sm:text-6xl lg:text-7xl bc-reveal"
+				style="--delay: 90ms"
 			>
-				Get started
-			</a>
-			<a
-				href="https://github.com/bmdavis419/better-context"
-				target="_blank"
-				rel="noreferrer"
-				class="inline-flex items-center justify-center rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900"
-			>
-				View on GitHub
-			</a>
-		</div>
-	</div>
+				Ask the codebase,
+				<span class="text-[color:hsl(var(--bc-accent))]">not the internet</span>.
+			</h1>
 
-	<section id="install" class="scroll-mt-28 grid gap-4 md:grid-cols-2">
-		<div>
-			<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-				Install
-			</h2>
-			<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-				Install globally with Bun, then run <code
-					class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10">btca --help</code
-				>.
+			<p
+				class="bc-prose max-w-xl text-pretty text-base sm:text-lg bc-reveal"
+				style="--delay: 160ms"
+			>
+				<code class="bc-inlineCode">btca</code>
+				clones repos locally, searches the actual source, then answers with receipts. It’s what you wish
+				every AI “docs assistant” was.
 			</p>
-			<div
-				class="relative mt-4 min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white/70 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30 p-4 h-20 flex flex-row items-center justify-between"
-			>
-				<div class="min-w-0 flex-1 overflow-x-auto">
-					{#if shikiStore.highlighter}
-						{@html shikiStore.highlighter.codeToHtml(INSTALL_CMD, {
-							theme: shikiTheme,
-							lang: 'bash',
-							rootStyle: 'background-color: transparent; padding: 0; margin: 0; height: 100%;'
-						})}
-					{:else}
-						<pre
-							class="m-0 h-full whitespace-pre p-0 leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-								>{INSTALL_CMD}</code
-							></pre>
-					{/if}
-				</div>
-				<CopyButton text={INSTALL_CMD} label="Copy install command" />
+
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center bc-reveal" style="--delay: 230ms">
+				<a href="/getting-started" class="bc-chip bc-btnPrimary justify-center">Get started</a>
+				<a
+					href="https://github.com/bmdavis419/better-context"
+					target="_blank"
+					rel="noreferrer"
+					class="bc-chip justify-center"
+				>
+					View on GitHub
+				</a>
 			</div>
 		</div>
-		<div>
-			<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-				Cursor rule setup
-			</h2>
-			<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-				Run this command in your terminal from your project's root directory.
-			</p>
-			<div
-				class="relative mt-4 min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white/70 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30 p-4 h-20 flex flex-row items-center justify-between"
-			>
-				<div class="min-w-0 flex-1 overflow-x-auto">
-					{#if shikiStore.highlighter}
-						{@html shikiStore.highlighter.codeToHtml(CURSOR_CMD, {
-							theme: shikiTheme,
-							lang: 'bash',
-							rootStyle: 'background-color: transparent; padding: 0; margin: 0; height: 100%;'
-						})}
-					{:else}
-						<pre
-							class="m-0 h-full whitespace-pre p-0 leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-								>{CURSOR_CMD}</code
-							></pre>
-					{/if}
+
+		<div class="bc-card bc-ring bc-cardHover overflow-hidden bc-reveal" style="--delay: 140ms">
+			<div class="flex items-center justify-between gap-4 px-5 py-4">
+				<div class="bc-badge bc-badgeAccent">
+					<span class="bc-kickerDot"></span>
+					<span>In the terminal</span>
 				</div>
-				<CopyButton text={CURSOR_CMD} label="Copy Cursor rule command" />
+				<div class="text-xs font-semibold tracking-[0.16em] uppercase bc-muted">demo</div>
+			</div>
+
+			<div class="px-5 pb-5">
+				<div class="bc-codeFrame">
+					<div
+						class="flex items-center justify-between gap-3 border-b border-[color:color-mix(in_oklab,hsl(var(--bc-border))_60%,transparent)] px-4 py-3"
+					>
+						<div class="flex items-center gap-2">
+							<span class="size-2 bg-[color:hsl(var(--bc-fg))]"></span>
+							<span class="size-2 bg-[color:hsl(var(--bc-fg))]"></span>
+							<span class="size-2 bg-[color:hsl(var(--bc-fg))]"></span>
+						</div>
+						<div class="text-xs bc-muted">btca</div>
+					</div>
+
+					<div class="p-4">
+						{#if shikiStore.highlighter}
+							{@html shikiStore.highlighter.codeToHtml(DEMO, {
+								theme: shikiTheme,
+								lang: 'bash',
+								rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+							})}
+						{:else}
+							<pre class="m-0 whitespace-pre-wrap text-sm leading-relaxed"><code>{DEMO}</code></pre>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="grid gap-4 lg:grid-cols-3">
+		<div class="bc-card bc-ring bc-cardHover p-6 bc-reveal" style="--delay: 260ms">
+			<div class="text-sm font-semibold">1. Index the real source</div>
+			<p class="mt-2 text-sm bc-prose">
+				Add a repo (git or local). btca clones, stores, and keeps it ready.
+			</p>
+		</div>
+
+		<div class="bc-card bc-ring bc-cardHover p-6 bc-reveal" style="--delay: 320ms">
+			<div class="text-sm font-semibold">2. Ask with intent</div>
+			<p class="mt-2 text-sm bc-prose">
+				It searches the codebase, pulls the relevant sections, then answers like a senior teammate.
+			</p>
+		</div>
+
+		<div class="bc-card bc-ring bc-cardHover p-6 bc-reveal" style="--delay: 380ms">
+			<div class="text-sm font-semibold">3. Get receipts</div>
+			<p class="mt-2 text-sm bc-prose">
+				Not vibes. The answer is grounded in the files it found — with clear snippets.
+			</p>
+		</div>
+	</section>
+
+	<section id="install" class="scroll-mt-28">
+		<div class="bc-kicker bc-reveal" style="--delay: 120ms">
+			<span class="bc-kickerDot"></span>
+			<span>Install</span>
+		</div>
+
+		<h2 class="mt-3 text-2xl font-semibold tracking-tight bc-reveal" style="--delay: 170ms">
+			One line.
+		</h2>
+		<p class="mt-2 max-w-2xl text-sm bc-prose bc-reveal" style="--delay: 220ms">
+			Install globally with Bun, then run <code class="bc-inlineCode">btca --help</code>.
+		</p>
+
+		<div class="mt-5 grid gap-4 md:grid-cols-2">
+			<div class="bc-card bc-ring p-5">
+				<div class="text-sm font-semibold">CLI install</div>
+				<div class="mt-3 bc-codeFrame">
+					<div class="flex items-center justify-between gap-3 p-4">
+						<div class="min-w-0 flex-1 overflow-x-auto">
+							{#if shikiStore.highlighter}
+								{@html shikiStore.highlighter.codeToHtml(INSTALL_CMD, {
+									theme: shikiTheme,
+									lang: 'bash',
+									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+								})}
+							{:else}
+								<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{INSTALL_CMD}</code
+									></pre>
+							{/if}
+						</div>
+						<CopyButton text={INSTALL_CMD} label="Copy install command" />
+					</div>
+				</div>
+			</div>
+
+			<div class="bc-card bc-ring p-5">
+				<div class="text-sm font-semibold">Cursor rule setup</div>
+				<p class="mt-2 text-sm bc-prose">
+					Run this from your project root. It installs a rule file so your agent naturally reaches
+					for btca.
+				</p>
+				<div class="mt-3 bc-codeFrame">
+					<div class="flex items-center justify-between gap-3 p-4">
+						<div class="min-w-0 flex-1 overflow-x-auto">
+							{#if shikiStore.highlighter}
+								{@html shikiStore.highlighter.codeToHtml(CURSOR_CMD, {
+									theme: shikiTheme,
+									lang: 'bash',
+									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+								})}
+							{:else}
+								<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CURSOR_CMD}</code
+									></pre>
+							{/if}
+						</div>
+						<CopyButton text={CURSOR_CMD} label="Copy Cursor rule command" />
+					</div>
+				</div>
 			</div>
 		</div>
 	</section>
 
 	<section id="commands" class="scroll-mt-28">
-		<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-			Quick commands
-		</h2>
-		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-			The CLI currently ships these subcommands:
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">ask</code>,
-			<code class="rounded bg-neutral-900/5 px-1 py-0.5 text-xs dark:bg-white/10">chat</code>.
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Quick commands</span>
+		</div>
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			Two ways to use it: <code class="bc-inlineCode">ask</code> for a single answer, and
+			<code class="bc-inlineCode">chat</code> for an interactive session.
 		</p>
 
 		<div class="mt-4 grid gap-4 md:grid-cols-2">
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-					Ask a question
-				</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
+			<div class="bc-card bc-ring bc-cardHover p-6">
+				<div class="text-sm font-semibold">Ask</div>
+				<p class="mt-2 text-sm bc-prose">One question in. A grounded answer out.</p>
+				<div class="mt-3 bc-codeFrame">
+					<div class="flex items-center justify-between gap-3 p-4">
 						<div class="min-w-0 flex-1 overflow-x-auto">
 							{#if shikiStore.highlighter}
 								{@html shikiStore.highlighter.codeToHtml(ASK_CMD, {
@@ -146,24 +206,19 @@
 									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
 								})}
 							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{ASK_CMD}</code
-									></pre>
+								<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{ASK_CMD}</code></pre>
 							{/if}
 						</div>
 						<CopyButton text={ASK_CMD} label="Copy ask command" />
 					</div>
 				</div>
 			</div>
-			<div
-				class="min-w-0 rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="text-sm font-semibold text-neutral-900 dark:text-neutral-50">Open the TUI</div>
-				<div
-					class="relative mt-3 min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 p-4 dark:border-neutral-800 dark:bg-neutral-950/40"
-				>
-					<div class="flex items-center justify-between gap-3">
+
+			<div class="bc-card bc-ring bc-cardHover p-6">
+				<div class="text-sm font-semibold">Chat</div>
+				<p class="mt-2 text-sm bc-prose">Stay in flow. Iterate in a TUI.</p>
+				<div class="mt-3 bc-codeFrame">
+					<div class="flex items-center justify-between gap-3 p-4">
 						<div class="min-w-0 flex-1 overflow-x-auto">
 							{#if shikiStore.highlighter}
 								{@html shikiStore.highlighter.codeToHtml(CHAT_CMD, {
@@ -172,9 +227,7 @@
 									rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
 								})}
 							{:else}
-								<pre
-									class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-										>{CHAT_CMD}</code
+								<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CHAT_CMD}</code
 									></pre>
 							{/if}
 						</div>
@@ -186,17 +239,14 @@
 	</section>
 
 	<section id="config" class="scroll-mt-28">
-		<h2 class="text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-			Config
-		</h2>
-		<p class="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-			On first run, <code class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10"
-				>btca</code
-			>
-			creates a default config at
-			<code class="rounded bg-neutral-900/5 px-1.5 py-1 text-xs dark:bg-white/10"
-				>~/.config/btca/btca.json</code
-			>. That’s where repo list + model/provider live.
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Config</span>
+		</div>
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			On first run, <code class="bc-inlineCode">btca</code> creates a default config at
+			<code class="bc-inlineCode">~/.config/btca/btca.json</code> — that’s where your resources + model/provider
+			live.
 		</p>
 	</section>
 </section>

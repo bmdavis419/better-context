@@ -1,0 +1,50 @@
+import { Context } from '../context/index.ts';
+import { getErrorMessage, getErrorTag } from '../errors.ts';
+
+type LogLevel = 'info' | 'error';
+
+export namespace Metrics {
+	export type Fields = Record<string, unknown>;
+
+	export const errorInfo = (cause: unknown) => ({
+		tag: getErrorTag(cause),
+		message: getErrorMessage(cause)
+	});
+
+	const emit = (level: LogLevel, event: string, fields?: Fields) => {
+		const payload = {
+			ts: new Date().toISOString(),
+			level,
+			event,
+			requestId: Context.requestId(),
+			...fields
+		};
+		const line = JSON.stringify(payload);
+		if (level === 'error') console.error(line);
+		else console.log(line);
+	};
+
+	export const info = (event: string, fields?: Fields) => emit('info', event, fields);
+	export const error = (event: string, fields?: Fields) => emit('error', event, fields);
+
+	export const span = async <T>(
+		name: string,
+		fn: () => Promise<T>,
+		fields?: Fields
+	): Promise<T> => {
+		const start = performance.now();
+		try {
+			const result = await fn();
+			info('span.ok', { name, ms: Math.round(performance.now() - start), ...fields });
+			return result;
+		} catch (cause) {
+			error('span.err', {
+				name,
+				ms: Math.round(performance.now() - start),
+				...fields,
+				error: errorInfo(cause)
+			});
+			throw cause;
+		}
+	};
+}

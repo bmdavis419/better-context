@@ -3,7 +3,7 @@
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import favicon from '$lib/assets/favicon.svg';
 	import ogImage from '$lib/assets/og.png';
-	import { Bot, Github, Moon, Sun } from '@lucide/svelte';
+	import { Bot, Github, Menu, Moon, Sun, X } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { setShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { setThemeStore } from '$lib/stores/ThemeStore.svelte';
@@ -19,10 +19,20 @@
 	setShikiStore();
 
 	const themeStore = setThemeStore();
+	let mobileNavOpen = $state(false);
 
 	const toggleTheme = () => {
 		themeStore.toggle();
 	};
+
+	const toggleNav = () => {
+		mobileNavOpen = !mobileNavOpen;
+	};
+
+	$effect(() => {
+		page.url.pathname;
+		mobileNavOpen = false;
+	});
 </script>
 
 <svelte:head>
@@ -46,52 +56,33 @@
 </svelte:head>
 
 <div class="relative min-h-dvh overflow-hidden">
-	<div
-		aria-hidden="true"
-		class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_40rem_at_20%_-10%,rgba(249,115,22,0.20),transparent_60%),radial-gradient(50rem_30rem_at_90%_0%,rgba(249,115,22,0.12),transparent_55%),radial-gradient(50rem_30rem_at_70%_110%,rgba(249,115,22,0.12),transparent_55%)] dark:bg-[radial-gradient(60rem_40rem_at_20%_-10%,rgba(249,115,22,0.14),transparent_60%),radial-gradient(50rem_30rem_at_90%_0%,rgba(249,115,22,0.10),transparent_55%),radial-gradient(50rem_30rem_at_70%_110%,rgba(249,115,22,0.10),transparent_55%)]"
-	></div>
+	<div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 bc-appBg"></div>
 
-	<header
-		class="sticky top-0 z-20 border-b border-neutral-200/70 bg-neutral-50/80 backdrop-blur dark:border-neutral-800/70 dark:bg-neutral-950/60"
-	>
-		<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-			<a href="/" class="no-underline">
-				<div class="flex items-center gap-2">
-					<div
-						class="grid size-9 place-items-center rounded-xl bg-linear-to-br from-orange-500 to-orange-700 text-white shadow-sm shadow-orange-500/20"
-					>
-						<Bot size={18} strokeWidth={2.25} />
-					</div>
-					<div class="leading-tight">
-						<div class="text-sm font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
-							The Better Context App
-						</div>
-						<div class="text-xs text-neutral-600 dark:text-neutral-400">CLI: btca</div>
-					</div>
+	<div class="bc-skip">
+		<a class="bc-skipLink" href="#main">Skip to content</a>
+	</div>
+
+	<header class="sticky top-0 z-20 bc-header">
+		<div class="bc-container flex items-center justify-between gap-4 py-4">
+			<a href="/" class="bc-chip" aria-label="Go home">
+				<div class="bc-logoMark">
+					<Bot size={18} strokeWidth={2.25} />
+				</div>
+				<div class="min-w-0 leading-tight">
+					<div class="bc-title text-sm">Better Context</div>
+					<div class="bc-subtitle text-xs">btca · local-first code answer engine</div>
 				</div>
 			</a>
 
-			<div class="flex items-center gap-3">
+			<nav aria-label="Primary" class="hidden items-center gap-1 sm:flex">
+				<a class="bc-navLink" href="/getting-started">Getting started</a>
+				<a class="bc-navLink" href="/commands">Commands</a>
+				<a class="bc-navLink" href="/models">Models</a>
+			</nav>
+
+			<div class="flex items-center gap-2">
 				<a
-					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
-					href="/getting-started"
-				>
-					Getting started
-				</a>
-				<a
-					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
-					href="/commands"
-				>
-					Commands
-				</a>
-				<a
-					class="hidden text-sm font-medium text-neutral-900 no-underline hover:underline dark:text-neutral-50 sm:inline-flex"
-					href="/models"
-				>
-					Models
-				</a>
-				<a
-					class="hidden rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 no-underline shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900 sm:inline-flex"
+					class="bc-chip hidden sm:inline-flex"
 					href="https://github.com/bmdavis419/better-context"
 					target="_blank"
 					rel="noreferrer"
@@ -103,7 +94,7 @@
 
 				<button
 					type="button"
-					class="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 shadow-sm hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-50 dark:hover:bg-neutral-900"
+					class="bc-chip"
 					onclick={toggleTheme}
 					aria-label="Toggle theme"
 					title={themeStore.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -114,30 +105,74 @@
 						<Moon size={18} strokeWidth={2.25} />
 					{/if}
 				</button>
+
+				<button
+					type="button"
+					class="bc-chip sm:hidden"
+					onclick={toggleNav}
+					aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+					title={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+				>
+					{#if mobileNavOpen}
+						<X size={18} strokeWidth={2.25} />
+					{:else}
+						<Menu size={18} strokeWidth={2.25} />
+					{/if}
+				</button>
 			</div>
 		</div>
+
+		{#if mobileNavOpen}
+			<div class="bc-container pb-4 sm:hidden">
+				<div class="bc-card bc-ring p-2">
+					<nav aria-label="Mobile" class="flex flex-col">
+						<a class="bc-navLink" href="/getting-started">Getting started</a>
+						<a class="bc-navLink" href="/commands">Commands</a>
+						<a class="bc-navLink" href="/models">Models</a>
+						<a
+							class="bc-navLink"
+							href="https://github.com/bmdavis419/better-context"
+							target="_blank"
+							rel="noreferrer"
+						>
+							GitHub
+						</a>
+					</nav>
+				</div>
+			</div>
+		{/if}
 	</header>
 
-	<main class="px-6 py-12">
+	<main id="main" class={fullBleed ? 'py-10' : 'bc-container py-12'}>
 		{#if fullBleed}
 			{@render children()}
 		{:else}
-			<div class="mx-auto w-full max-w-5xl">
-				{@render children()}
-			</div>
+			{@render children()}
 		{/if}
 	</main>
 
-	<footer class="border-t border-neutral-200/70 py-10 dark:border-neutral-800/70">
-		<div
-			class="mx-auto flex max-w-5xl flex-col gap-3 px-6 text-sm text-neutral-600 dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between"
-		>
-			<div>Built with Bun + Effect + SvelteKit</div>
-			<div class="flex gap-4">
-				<a href="https://github.com/bmdavis419/better-context" target="_blank" rel="noreferrer"
-					>GitHub</a
+	<footer
+		class="mt-10 border-t border-[color:color-mix(in_oklab,hsl(var(--bc-border))_55%,transparent)]"
+	>
+		<div class="bc-container grid gap-8 py-12 sm:grid-cols-2">
+			<div class="flex flex-col gap-2">
+				<div class="text-sm font-semibold tracking-tight">
+					Built for agents that actually read code.
+				</div>
+				<div class="text-sm bc-muted">Bun + Effect + SvelteKit. Zero fluff, full context.</div>
+			</div>
+
+			<div class="flex flex-wrap items-start gap-2 sm:justify-end">
+				<a class="bc-chip" href="/getting-started#install">Install</a>
+				<a
+					class="bc-chip"
+					href="https://github.com/bmdavis419/better-context"
+					target="_blank"
+					rel="noreferrer"
 				>
-				<a href="/getting-started#install">Install</a>
+					GitHub
+				</a>
+				<a class="bc-chip" href="/commands">Command reference</a>
 			</div>
 		</div>
 	</footer>

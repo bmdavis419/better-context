@@ -25,6 +25,7 @@
 		"prepare": "effect-language-service patch",
 		"dev": "turbo dev --ui tui",
 		"cli": "bun run apps/cli/src/index.ts",
+		"dev:server": "bun --watch apps/server/src/index.ts",
 		"build:all": "turbo build",
 		"build:cli": "turbo build --filter=btca",
 		"build:web": "turbo build --filter=@btca/web",
@@ -32,10 +33,16 @@
 		"check:cli": "turbo check --filter=btca",
 		"check:web": "turbo check --filter=@btca/web",
 		"check:shared": "turbo check --filter=@btca/shared",
+		"check:server": "turbo check --filter=@btca/server",
+
 		"format:all": "turbo format",
 		"format:cli": "turbo format --filter=btca",
 		"format:web": "turbo format --filter=@btca/web",
 		"format:shared": "turbo format --filter=@btca/shared",
+		"format:server": "turbo format --filter=@btca/server",
+
+		"test:server": "turbo test --filter=@btca/server",
+
 		"clean": "find . -type d \\( -name node_modules -o -name .svelte-kit -o -name .turbo -o -name .vercel \\) -prune -exec rm -rf {} +"
 	},
 	"devDependencies": {

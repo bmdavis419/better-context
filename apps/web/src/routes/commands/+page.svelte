@@ -79,49 +79,32 @@
 	const shikiTheme = $derived(themeStore.theme === 'dark' ? 'dark-plus' : 'light-plus');
 </script>
 
-<section class="flex flex-col gap-10">
-	<div class="flex flex-col gap-4">
-		<div class="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-			<span
-				class="inline-flex items-center rounded-full border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-700 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-300"
-				>Reference</span
-			>
-			<span class="hidden sm:inline">Complete list of all available commands.</span>
+<section class="flex flex-col gap-14">
+	<header class="flex flex-col gap-5">
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Reference</span>
+			<span class="hidden sm:inline bc-muted">Every command, one clean list</span>
 		</div>
 
-		<h1
-			class="text-balance text-4xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50 sm:text-5xl"
-		>
-			Commands
-		</h1>
-
-		<p
-			class="max-w-2xl text-pretty text-base leading-relaxed text-neutral-700 dark:text-neutral-300 sm:text-lg"
-		>
-			All available <code class="rounded bg-neutral-900/5 px-1.5 py-1 text-sm dark:bg-white/10"
-				>btca</code
-			> commands with descriptions and examples.
+		<h1 class="bc-h1 text-balance text-5xl sm:text-6xl">Commands</h1>
+		<p class="bc-prose max-w-2xl text-pretty text-base sm:text-lg">
+			All available <code class="bc-inlineCode">btca</code> commands with descriptions and examples.
 		</p>
-	</div>
+	</header>
 
-	<div class="flex flex-col gap-6">
+	<div class="flex flex-col gap-4">
 		{#each commands as cmd}
-			<div
-				class="rounded-2xl border border-neutral-200 bg-white/70 p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900/30"
-			>
-				<div class="flex flex-col gap-3">
-					<div>
-						<code
-							class="rounded bg-neutral-900/5 px-2 py-1 text-sm font-semibold text-neutral-900 dark:bg-white/10 dark:text-neutral-50"
-							>{cmd.name}</code
-						>
+			<div class="bc-card bc-ring bc-cardHover p-6">
+				<div class="flex flex-col gap-4">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<code class="bc-tag">{cmd.name} </code>
+						<div class="bc-badge">CLI</div>
 					</div>
-					<p class="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
-						{cmd.description}
-					</p>
-					<div
-						class="relative min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white/70 dark:border-neutral-800 dark:bg-neutral-950/40"
-					>
+
+					<p class="text-sm bc-prose">{cmd.description}</p>
+
+					<div class="bc-codeFrame">
 						<div class="flex items-center justify-between gap-3 p-4">
 							<div class="min-w-0 flex-1 overflow-x-auto">
 								{#if shikiStore.highlighter}
@@ -131,9 +114,7 @@
 										rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
 									})}
 								{:else}
-									<pre
-										class="m-0 whitespace-pre text-sm leading-relaxed text-neutral-900 dark:text-neutral-50"><code
-											>{cmd.example}</code
+									<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{cmd.example}</code
 										></pre>
 								{/if}
 							</div>

@@ -11,6 +11,10 @@
 		"check": {
 			"dependsOn": ["^check"]
 		},
+		"test": {
+			"dependsOn": ["^test"],
+			"cache": false
+		},
 		"dev": {
 			"persistent": true,
 			"cache": false

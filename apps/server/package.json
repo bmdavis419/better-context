@@ -1,0 +1,28 @@
+{
+	"name": "@btca/server",
+	"version": "0.0.1",
+	"module": "src/index.ts",
+	"type": "module",
+	"private": true,
+	"exports": {
+		"./stream": "./src/stream/index.ts",
+		"./stream/types": "./src/stream/types.ts"
+	},
+	"scripts": {
+		"check": "tsgo --noEmit",
+		"dev": "bun --watch src/index.ts",
+		"format": "prettier --write .",
+		"test": "bun test",
+		"test:watch": "bun test --watch"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20260109.1",
+		"prettier": "^3.7.4"
+	},
+	"dependencies": {
+		"@opencode-ai/sdk": "^1.0.208",
+		"hono": "^4.7.11",
+		"zod": "^3.25.76"
+	}
+}
