@@ -45,9 +45,7 @@ export const MainUi: Component<{
 };
 
 export async function launchTui(options?: { initialResources?: string[] }) {
-	if (options?.initialResources && options.initialResources.length > 0) {
-		setInitialResources(options.initialResources);
-	}
+	setInitialResources(options?.initialResources ?? []);
 	const exitPromise = createExitPromise();
 	await import('./App.tsx');
 	return exitPromise;

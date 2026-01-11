@@ -1,14 +1,12 @@
 const exitResolvers = new Set<() => void>();
-let initialResources: string[] = [];
+const initialResourcesQueue: string[][] = [];
 
 export const setInitialResources = (resources: string[]) => {
-	initialResources = [...resources];
+	initialResourcesQueue.push([...resources]);
 };
 
 export const consumeInitialResources = () => {
-	const resources = [...initialResources];
-	initialResources = [];
-	return resources;
+	return initialResourcesQueue.shift() ?? [];
 };
 
 export const createExitPromise = () =>
