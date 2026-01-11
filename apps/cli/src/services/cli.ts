@@ -9,6 +9,7 @@ import {
 	extractMetadataFromEvents,
 	streamToChunks
 } from '../core/index.ts';
+import { ConfigError } from '../core/config/service.ts';
 import type { ResourceDefinition, GitResource, LocalResource } from '../core/resource/types.ts';
 import { isGitResource } from '../core/resource/types.ts';
 import { removeDirectory } from '../lib/utils/files.ts';
@@ -289,11 +290,18 @@ const chatCommand = Command.make('chat', { resource: chatResourceOption }, ({ re
 			}
 		}
 
-		// Ensure resources and collection
-		const resourceInfos = yield* getResourceInfos(services.resources, resourceNames);
-		const collection = yield* services.collections.ensure(resourceNames, { quiet: false });
+		// Ensure resources are valid and cached before launching the TUI
+		yield* getResourceInfos(services.resources, resourceNames);
+		yield* services.collections.ensure(resourceNames, { quiet: false });
 
-		yield* services.agent.spawnTui({ collection, resources: resourceInfos });
+		const { launchTui } = yield* Effect.tryPromise({
+			try: () => import('../tui-solid/index.tsx'),
+			catch: (error) => new ConfigError({ message: `Failed to load TUI: ${String(error)}` })
+		});
+		yield* Effect.tryPromise({
+			try: () => launchTui({ initialResources: resourceNames }),
+			catch: (error) => new ConfigError({ message: `Failed to launch TUI: ${String(error)}` })
+		});
 	}).pipe(
 		Effect.catchTag('ConfigError', (e) =>
 			Effect.sync(() => {

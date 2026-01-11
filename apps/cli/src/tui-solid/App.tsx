@@ -4,6 +4,7 @@ import { MessagesProvider } from './context/messages-context.tsx';
 import { render, useKeyboard, useRenderer } from '@opentui/solid';
 import { MainUi } from '.';
 import { ConsolePosition } from '@opentui/core';
+import { notifyExit } from './runtime.ts';
 
 const App: Component = () => {
 	const renderer = useRenderer();
@@ -55,6 +56,9 @@ render(
 			sizePercent: 20,
 			maxStoredLogs: 500
 		},
-		exitOnCtrlC: false
+		exitOnCtrlC: false,
+		onDestroy: () => {
+			notifyExit();
+		}
 	}
 );

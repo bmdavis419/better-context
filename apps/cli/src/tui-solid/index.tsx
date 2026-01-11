@@ -3,6 +3,7 @@ import { Messages } from './components/messages.tsx';
 import { type Accessor, type Component } from 'solid-js';
 import { Header } from './components/header.tsx';
 import { InputSection } from './components/input-section.tsx';
+import { createExitPromise, setInitialResources } from './runtime.ts';
 
 const WarningBanner: Component = () => {
 	return (
@@ -43,6 +44,9 @@ export const MainUi: Component<{
 	);
 };
 
-export async function launchTui() {
+export async function launchTui(options?: { initialResources?: string[] }) {
+	setInitialResources(options?.initialResources ?? []);
+	const exitPromise = createExitPromise();
 	await import('./App.tsx');
+	return exitPromise;
 }

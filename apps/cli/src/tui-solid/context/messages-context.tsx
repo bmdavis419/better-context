@@ -2,6 +2,7 @@ import {
 	createContext,
 	createSignal,
 	useContext,
+	onMount,
 	type Accessor,
 	type Component,
 	type ParentProps
@@ -11,6 +12,7 @@ import type { BtcaChunk } from '../../core/index.ts';
 import { services } from '../services.ts';
 import { generateId } from '../../core/thread/types.ts';
 import { copyToClipboard } from '../clipboard.ts';
+import { consumeInitialResources } from '../runtime.ts';
 
 type MessagesState = {
 	// Message history
@@ -53,6 +55,9 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	const [lastQuestionId, setLastQuestionId] = createSignal<string | null>(null);
 	const [isStreaming, setIsStreaming] = createSignal(false);
 	const [cancelState, setCancelState] = createSignal<CancelState>('none');
+	let threadInitPromise: Promise<void> | null = null;
+
+	const initialResources = consumeInitialResources();
 
 	// Internal helpers for message updates
 	const addMessage = (message: Message) => setMessages((prev) => [...prev, message]);
@@ -121,8 +126,14 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	// Thread management
 	const initializeThread = async () => {
 		if (currentThread()) return;
-		const threadId = await services.createThread();
-		setCurrentThread({ id: threadId, resources: [], questions: [] });
+		if (threadInitPromise) return threadInitPromise;
+		threadInitPromise = (async () => {
+			const threadId = await services.createThread();
+			setCurrentThread({ id: threadId, resources: [], questions: [] });
+		})().finally(() => {
+			threadInitPromise = null;
+		});
+		return threadInitPromise;
 	};
 
 	const addResourcesToThread = (resources: string[]) => {
@@ -146,6 +157,18 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 
 		return newQuestion;
 	};
+
+	onMount(() => {
+		if (initialResources.length === 0) return;
+		void (async () => {
+			await initializeThread();
+			addResourcesToThread(initialResources);
+			addMessage({
+				role: 'system',
+				content: `Using resources: ${initialResources.map((r) => `@${r}`).join(' ')}`
+			});
+		})().catch(console.error);
+	});
 
 	// Main send method
 	const send = async (input: InputState, newResources: string[], allResources: string[]) => {
