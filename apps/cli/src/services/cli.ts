@@ -293,8 +293,14 @@ const chatCommand = Command.make('chat', { resource: chatResourceOption }, ({ re
 		yield* getResourceInfos(services.resources, resourceNames);
 		yield* services.collections.ensure(resourceNames, { quiet: false });
 
-		const { launchTui } = yield* Effect.promise(() => import('../tui-solid/index.tsx'));
-		yield* Effect.promise(() => launchTui({ initialResources: resourceNames }));
+		const { launchTui } = yield* Effect.tryPromise({
+			try: () => import('../tui-solid/index.tsx'),
+			catch: (error) => new Error(`Failed to load TUI: ${String(error)}`)
+		});
+		yield* Effect.tryPromise({
+			try: () => launchTui({ initialResources: resourceNames }),
+			catch: (error) => new Error(`Failed to launch TUI: ${String(error)}`)
+		});
 	}).pipe(
 		Effect.catchTag('ConfigError', (e) =>
 			Effect.sync(() => {

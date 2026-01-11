@@ -12,6 +12,7 @@ import type { BtcaChunk } from '../../core/index.ts';
 import { services } from '../services.ts';
 import { generateId } from '../../core/thread/types.ts';
 import { copyToClipboard } from '../clipboard.ts';
+import { consumeInitialResources } from '../runtime.ts';
 
 type MessagesState = {
 	// Message history
@@ -55,16 +56,7 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	const [isStreaming, setIsStreaming] = createSignal(false);
 	const [cancelState, setCancelState] = createSignal<CancelState>('none');
 
-	const initialResourcesEnv = process.env.BTCA_INITIAL_RESOURCES;
-	const initialResources = initialResourcesEnv
-		? initialResourcesEnv
-				.split(',')
-				.map((resource) => resource.trim())
-				.filter(Boolean)
-		: [];
-	if (initialResourcesEnv) {
-		delete process.env.BTCA_INITIAL_RESOURCES;
-	}
+	const initialResources = consumeInitialResources();
 
 	// Internal helpers for message updates
 	const addMessage = (message: Message) => setMessages((prev) => [...prev, message]);
