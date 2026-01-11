@@ -55,6 +55,7 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	const [lastQuestionId, setLastQuestionId] = createSignal<string | null>(null);
 	const [isStreaming, setIsStreaming] = createSignal(false);
 	const [cancelState, setCancelState] = createSignal<CancelState>('none');
+	let threadInitPromise: Promise<void> | null = null;
 
 	const initialResources = consumeInitialResources();
 
@@ -125,8 +126,14 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	// Thread management
 	const initializeThread = async () => {
 		if (currentThread()) return;
-		const threadId = await services.createThread();
-		setCurrentThread({ id: threadId, resources: [], questions: [] });
+		if (threadInitPromise) return threadInitPromise;
+		threadInitPromise = (async () => {
+			const threadId = await services.createThread();
+			setCurrentThread({ id: threadId, resources: [], questions: [] });
+		})().finally(() => {
+			threadInitPromise = null;
+		});
+		return threadInitPromise;
 	};
 
 	const addResourcesToThread = (resources: string[]) => {
