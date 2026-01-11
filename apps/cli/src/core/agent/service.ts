@@ -348,13 +348,14 @@ const spawnOpencodeTui = async (args: {
 export interface AgentServiceConfig {
 	provider: string;
 	model: string;
+	variant?: string;
 }
 
 /**
  * Create the agent service
  */
 export const createAgentService = (config: AgentServiceConfig) => {
-	const { provider, model } = config;
+	const { provider, model, variant } = config;
 
 	/**
 	 * Create an OpenCode instance for a collection
@@ -446,6 +447,7 @@ export const createAgentService = (config: AgentServiceConfig) => {
 						providerID: provider,
 						modelID: model
 					},
+					...(variant ? { variant } : {}),
 					parts: [{ type: 'text', text: args.text }]
 				}
 			})

@@ -31,6 +31,7 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 			const result = await services.updateModel(selectedModel.provider, selectedModel.model);
 			config.setProvider(result.provider);
 			config.setModel(result.model);
+			config.setVariant(result.variant ?? '');
 			messages.addSystemMessage(`Model updated: ${result.provider}/${result.model}`);
 		} catch (error) {
 			messages.addSystemMessage(`Error: ${error}`);

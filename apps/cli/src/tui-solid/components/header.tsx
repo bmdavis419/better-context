@@ -45,7 +45,9 @@ export const Header: Component = () => {
 			</text>
 			<text
 				fg={colors.textSubtle}
-				content={`${config.selectedProvider()}/${config.selectedModel()}`}
+				content={`${config.selectedProvider()}/${config.selectedModel()}${
+					config.selectedVariant() ? ` (${config.selectedVariant()})` : ''
+				}`}
 			/>
 		</box>
 	);

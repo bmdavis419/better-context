@@ -53,7 +53,8 @@ export const initializeCoreServices = Effect.gen(function* () {
 	// Initialize agent service
 	const agent = createAgentService({
 		provider: configData.provider,
-		model: configData.model
+		model: configData.model,
+		variant: configData.variant
 	});
 
 	return {

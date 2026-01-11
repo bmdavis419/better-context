@@ -33,6 +33,13 @@ const PROVIDER_NAME_REGEX = /^[a-zA-Z0-9._+\-/:]+$/;
 const MODEL_NAME_REGEX = /^[a-zA-Z0-9._+\-/:]+$/;
 
 /**
+ * Variant name validation regex.
+ * Allows letters, numbers, dots, underscores, plus, and hyphens.
+ * Examples: "none", "low", "medium", "high", "xhigh", "max".
+ */
+const VARIANT_NAME_REGEX = /^[a-zA-Z0-9._+\-]+$/;
+
+/**
  * Validate a resource name to prevent path traversal and git injection attacks.
  *
  * Ensures:
@@ -341,6 +348,26 @@ export const validateModelName = (name: string): Effect.Effect<void, ConfigError
 		return Effect.fail(
 			new ConfigError({
 				message: `Invalid model name: ${name}. Must contain only letters, numbers, and these characters: . _ + - / :`
+			})
+		);
+	}
+
+	return Effect.void;
+};
+
+/**
+ * Validate a model variant name.
+ */
+export const validateVariantName = (name: string): Effect.Effect<void, ConfigError> => {
+	// Empty variant is valid (treated as undefined)
+	if (!name || name.trim().length === 0) {
+		return Effect.void;
+	}
+
+	if (!VARIANT_NAME_REGEX.test(name)) {
+		return Effect.fail(
+			new ConfigError({
+				message: `Invalid variant name: ${name}. Must contain only alphanumeric characters, dots, underscores, plus, and hyphens.`
 			})
 		);
 	}

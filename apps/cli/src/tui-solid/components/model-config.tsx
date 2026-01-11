@@ -99,6 +99,7 @@ export const ModelConfig: Component<ModelConfigProps> = (props) => {
 				const result = await services.updateModel(vals.provider, vals.model);
 				config.setProvider(result.provider);
 				config.setModel(result.model);
+				config.setVariant(result.variant ?? '');
 				messages.addSystemMessage(`Model updated: ${result.provider}/${result.model}`);
 			} catch (error) {
 				messages.addSystemMessage(`Error: ${error}`);
