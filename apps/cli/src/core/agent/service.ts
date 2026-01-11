@@ -255,63 +255,103 @@ export type ChunkUpdate =
 export const streamToChunks = (eventStream: Stream.Stream<OcEvent, AgentError>) => {
 	const chunks = new Map<string, BtcaChunk>();
 	const allEvents: OcEvent[] = [];
+	const messageRoles = new Map<string, 'user' | 'assistant'>();
+	const pendingPartsByMessage = new Map<string, { part: any }[]>();
+
+	const applyPart = (part: {
+		id: string;
+		messageID: string;
+		type: string;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		[key: string]: any;
+	}): ChunkUpdate[] => {
+		const partId = part.id;
+
+		switch (part.type) {
+			case 'text': {
+				const existing = chunks.get(partId);
+				if (existing && existing.type === 'text') {
+					existing.text = part.text;
+					return [{ type: 'update', id: partId, chunk: { text: part.text } }];
+				}
+				const chunk: BtcaChunk = { type: 'text', id: partId, text: part.text };
+				chunks.set(partId, chunk);
+				return [{ type: 'add', chunk }];
+			}
+			case 'reasoning': {
+				const existing = chunks.get(partId);
+				if (existing && existing.type === 'reasoning') {
+					existing.text = part.text;
+					return [{ type: 'update', id: partId, chunk: { text: part.text } }];
+				}
+				const chunk: BtcaChunk = { type: 'reasoning', id: partId, text: part.text };
+				chunks.set(partId, chunk);
+				return [{ type: 'add', chunk }];
+			}
+			case 'tool': {
+				const existing = chunks.get(partId);
+				const status = part.state.status;
+				const state =
+					status === 'pending' ? 'pending' : status === 'running' ? 'running' : 'completed';
+				if (existing && existing.type === 'tool') {
+					existing.state = state;
+					return [{ type: 'update', id: partId, chunk: { state } }];
+				}
+				const chunk: BtcaChunk = { type: 'tool', id: partId, toolName: part.tool, state };
+				chunks.set(partId, chunk);
+				return [{ type: 'add', chunk }];
+			}
+			case 'file': {
+				if (chunks.has(partId)) return [];
+				const chunk: BtcaChunk = {
+					type: 'file',
+					id: partId,
+					filePath: part.filename ?? part.url
+				};
+				chunks.set(partId, chunk);
+				return [{ type: 'add', chunk }];
+			}
+			default:
+				return [];
+		}
+	};
 
 	const chunkStream = eventStream.pipe(
 		Stream.mapConcat((event): ChunkUpdate[] => {
 			allEvents.push(event);
 
+			if (event.type === 'message.updated') {
+				const info = (event.properties as { info?: { id?: string; role?: string } }).info;
+				if (info?.id && (info.role === 'user' || info.role === 'assistant')) {
+					messageRoles.set(info.id, info.role);
+					if (info.role === 'assistant') {
+						const pending = pendingPartsByMessage.get(info.id);
+						if (pending && pending.length > 0) {
+							pendingPartsByMessage.delete(info.id);
+							return pending.flatMap(({ part }) => applyPart(part));
+						}
+					} else {
+						pendingPartsByMessage.delete(info.id);
+					}
+				}
+				return [];
+			}
+
 			if (event.type !== 'message.part.updated') return [];
 
 			const part = event.properties.part;
-			const partId = part.id;
 
-			switch (part.type) {
-				case 'text': {
-					const existing = chunks.get(partId);
-					if (existing && existing.type === 'text') {
-						existing.text = part.text;
-						return [{ type: 'update', id: partId, chunk: { text: part.text } }];
-					}
-					const chunk: BtcaChunk = { type: 'text', id: partId, text: part.text };
-					chunks.set(partId, chunk);
-					return [{ type: 'add', chunk }];
-				}
-				case 'reasoning': {
-					const existing = chunks.get(partId);
-					if (existing && existing.type === 'reasoning') {
-						existing.text = part.text;
-						return [{ type: 'update', id: partId, chunk: { text: part.text } }];
-					}
-					const chunk: BtcaChunk = { type: 'reasoning', id: partId, text: part.text };
-					chunks.set(partId, chunk);
-					return [{ type: 'add', chunk }];
-				}
-				case 'tool': {
-					const existing = chunks.get(partId);
-					const status = part.state.status;
-					const state =
-						status === 'pending' ? 'pending' : status === 'running' ? 'running' : 'completed';
-					if (existing && existing.type === 'tool') {
-						existing.state = state;
-						return [{ type: 'update', id: partId, chunk: { state } }];
-					}
-					const chunk: BtcaChunk = { type: 'tool', id: partId, toolName: part.tool, state };
-					chunks.set(partId, chunk);
-					return [{ type: 'add', chunk }];
-				}
-				case 'file': {
-					if (chunks.has(partId)) return [];
-					const chunk: BtcaChunk = {
-						type: 'file',
-						id: partId,
-						filePath: part.filename ?? part.url
-					};
-					chunks.set(partId, chunk);
-					return [{ type: 'add', chunk }];
-				}
-				default:
-					return [];
+			const role = messageRoles.get(part.messageID);
+			if (role === 'assistant') {
+				return applyPart(part);
 			}
+			if (role === 'user') {
+				return [];
+			}
+			const pending = pendingPartsByMessage.get(part.messageID) ?? [];
+			pending.push({ part });
+			pendingPartsByMessage.set(part.messageID, pending);
+			return [];
 		})
 	);
 
