@@ -33,7 +33,8 @@ export const StoredConfigSchema = Schema.Struct({
 	dataDirectory: Schema.optional(Schema.String), // defaults to ~/.local/share/btca
 	resources: Schema.Array(ResourceDefinitionSchema),
 	model: Schema.String,
-	provider: Schema.String
+	provider: Schema.String,
+	variant: Schema.optional(Schema.String)
 });
 
 // Runtime config type (with resolved paths)
@@ -45,6 +46,7 @@ export interface Config {
 	resources: (typeof ResourceDefinitionSchema.Type)[];
 	model: string;
 	provider: string;
+	variant?: string;
 }
 
 export type LegacyRepo = typeof LegacyRepoSchema.Type;

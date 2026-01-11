@@ -307,26 +307,41 @@ const chatCommand = Command.make('chat', { resource: chatResourceOption }, ({ re
 
 // === Config Subcommands ===
 
-// config model - view or set model/provider
+// config model - view or set model/provider/variant
 const providerOption = Options.text('provider').pipe(Options.withAlias('p'), Options.optional);
 const modelOption = Options.text('model').pipe(Options.withAlias('m'), Options.optional);
+const variantOption = Options.text('variant').pipe(Options.optional);
 
 const configModelCommand = Command.make(
 	'model',
-	{ provider: providerOption, model: modelOption },
-	({ provider, model }) =>
+	{ provider: providerOption, model: modelOption, variant: variantOption },
+	({ provider, model, variant }) =>
 		Effect.gen(function* () {
 			const services = yield* initializeCoreServices;
 
 			// If both options provided, update the config
 			if (provider._tag === 'Some' && model._tag === 'Some') {
+				const current = yield* services.config.getModel();
 				const result = yield* services.config.updateModel({
 					provider: provider.value,
-					model: model.value
+					model: model.value,
+					variant: variant._tag === 'Some' ? variant.value : current.variant
 				});
 				console.log(`Updated model configuration:`);
 				console.log(`  Provider: ${result.provider}`);
 				console.log(`  Model: ${result.model}`);
+				if (result.variant) console.log(`  Variant: ${result.variant}`);
+			} else if (variant._tag === 'Some' && provider._tag === 'None' && model._tag === 'None') {
+				const current = yield* services.config.getModel();
+				const result = yield* services.config.updateModel({
+					provider: current.provider,
+					model: current.model,
+					variant: variant.value
+				});
+				console.log(`Updated model configuration:`);
+				console.log(`  Provider: ${result.provider}`);
+				console.log(`  Model: ${result.model}`);
+				if (result.variant) console.log(`  Variant: ${result.variant}`);
 			} else if (provider._tag === 'Some' || model._tag === 'Some') {
 				// If only one is provided, show an error
 				console.error('Error: Both --provider and --model must be specified together');
@@ -337,6 +352,7 @@ const configModelCommand = Command.make(
 				console.log(`Current model configuration:`);
 				console.log(`  Provider: ${current.provider}`);
 				console.log(`  Model: ${current.model}`);
+				if (current.variant) console.log(`  Variant: ${current.variant}`);
 			}
 		}).pipe(Effect.provide(BunContext.layer))
 );

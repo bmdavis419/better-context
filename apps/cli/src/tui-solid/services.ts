@@ -99,7 +99,7 @@ export const services = {
 	/**
 	 * Get current model config
 	 */
-	getModel: async (): Promise<{ provider: string; model: string }> => {
+	getModel: async (): Promise<{ provider: string; model: string; variant?: string }> => {
 		const core = await getServices();
 		return runtime.runPromise(core.config.getModel());
 	},
@@ -109,10 +109,11 @@ export const services = {
 	 */
 	updateModel: async (
 		provider: string,
-		model: string
-	): Promise<{ provider: string; model: string }> => {
+		model: string,
+		variant?: string
+	): Promise<{ provider: string; model: string; variant?: string }> => {
 		const core = await getServices();
-		return runtime.runPromise(core.config.updateModel({ provider, model }));
+		return runtime.runPromise(core.config.updateModel({ provider, model, variant }));
 	},
 
 	/**

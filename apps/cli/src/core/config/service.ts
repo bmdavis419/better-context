@@ -22,7 +22,8 @@ import {
 	validateSearchPath,
 	validateResourceNotes,
 	validateProviderName,
-	validateModelName
+	validateModelName,
+	validateVariantName
 } from '../validation/resource.ts';
 
 export class ConfigError extends TaggedError('ConfigError')<{
@@ -87,6 +88,7 @@ interface MigratedConfig {
 	resources: MigratedResource[];
 	model: string;
 	provider: string;
+	variant?: string;
 	dataDirectory?: string;
 }
 
@@ -124,7 +126,8 @@ const migrateConfig = (parsed: Record<string, unknown>): MigratedConfig => {
 		$schema: CONFIG_SCHEMA_URL,
 		resources,
 		model: String(parsed.model ?? DEFAULT_MODEL),
-		provider: String(parsed.provider ?? DEFAULT_PROVIDER)
+		provider: String(parsed.provider ?? DEFAULT_PROVIDER),
+		...(parsed.variant ? { variant: String(parsed.variant) } : {})
 	};
 
 	// Only include dataDirectory if it was explicitly set and isn't default
@@ -180,7 +183,8 @@ const loadConfig = Effect.gen(function* () {
 			configPath,
 			resources: DEFAULT_RESOURCES,
 			model: DEFAULT_MODEL,
-			provider: DEFAULT_PROVIDER
+			provider: DEFAULT_PROVIDER,
+			variant: undefined
 		};
 
 		return config;
@@ -219,7 +223,8 @@ const loadConfig = Effect.gen(function* () {
 			configPath,
 			resources: migrated.resources,
 			model: migrated.model,
-			provider: migrated.provider
+			provider: migrated.provider,
+			variant: migrated.variant
 		};
 
 		return config;
@@ -239,7 +244,8 @@ const loadConfig = Effect.gen(function* () {
 		configPath,
 		resources: [...stored.resources],
 		model: stored.model,
-		provider: stored.provider
+		provider: stored.provider,
+		variant: stored.variant
 	};
 
 	return config;
@@ -259,7 +265,8 @@ const createConfigService = Effect.gen(function* () {
 			dataDirectory: collapseHome(config.dataDirectory),
 			resources: config.resources,
 			model: config.model,
-			provider: config.provider
+			provider: config.provider,
+			...(config.variant ? { variant: config.variant } : {})
 		};
 
 		yield* fs
@@ -299,8 +306,8 @@ const createConfigService = Effect.gen(function* () {
 		/**
 		 * Get the current model and provider
 		 */
-		getModel: (): Effect.Effect<{ model: string; provider: string }> =>
-			Effect.succeed({ model: config.model, provider: config.provider }),
+		getModel: (): Effect.Effect<{ model: string; provider: string; variant?: string }> =>
+			Effect.succeed({ model: config.model, provider: config.provider, variant: config.variant }),
 
 		/**
 		 * Update the model and provider
@@ -308,15 +315,19 @@ const createConfigService = Effect.gen(function* () {
 		updateModel: (args: {
 			model: string;
 			provider: string;
-		}): Effect.Effect<{ model: string; provider: string }, ConfigError, FileSystem.FileSystem> =>
+			variant?: string;
+		}): Effect.Effect<{ model: string; provider: string; variant?: string }, ConfigError, FileSystem.FileSystem> =>
 			Effect.gen(function* () {
 				// Validate model and provider names
 				yield* validateProviderName(args.provider);
 				yield* validateModelName(args.model);
+				if (args.variant) {
+					yield* validateVariantName(args.variant);
+				}
 
-				config = { ...config, model: args.model, provider: args.provider };
+				config = { ...config, model: args.model, provider: args.provider, variant: args.variant };
 				yield* saveConfig;
-				return { model: config.model, provider: config.provider };
+				return { model: config.model, provider: config.provider, variant: config.variant };
 			}),
 
 		/**

@@ -13,8 +13,10 @@ import { services } from '../services.ts';
 type ConfigState = {
 	selectedModel: Accessor<string>;
 	selectedProvider: Accessor<string>;
+	selectedVariant: Accessor<string>;
 	setModel: (model: string) => void;
 	setProvider: (provider: string) => void;
+	setVariant: (variant: string) => void;
 
 	repos: Accessor<Repo[]>;
 	addRepo: (repo: Repo) => void;
@@ -32,6 +34,7 @@ export const useConfigContext = () => {
 export const ConfigProvider: Component<ParentProps> = (props) => {
 	const [selectedModel, setSelectedModel] = createSignal('');
 	const [selectedProvider, setSelectedProvider] = createSignal('');
+	const [selectedVariant, setSelectedVariant] = createSignal('');
 	const [repos, setRepos] = createSignal<Repo[]>([]);
 
 	onMount(() => {
@@ -41,6 +44,7 @@ export const ConfigProvider: Component<ParentProps> = (props) => {
 			.then((config) => {
 				setSelectedProvider(config.provider);
 				setSelectedModel(config.model);
+				setSelectedVariant(config.variant ?? '');
 			})
 			.catch(console.error);
 	});
@@ -48,8 +52,10 @@ export const ConfigProvider: Component<ParentProps> = (props) => {
 	const state: ConfigState = {
 		selectedModel,
 		selectedProvider,
+		selectedVariant,
 		setModel: setSelectedModel,
 		setProvider: setSelectedProvider,
+		setVariant: setSelectedVariant,
 		repos,
 		addRepo: (repo) => setRepos((prev) => [...prev, repo]),
 		removeRepo: (name) => setRepos((prev) => prev.filter((r) => r.name !== name))
