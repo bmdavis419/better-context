@@ -289,11 +289,12 @@ const chatCommand = Command.make('chat', { resource: chatResourceOption }, ({ re
 			}
 		}
 
-		// Ensure resources and collection
-		const resourceInfos = yield* getResourceInfos(services.resources, resourceNames);
-		const collection = yield* services.collections.ensure(resourceNames, { quiet: false });
+		// Ensure resources are valid and cached before launching the TUI
+		yield* getResourceInfos(services.resources, resourceNames);
+		yield* services.collections.ensure(resourceNames, { quiet: false });
 
-		yield* services.agent.spawnTui({ collection, resources: resourceInfos });
+		const { launchTui } = yield* Effect.promise(() => import('../tui-solid/index.tsx'));
+		yield* Effect.promise(() => launchTui({ initialResources: resourceNames }));
 	}).pipe(
 		Effect.catchTag('ConfigError', (e) =>
 			Effect.sync(() => {

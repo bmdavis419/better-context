@@ -2,6 +2,7 @@ import {
 	createContext,
 	createSignal,
 	useContext,
+	onMount,
 	type Accessor,
 	type Component,
 	type ParentProps
@@ -53,6 +54,17 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 	const [lastQuestionId, setLastQuestionId] = createSignal<string | null>(null);
 	const [isStreaming, setIsStreaming] = createSignal(false);
 	const [cancelState, setCancelState] = createSignal<CancelState>('none');
+
+	const initialResourcesEnv = process.env.BTCA_INITIAL_RESOURCES;
+	const initialResources = initialResourcesEnv
+		? initialResourcesEnv
+				.split(',')
+				.map((resource) => resource.trim())
+				.filter(Boolean)
+		: [];
+	if (initialResourcesEnv) {
+		delete process.env.BTCA_INITIAL_RESOURCES;
+	}
 
 	// Internal helpers for message updates
 	const addMessage = (message: Message) => setMessages((prev) => [...prev, message]);
@@ -146,6 +158,18 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 
 		return newQuestion;
 	};
+
+	onMount(() => {
+		if (initialResources.length === 0) return;
+		void (async () => {
+			await initializeThread();
+			addResourcesToThread(initialResources);
+			addMessage({
+				role: 'system',
+				content: `Using resources: ${initialResources.map((r) => `@${r}`).join(' ')}`
+			});
+		})().catch(console.error);
+	});
 
 	// Main send method
 	const send = async (input: InputState, newResources: string[], allResources: string[]) => {
