@@ -96,7 +96,11 @@ export const ModelConfig: Component<ModelConfigProps> = (props) => {
 		} else if (currentStep === 'confirm') {
 			const vals = values();
 			try {
-				const result = await services.updateModel(vals.provider, vals.model);
+				const result = await services.updateModel(
+					vals.provider,
+					vals.model,
+					config.selectedVariant() || undefined
+				);
 				config.setProvider(result.provider);
 				config.setModel(result.model);
 				config.setVariant(result.variant ?? '');

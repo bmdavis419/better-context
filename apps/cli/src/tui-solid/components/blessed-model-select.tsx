@@ -28,7 +28,11 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 		if (!selectedModel) return;
 
 		try {
-			const result = await services.updateModel(selectedModel.provider, selectedModel.model);
+			const result = await services.updateModel(
+				selectedModel.provider,
+				selectedModel.model,
+				config.selectedVariant() || undefined
+			);
 			config.setProvider(result.provider);
 			config.setModel(result.model);
 			config.setVariant(result.variant ?? '');

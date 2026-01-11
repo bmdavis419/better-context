@@ -364,6 +364,15 @@ export const validateVariantName = (name: string): Effect.Effect<void, ConfigErr
 		return Effect.void;
 	}
 
+	const MAX_NAME_LENGTH = 100;
+	if (name.length > MAX_NAME_LENGTH) {
+		return Effect.fail(
+			new ConfigError({
+				message: `Variant name too long: ${name.length} characters. Maximum allowed: ${MAX_NAME_LENGTH}.`
+			})
+		);
+	}
+
 	if (!VARIANT_NAME_REGEX.test(name)) {
 		return Effect.fail(
 			new ConfigError({
