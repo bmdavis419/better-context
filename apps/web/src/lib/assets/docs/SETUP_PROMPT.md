@@ -3,7 +3,7 @@
 ## Quick Copy-Paste Version
 
 ```
-Set up btca for this project: scan package.json for major dependencies (frameworks, libraries, tools), suggest adding each as a btca resource with sensible defaults, then create a btca.config.jsonc file in the project root and update AGENTS.md with usage instructions. Ask me to confirm each resource before adding. Present defaults for repo URLs, branches, and search paths based on common patterns.
+Set up btca for this project: scan package.json for major dependencies (frameworks, libraries, tools), then show me the full list of resources you'd suggest. Once I confirm the list, prepare the btca.config.jsonc with all resources and show it to me for approval before creating files. Work in batches, not one-by-one.
 ```
 
 ## Detailed Instructions
@@ -25,37 +25,32 @@ Check package.json (or equivalent package manager files) and identify libraries/
 - **Syntax**: Shiki, Prism
 - **Other major libraries**: Drizzle, Prisma, Zod, etc.
 
-## Step 2: Suggest Resources
+## Step 2: Present Full Resource List
 
-For each significant dependency you find, ask me one at a time:
+After scanning, show me the **complete list** of suggested resources in a simple format:
 
-> "I found [library name] in your dependencies. Would you like to add it as a btca resource? This would let you query [brief description of what you'd get - e.g., 'the official docs and source code' or 'API documentation and examples']."
+```
+Found these dependencies that would benefit from btca:
 
-Wait for my response before moving to the next one.
+1. svelte - Svelte framework docs and source
+2. tailwind - Tailwind CSS documentation  
+3. effect - Effect-TS library docs
+4. drizzleOrm - Drizzle ORM documentation
+... etc
 
-## Step 3: Gather Resource Details
+Note: Resource names should be camelCase (e.g., drizzleOrm, not drizzle-orm).
 
-For each resource I approve, you need the following information. **Suggest sensible defaults** based on common repository structures:
+Does this list look good, or would you like to add/remove any?
+```
 
-- **name**: Short identifier (e.g., "svelte", "effect", "tailwind")
-- **type**: "git" (for remote repos) or "local" (for local directories)
-- **url**: GitHub repository URL (required for git type)
-  - Suggest the official docs repo or main repo
-  - Examples:
-    - Svelte: `https://github.com/sveltejs/svelte.dev`
-    - Effect: `https://github.com/Effect-TS/effect`
-    - Tailwind: `https://github.com/tailwindlabs/tailwindcss.com`
-- **branch**: Git branch (default: "main", but some use "canary" like Next.js)
-- **searchPath** (optional): Subdirectory to focus on
-  - Examples: "docs", "apps/svelte.dev", "packages/core", "src/docs"
-- **specialNotes** (optional): Special notes for the AI about the resource
-  - Example: "This is the docs website repo. Focus on markdown files in the content directory."
+**Wait for my confirmation before proceeding.** I might say:
+- "Looks good" - proceed with all
+- "Remove X and Y" - exclude those
+- "Add Z" - include additional ones
 
-**Present suggested defaults and let me confirm or modify them.**
+## Step 3: Show Prepared Config
 
-## Step 4: Create Config File
-
-Create a `btca.config.jsonc` file in the project root with this structure:
+Once I approve the resource list, prepare the full `btca.config.jsonc` with sensible defaults and **show it to me before writing any files**:
 
 ```jsonc
 {
@@ -68,25 +63,61 @@ Create a `btca.config.jsonc` file in the project root with this structure:
 			"branch": "main",
 			"searchPath": "apps/svelte.dev",
 			"specialNotes": "Svelte docs website. Focus on content directory for markdown docs."
+		},
+		{
+			"name": "tailwind",
+			"type": "git",
+			"url": "https://github.com/tailwindlabs/tailwindcss.com",
+			"branch": "main",
+			"searchPath": "src/docs"
 		}
-		// Add all approved resources here
+		// ... all approved resources
 	],
 	"model": "claude-haiku-4-5",
 	"provider": "opencode"
 }
 ```
 
-**Important**: Only include approved resources. Each resource should be a complete object in the `resources` array.
+Ask: "Here's the config I'll create. Want me to change anything before I write it?"
 
-## Step 5: Update AGENTS.md
+**Wait for approval** before creating files. I might want to:
+- Change a repo URL
+- Adjust a searchPath
+- Add specialNotes
+- Change branch names
+
+## Step 4: Create Files
+
+Only after I approve the config, create:
+
+- `btca.config.jsonc` in the project root
+
+## Step 5: Ask About Usage Mode
+
+Ask me which mode I want the agent to use btca in:
+
+```
+How would you like your AI agent to use btca?
+
+1. **eager** - Agent uses btca automatically whenever it thinks it needs up-to-date info
+2. **ask** - Agent asks you first before using btca to research
+3. **lazy** - Agent only uses btca when you explicitly say "use btca" in your prompt
+
+Which mode? (eager/ask/lazy)
+```
+
+**Wait for my response** before updating AGENTS.md.
+
+## Step 6: Update AGENTS.md
 
 Check if an `AGENTS.md` file exists in the project root:
 
 - **If it exists**: Look for an existing `## btca` section and update it
 - **If it doesn't exist**: Create `AGENTS.md` with the btca section
 
-Add or update this section:
+Add or update this section based on the chosen mode:
 
+**For "eager" mode:**
 ```markdown
 ## btca
 
@@ -96,56 +127,64 @@ When you need up-to-date information about technologies used in this project, us
 
 ### Usage
 
-Ask a question about one or more resources:
+\`\`\`bash
+btca ask -r <resource> -q "<question>"
+\`\`\`
+
+Use multiple `-r` flags to query multiple resources at once:
+
+\`\`\`bash
+btca ask -r svelte -r effect -q "How do I integrate Effect with Svelte?"
+\`\`\`
+```
+
+**For "ask" mode:**
+```markdown
+## btca
+
+When you need up-to-date information about technologies used in this project, ask the user if they'd like you to use btca to research.
+
+**Available resources**: [comma-separated list of all resource names from config]
+
+### Usage
 
 \`\`\`bash
 btca ask -r <resource> -q "<question>"
 \`\`\`
 
-Examples:
+Use multiple `-r` flags to query multiple resources at once:
 
 \`\`\`bash
-
-# Single resource
-
-btca ask -r svelte -q "How do stores work in Svelte 5?"
-
-# Multiple resources
-
 btca ask -r svelte -r effect -q "How do I integrate Effect with Svelte?"
-
-# Using @mentions in the question
-
-btca ask -q "@svelte @tailwind How do I style components?"
 \`\`\`
-
-### Interactive Mode
-
-Start a chat session for deeper exploration:
-
-\`\`\`bash
-btca chat -r svelte -r effect
-\`\`\`
-
-Or use the TUI:
-
-\`\`\`bash
-btca
-\`\`\`
-
-Then use `@mentions` to reference resources (e.g., "@svelte How do I create a store?")
 ```
 
-## Step 6: Provide Summary
+**For "lazy" mode:**
+```markdown
+## btca
+
+When the user says "use btca" for codebase/docs questions.
+
+**Available resources**: [comma-separated list of all resource names from config]
+
+### Usage
+
+\`\`\`bash
+btca ask -r <resource> -q "<question>"
+\`\`\`
+
+Use multiple `-r` flags to query multiple resources at once.
+```
+
+## Step 7: Provide Summary
 
 After completing the setup, show me:
 
 1. **Configured resources** (list with name, type, and URL/path)
 2. **Config file location** (absolute path)
-3. **AGENTS.md status** (created or updated)
+3. **AGENTS.md status** (created or updated, with which mode)
 4. **Example commands** specific to my project's resources
 5. **Next steps**:
-   - "Run `btca config resources list` to verify your global btca config"
    - "Resources will be cloned to `~/.local/share/btca/resources/` on first use"
    - "Use `btca clear` to remove cached git repositories if needed"
 
@@ -155,10 +194,10 @@ After completing the setup, show me:
 
 **Behavior Guidelines**:
 
-- Be conversational and interactive - don't assume what I want
-- Present suggestions with sensible defaults, but always ask for confirmation
-- Show me what you're about to write before writing it (especially the config)
-- If I say "add [library]", ask for the details rather than guessing
+- **Work in batches, not one-by-one** - show the full list of resources at once
+- Present the complete list first, get confirmation, then show the prepared config
+- Only 2 confirmation points: (1) the resource list, (2) the prepared config
+- Show me what you're about to write before writing it
 - Don't add resources I haven't explicitly approved
 - If `AGENTS.md` exists with a btca section, update it cleanly without duplication
 
@@ -168,6 +207,7 @@ After completing the setup, show me:
 - Format: Valid JSON with comments (JSONC)
 - Schema: Include the `$schema` field for validation
 - Resources: Only include those I've approved
+- Resource names: Use camelCase, not hyphen-case (e.g., `drizzleOrm` not `drizzle-orm`)
 - Model defaults: `"claude-haiku-4-5"` with provider `"opencode"`
 
 **Common Resource Patterns**:

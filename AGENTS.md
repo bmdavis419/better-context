@@ -31,3 +31,15 @@ After making changes in a specific package, run its check script:
 - **Imports**: External packages first, then local. Use `.ts` extensions for local imports.
 - **Bun APIs**: Prefer `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` over Node equivalents.
 - **Testing**: Use `bun:test` with `import { test, expect } from "bun:test"`.
+
+## btca
+
+When the user says "use btca" for codebase/docs questions.
+
+**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite
+
+### Usage
+
+```bash
+btca ask -r <resource> -q "<question>"
+```

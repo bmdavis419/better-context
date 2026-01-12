@@ -1,0 +1,64 @@
+{
+	"$schema": "https://btca.dev/btca.schema.json",
+	"resources": [
+		{
+			"name": "svelte",
+			"type": "git",
+			"url": "https://github.com/sveltejs/svelte.dev",
+			"branch": "main",
+			"searchPath": "apps/svelte.dev",
+			"specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
+		},
+		{
+			"name": "svelteKit",
+			"type": "git",
+			"url": "https://github.com/sveltejs/kit",
+			"branch": "main",
+			"searchPath": "documentation"
+		},
+		{
+			"name": "tailwind",
+			"type": "git",
+			"url": "https://github.com/tailwindlabs/tailwindcss.com",
+			"branch": "main",
+			"searchPath": "src/docs"
+		},
+		{
+			"name": "hono",
+			"type": "git",
+			"url": "https://github.com/honojs/website",
+			"branch": "main",
+			"searchPath": "docs"
+		},
+		{
+			"name": "zod",
+			"type": "git",
+			"url": "https://github.com/colinhacks/zod",
+			"branch": "main",
+			"searchPath": "packages/docs/content"
+		},
+		{
+			"name": "solidJs",
+			"type": "git",
+			"url": "https://github.com/solidjs/solid-docs",
+			"branch": "main",
+			"searchPath": "src/routes"
+		},
+		{
+			"name": "commander",
+			"type": "git",
+			"url": "https://github.com/tj/commander.js",
+			"branch": "master",
+			"searchPath": "docs"
+		},
+		{
+			"name": "vite",
+			"type": "git",
+			"url": "https://github.com/vitejs/vite",
+			"branch": "main",
+			"searchPath": "docs"
+		}
+	],
+	"model": "claude-haiku-4-5",
+	"provider": "opencode"
+}
