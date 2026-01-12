@@ -1,53 +1,54 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-const { execSync, spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
-
-const platform = os.platform();
-const arch = os.arch();
-
-// Map to our binary names
-function getBinaryName() {
-	if (platform === 'darwin') {
-		return arch === 'arm64' ? 'btca-darwin-arm64' : 'btca-darwin-x64';
-	} else if (platform === 'linux') {
-		return arch === 'arm64' ? 'btca-linux-arm64' : 'btca-linux-x64';
-	} else if (platform === 'win32') {
-		return 'btca-windows-x64.exe';
-	}
-	return null;
-}
-
-const binaryName = getBinaryName();
-
-if (!binaryName) {
-	console.error(`Unsupported platform: ${platform}-${arch}`);
-	console.error('Please install bun and run: bun x @btca/cli');
+if (typeof Bun === 'undefined') {
+	console.error('[btca] This CLI requires Bun. Install it: https://bun.sh');
+	console.error('       Then run: bun install -g btca');
 	process.exit(1);
 }
 
-const binaryPath = path.join(__dirname, 'dist', binaryName);
+import path from 'node:path';
 
-if (!fs.existsSync(binaryPath)) {
-	// Binary not found - try running with bun directly
-	try {
-		execSync('bun --version', { stdio: 'ignore' });
-		// Bun is available, run with bun
-		const result = spawn('bun', [path.join(__dirname, 'src', 'index.ts'), ...process.argv.slice(2)], {
-			stdio: 'inherit'
-		});
-		result.on('exit', (code) => process.exit(code || 0));
-	} catch {
-		console.error(`Binary not found for your platform: ${platform}-${arch}`);
-		console.error('Please install bun (https://bun.sh) and run: bun x @btca/cli');
-		process.exit(1);
-	}
-} else {
-	// Run the native binary
-	const result = spawn(binaryPath, process.argv.slice(2), {
-		stdio: 'inherit'
-	});
-	result.on('exit', (code) => process.exit(code || 0));
+const PLATFORM_ARCH = `${process.platform}-${process.arch}`;
+
+const TARGET_MAP = {
+	'darwin-arm64': 'btca-darwin-arm64',
+	'darwin-x64': 'btca-darwin-x64',
+	'linux-x64': 'btca-linux-x64',
+	'linux-arm64': 'btca-linux-arm64',
+	'win32-x64': 'btca-windows-x64.exe'
+};
+
+const binaryName = TARGET_MAP[PLATFORM_ARCH];
+
+if (!binaryName) {
+	console.error(
+		`[btca] Unsupported platform: ${PLATFORM_ARCH}. ` +
+			'Please open an issue with your OS/CPU details.'
+	);
+	process.exit(1);
 }
+
+const __dirname = path.dirname(Bun.fileURLToPath(import.meta.url));
+const binPath = path.join(__dirname, 'dist', binaryName);
+const binFile = Bun.file(binPath);
+
+if (!(await binFile.exists())) {
+	console.error(
+		`[btca] Prebuilt binary not found for ${PLATFORM_ARCH}. ` +
+			'Try reinstalling, or open an issue if the problem persists.'
+	);
+	process.exit(1);
+}
+
+const result = Bun.spawnSync([binPath, ...process.argv.slice(2)], {
+	stdout: 'inherit',
+	stderr: 'inherit',
+	stdin: 'inherit'
+});
+
+if (result.error) {
+	console.error(`[btca] Failed to start binary: ${result.error}`);
+	process.exit(1);
+}
+
+process.exit(result.exitCode ?? 1);

@@ -1,7 +1,7 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"homepage": "https://btca.dev",
 	"description": "CLI tool for asking questions about technologies using btca server",
 	"type": "module",
