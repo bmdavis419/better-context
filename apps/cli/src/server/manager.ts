@@ -1,4 +1,4 @@
-import { startServer, type ServerInstance } from '@btca/server';
+import { startServer, type ServerInstance } from 'btca-server';
 
 export interface ServerManager {
 	url: string;

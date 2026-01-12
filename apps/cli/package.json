@@ -39,7 +39,7 @@
 		"build": "bun run scripts/build-binaries.ts"
 	},
 	"devDependencies": {
-		"@btca/server": "workspace:*",
+		"btca-server": "workspace:*",
 		"@opentui/core": "^0.1.65",
 		"@opentui/solid": "^0.1.65",
 		"@shikijs/langs": "^3.20.0",

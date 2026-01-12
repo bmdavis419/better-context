@@ -17,6 +17,7 @@ const program = new Command()
 	.name('btca')
 	.description('CLI for asking questions about technologies using btca server')
 	.version(VERSION, '-v, --version', 'output the version number')
+	.enablePositionalOptions()
 	.option('--server <url>', 'Use an existing btca server URL')
 	.option('--port <port>', 'Port for auto-started server (default: random)', parseInt);
 

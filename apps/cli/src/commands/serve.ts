@@ -5,9 +5,9 @@ const DEFAULT_PORT = 8080;
 
 export const serveCommand = new Command('serve')
 	.description('Start the btca server and listen for requests')
-	.option('-p, --port <port>', 'Port to listen on (default: 8080)', parseInt)
-	.action(async (options: { port?: number }) => {
-		const port = options.port ?? DEFAULT_PORT;
+	.option('-p, --port <port>', 'Port to listen on (default: 8080)')
+	.action(async (options: { port?: string }) => {
+		const port = options.port ? parseInt(options.port, 10) : DEFAULT_PORT;
 
 		try {
 			console.log(`Starting btca server on port ${port}...`);

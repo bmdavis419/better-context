@@ -15,14 +15,9 @@
     },
     "apps/cli": {
       "name": "btca",
-      "version": "1.0.0",
+      "version": "1.0.20",
       "bin": {
         "btca": "bin.js",
-      },
-      "dependencies": {
-        "@btca/server": "workspace:*",
-        "commander": "^12.1.0",
-        "hono": "^4.7.11",
       },
       "devDependencies": {
         "@opentui/core": "^0.1.65",
@@ -31,6 +26,9 @@
         "@shikijs/themes": "^3.20.0",
         "@types/bun": "latest",
         "@typescript/native-preview": "^7.0.0-dev.20260109.1",
+        "btca-server": "workspace:*",
+        "commander": "^12.1.0",
+        "hono": "^4.7.11",
         "marked": "^17.0.1",
         "prettier": "^3.7.4",
         "shiki": "^3.20.0",
@@ -70,8 +68,8 @@
       },
     },
     "apps/server": {
-      "name": "@btca/server",
-      "version": "0.0.1",
+      "name": "btca-server",
+      "version": "1.0.20",
       "dependencies": {
         "@opencode-ai/sdk": "^1.0.208",
         "hono": "^4.7.11",
@@ -180,8 +178,6 @@
     "@babel/traverse": ["@babel/traverse@7.28.5", "", { "dependencies": { "@babel/code-frame": "^7.27.1", "@babel/generator": "^7.28.5", "@babel/helper-globals": "^7.28.0", "@babel/parser": "^7.28.5", "@babel/template": "^7.27.2", "@babel/types": "^7.28.5", "debug": "^4.3.1" } }, "sha512-TCCj4t55U90khlYkVV/0TfkJkAkUg3jZFA3Neb7unZT8CPok7iiRfaX0F+WnqWqt7OxhOn0uBKXCw4lbL8W0aQ=="],
 
     "@babel/types": ["@babel/types@7.28.5", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.28.5" } }, "sha512-qQ5m48eI/MFLQ5PxQj4PFaprjyCTLI37ElWMmNs0K8Lk3dVeOdNpB3ks8jc7yM5CDmVC73eMVk/trk3fgmrUpA=="],
-
-    "@btca/server": ["@btca/server@workspace:apps/server"],
 
     "@btca/shared": ["@btca/shared@workspace:packages/shared"],
 
@@ -610,6 +606,8 @@
     "btca": ["btca@workspace:apps/cli"],
 
     "btca-legacy": ["btca-legacy@workspace:apps/cli-LEGACY"],
+
+    "btca-server": ["btca-server@workspace:apps/server"],
 
     "buffer": ["buffer@5.7.1", "", { "dependencies": { "base64-js": "^1.3.1", "ieee754": "^1.1.13" } }, "sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ=="],
 
