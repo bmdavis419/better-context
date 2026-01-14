@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { MessageSquare, Loader2, Send } from '@lucide/svelte';
 	import type { BtcaChunk, CancelState } from '$lib/types';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import ChatMessages from '$lib/components/ChatMessages.svelte';
 	import { useQuery, useConvexClient } from 'convex-svelte';
@@ -9,13 +9,17 @@
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
-	// Get thread ID from route params
-	const threadId = $derived((page.params as { id: string }).id as Id<'threads'>);
+	// Get thread ID from route params - can be 'new' for a fresh thread
+	const routeId = $derived((page.params as { id: string }).id);
+	const isNewThread = $derived(routeId === 'new');
+	const threadId = $derived(isNewThread ? null : (routeId as Id<'threads'>));
 	const auth = getAuthState();
 	const client = useConvexClient();
 
-	// Convex queries
-	const threadQuery = $derived(useQuery(api.threads.getWithMessages, { threadId }));
+	// Convex queries - only query if we have a real thread ID
+	const threadQuery = $derived(
+		threadId ? useQuery(api.threads.getWithMessages, { threadId }) : null
+	);
 	const resourcesQuery = $derived(
 		auth.convexUserId ? useQuery(api.resources.listAvailable, { userId: auth.convexUserId }) : null
 	);
@@ -25,6 +29,9 @@
 	let sandboxStatus = $state<string | null>(null);
 	let cancelState = $state<CancelState>('none');
 	let inputValue = $state('');
+
+	// Pending message shown immediately while waiting for stream
+	let pendingUserMessage = $state<{ content: string; resources: string[] } | null>(null);
 
 	// Streaming state
 	let currentChunks = $state<BtcaChunk[]>([]);
@@ -46,7 +53,15 @@
 		}
 	});
 
+	// Auto-focus input on page load
+	$effect(() => {
+		if (inputEl && auth.isSignedIn) {
+			inputEl.focus();
+		}
+	});
+
 	async function clearChat() {
+		if (!threadId) return;
 		try {
 			await client.mutation(api.threads.clearMessages, { threadId });
 		} catch (error) {
@@ -66,7 +81,10 @@
 	}
 
 	async function sendMessage() {
-		if (!auth.convexUserId || !thread || isStreaming || !inputValue.trim()) return;
+		if (!auth.convexUserId || isStreaming || !inputValue.trim()) return;
+
+		// For existing threads, we need the thread to exist
+		if (!isNewThread && !thread) return;
 
 		const { resources: mentionedResources, question } = parseMentions(inputValue);
 
@@ -94,29 +112,50 @@
 		const savedInput = inputValue;
 		inputValue = '';
 		isStreaming = true;
-		sandboxStatus = thread.sandboxState === 'pending' ? 'pending' : null;
+		// Show the user message immediately
+		pendingUserMessage = { content: savedInput, resources: validResources };
+		// Sandbox status will be sent from server via SSE events
+		sandboxStatus = null;
 		cancelState = 'none';
 		currentChunks = [];
 		abortController = new AbortController();
 
 		try {
-			const response = await fetch(`/api/threads/${threadId}/chat`, {
+			// If this is a new thread, create it first
+			let actualThreadId = threadId;
+			if (isNewThread) {
+				const createResponse = await fetch('/api/threads', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ userId: auth.convexUserId })
+				});
+				if (!createResponse.ok) {
+					throw new Error('Failed to create thread');
+				}
+				const { threadId: newThreadId } = await createResponse.json();
+				actualThreadId = newThreadId;
+
+				// Replace the URL without navigation (so back button works correctly)
+				replaceState(`/chat/${newThreadId}`, {});
+			}
+
+			const body = JSON.stringify({
+				message: savedInput,
+				resources: validResources,
+				userId: auth.convexUserId
+			});
+
+			const response = await fetch(`/api/threads/${actualThreadId}/chat`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					message: savedInput,
-					resources: validResources,
-					userId: auth.convexUserId,
-					sandboxId: thread.sandboxId,
-					sandboxState: thread.sandboxState,
-					serverUrl: thread.serverUrl,
-					threadResources,
-					previousMessages: messages
-				}),
+				body,
 				signal: abortController.signal
 			});
 
-			if (!response.ok) throw new Error('Failed to send message');
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(errorText || 'Failed to send message');
+			}
 			if (!response.body) throw new Error('No response body');
 
 			const reader = response.body.getReader();
@@ -143,6 +182,11 @@
 								| { type: 'status'; status: string }
 								| { type: 'done' }
 								| { type: 'error'; error: string };
+
+							// Clear pending message on first event - server has saved to Convex
+							if (pendingUserMessage) {
+								pendingUserMessage = null;
+							}
 
 							if (event.type === 'status') {
 								sandboxStatus = event.status;
@@ -177,6 +221,7 @@
 			sandboxStatus = null;
 			cancelState = 'none';
 			currentChunks = [];
+			pendingUserMessage = null;
 			abortController = null;
 		}
 	}
@@ -304,24 +349,66 @@
 		return '@resource question...';
 	}
 
+	let backdropEl = $state<HTMLDivElement | null>(null);
+
+	function syncScroll() {
+		if (inputEl && backdropEl) {
+			backdropEl.scrollTop = inputEl.scrollTop;
+		}
+	}
+
+	function highlightMentions(text: string): string {
+		const resourceNames = new Set(availableResources.map((r) => r.name.toLowerCase()));
+		const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		return escaped.replace(/@(\w+)/g, (match, name) => {
+			if (resourceNames.has(name.toLowerCase())) {
+				return `<span class="mention-highlight">${match}</span>`;
+			}
+			return match;
+		});
+	}
+
 	// Convert Convex messages to the format expected by ChatMessages
-	const displayMessages = $derived(
-		messages.map((m) => ({
-			id: m._id as string,
-			role: m.role,
-			content: m.content,
-			resources: m.resources ?? [],
-			canceled: m.canceled
-		})) as import('$lib/types').Message[]
-	);
+	type Message = import('$lib/types').Message;
+	const displayMessages = $derived.by((): Message[] => {
+		const msgs = messages.map((m): Message => {
+			if (m.role === 'user') {
+				return {
+					id: m._id as string,
+					role: 'user',
+					content: m.content as string,
+					resources: m.resources ?? []
+				};
+			}
+			// Assistant messages - content can be string or { type: 'chunks', chunks: [] }
+			return {
+				id: m._id as string,
+				role: 'assistant',
+				content: m.content,
+				canceled: m.canceled
+			} as Message;
+		});
+
+		// Add pending user message if exists (shown immediately while waiting for stream)
+		if (pendingUserMessage) {
+			msgs.push({
+				id: 'pending-user',
+				role: 'user',
+				content: pendingUserMessage.content,
+				resources: pendingUserMessage.resources
+			});
+		}
+
+		return msgs;
+	});
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-	{#if threadQuery?.isLoading}
+	{#if !isNewThread && threadQuery?.isLoading}
 		<div class="flex flex-1 items-center justify-center">
 			<Loader2 size={32} class="animate-spin" />
 		</div>
-	{:else if !thread}
+	{:else if !isNewThread && !thread}
 		<div class="flex flex-1 flex-col items-center justify-center gap-6 p-8">
 			<div class="bc-logoMark"><MessageSquare size={20} /></div>
 			<h2 class="text-xl font-semibold">Thread not found</h2>
@@ -329,12 +416,7 @@
 		</div>
 	{:else}
 		<!-- Messages (scrollable area) -->
-		<ChatMessages
-			messages={displayMessages}
-			{isStreaming}
-			{sandboxStatus}
-			{currentChunks}
-		/>
+		<ChatMessages messages={displayMessages} {isStreaming} {sandboxStatus} {currentChunks} />
 
 		<!-- Input (fixed at bottom) -->
 		<div class="chat-input-container shrink-0">
@@ -368,17 +450,23 @@
 					</div>
 				{/if}
 
-				<textarea
-					class="chat-input"
-					bind:this={inputEl}
-					bind:value={inputValue}
-					oninput={handleInputChange}
-					onclick={handleInputChange}
-					onkeydown={handleKeydown}
-					disabled={isStreaming}
-					rows="1"
-					placeholder={getPlaceholder()}
-				></textarea>
+				<div class="chat-input-highlight-wrapper">
+					<div class="chat-input-backdrop" aria-hidden="true" bind:this={backdropEl}>
+						{@html highlightMentions(inputValue)}
+					</div>
+					<textarea
+						class="chat-input"
+						bind:this={inputEl}
+						bind:value={inputValue}
+						oninput={handleInputChange}
+						onclick={handleInputChange}
+						onkeydown={handleKeydown}
+						onscroll={syncScroll}
+						disabled={isStreaming}
+						rows="2"
+						placeholder={getPlaceholder()}
+					></textarea>
+				</div>
 
 				<button
 					type="button"
@@ -402,7 +490,7 @@
 						Enter to send
 					{/if}
 				</span>
-				{#if !isStreaming}
+				{#if !isStreaming && !isNewThread}
 					<button type="button" class="text-xs hover:underline" onclick={clearChat}>Clear</button>
 				{/if}
 			</div>

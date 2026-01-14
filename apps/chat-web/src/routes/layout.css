@@ -310,23 +310,55 @@
 		width: 100%;
 	}
 
-	/* Simple input wrapper */
+	/* Input wrapper with flexbox */
 	.input-wrapper {
+		position: relative;
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.chat-input-highlight-wrapper {
+		flex: 1;
 		position: relative;
 	}
 
+	.chat-input-backdrop {
+		position: absolute;
+		inset: 0;
+		padding: 12px 14px;
+		border: 1px solid transparent;
+		font-size: 14px;
+		font-family: var(--font-family-geist-mono);
+		line-height: 1.5;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		overflow: hidden;
+		pointer-events: none;
+		color: transparent;
+	}
+
+	.mention-highlight {
+		color: hsl(var(--bc-accent));
+		background: hsl(var(--bc-accent) / 0.15);
+	}
+
 	.chat-input {
+		position: relative;
 		width: 100%;
-		padding: 12px 50px 12px 14px;
+		padding: 12px 14px;
 		border: 1px solid hsl(var(--bc-accent));
-		background: hsl(var(--bc-surface));
+		background: transparent;
 		color: hsl(var(--bc-fg));
+		caret-color: hsl(var(--bc-fg));
 		font-size: 14px;
 		font-family: var(--font-family-geist-mono);
 		resize: none;
-		min-height: 48px;
-		max-height: 200px;
 		line-height: 1.5;
+		field-sizing: content;
+		min-height: calc(2lh + 24px);
+		max-height: calc(4lh + 24px);
+		overflow-y: auto;
 	}
 
 	.chat-input:focus {
@@ -344,11 +376,10 @@
 	}
 
 	.send-btn {
-		position: absolute;
-		right: 8px;
-		top: 50%;
-		transform: translateY(-50%);
-		padding: 6px;
+		flex-shrink: 0;
+		width: 42px;
+		height: 42px;
+		padding: 0;
 		background: hsl(var(--bc-fg));
 		color: hsl(var(--bc-bg));
 		border: none;

@@ -1,10 +1,39 @@
 <script lang="ts">
 	import { Loader2, Server, GitBranch, Zap, Copy, Check, ArrowDown } from '@lucide/svelte';
-	import type { Message, BtcaChunk } from '$lib/types';
+	import type { Message, BtcaChunk, AssistantContent } from '$lib/types';
 	import { nanoid } from 'nanoid';
 	import { marked } from 'marked';
 	import { createHighlighter } from 'shiki';
 	import DOMPurify from 'isomorphic-dompurify';
+
+	// Type guards for AssistantContent (can be string | { type: 'text' } | { type: 'chunks' })
+	function isTextContent(content: AssistantContent): content is { type: 'text'; content: string } {
+		return typeof content === 'object' && content !== null && content.type === 'text';
+	}
+	function isChunksContent(
+		content: AssistantContent
+	): content is { type: 'chunks'; chunks: BtcaChunk[] } {
+		return typeof content === 'object' && content !== null && content.type === 'chunks';
+	}
+
+	// Extract text from assistant content for copy functionality
+	function getAssistantTextContent(content: AssistantContent): string {
+		if (typeof content === 'string') return content;
+		if (isTextContent(content)) return content.content;
+		if (isChunksContent(content)) {
+			return content.chunks
+				.filter((c): c is BtcaChunk & { type: 'text' } => c.type === 'text')
+				.map((c) => c.text)
+				.join('\n\n');
+		}
+		return '';
+	}
+
+	// Get chunks from assistant content (returns empty array for non-chunks content)
+	function getAssistantChunks(content: AssistantContent): BtcaChunk[] {
+		if (isChunksContent(content)) return content.chunks;
+		return [];
+	}
 
 	interface Props {
 		messages: Message[];
@@ -34,12 +63,25 @@
 	// Copy state
 	let copiedId = $state<string | null>(null);
 
-	// Markdown rendering
+	// Markdown rendering - strip conversation history from displayed text
+	// This handles cases where the AI echoes back parts of the formatted prompt
 	function stripHistory(text: string): string {
-		return text
-			.replace(/=== CONVERSATION HISTORY ===[\s\S]*?=== END HISTORY ===/g, '')
-			.replace(/^Current question:\s*/i, '')
-			.trim();
+		return (
+			text
+				// Old format markers
+				.replace(/=== CONVERSATION HISTORY ===[\s\S]*?=== END HISTORY ===/g, '')
+				.replace(/^Current question:\s*/i, '')
+				// New XML format - strip full history block and current_message wrapper
+				.replace(/<conversation_history>[\s\S]*?<\/conversation_history>\s*/g, '')
+				.replace(/<current_message>\s*/g, '')
+				.replace(/\s*<\/current_message>/g, '')
+				// Strip orphaned tags (when AI echoes back partial history)
+				.replace(/<\/?conversation_history>\s*/g, '')
+				.replace(/<\/?current_message>\s*/g, '')
+				.replace(/<\/?human>\s*/g, '')
+				.replace(/<\/?assistant>\s*/g, '')
+				.trim()
+		);
 	}
 
 	const shikiHighlighter = createHighlighter({
@@ -189,11 +231,15 @@
 						<div class="mb-2">
 							<span class="text-xs font-medium text-[hsl(var(--bc-success))]">AI</span>
 						</div>
-						{#if message.content.type === 'text'}
+						{#if typeof message.content === 'string'}
+							<div class="prose prose-neutral prose-invert max-w-none">
+								{@html getRenderedMarkdown(message.content)}
+							</div>
+						{:else if isTextContent(message.content)}
 							<div class="prose prose-neutral prose-invert max-w-none">
 								{@html getRenderedMarkdown(message.content.content)}
 							</div>
-						{:else if message.content.type === 'chunks'}
+						{:else if isChunksContent(message.content)}
 							<div class="space-y-3">
 								{#each sortChunks(message.content.chunks) as chunk (chunk.id)}
 									{#if chunk.type === 'reasoning'}
@@ -226,11 +272,7 @@
 							<button
 								type="button"
 								class="copy-answer-btn"
-								onclick={() =>
-									copyFullAnswer(
-										message.id,
-										message.content.type === 'chunks' ? message.content.chunks : []
-									)}
+								onclick={() => copyFullAnswer(message.id, getAssistantChunks(message.content))}
 							>
 								{#if copiedId === message.id}
 									<Check size={12} /> Copied
@@ -321,7 +363,7 @@
 									<span>{chunk.toolName}</span>
 								</div>
 							{:else if chunk.type === 'text'}
-								<div class="prose  prose-neutral prose-invert max-w-none">
+								<div class="prose prose-neutral prose-invert max-w-none">
 									{@html getRenderedMarkdown(chunk.text)}
 								</div>
 							{/if}

@@ -1,32 +1,20 @@
 import { z } from 'zod';
 
-// Chunk types for streaming responses (matching CLI types)
-export interface TextChunk {
-	type: 'text';
-	id: string;
-	text: string;
-}
+// Re-export shared types
+export type {
+	TextChunk,
+	ReasoningChunk,
+	ToolChunk,
+	FileChunk,
+	BtcaChunk,
+	AssistantContent,
+	ThreadMessage,
+	CancelState
+} from '@btca/shared';
 
-export interface ReasoningChunk {
-	type: 'reasoning';
-	id: string;
-	text: string;
-}
+export { formatConversationHistory, extractMessageText } from '@btca/shared';
 
-export interface ToolChunk {
-	type: 'tool';
-	id: string;
-	toolName: string;
-	state: 'pending' | 'running' | 'completed';
-}
-
-export interface FileChunk {
-	type: 'file';
-	id: string;
-	filePath: string;
-}
-
-export type BtcaChunk = TextChunk | ReasoningChunk | ToolChunk | FileChunk;
+import type { BtcaChunk, AssistantContent } from '@btca/shared';
 
 // Resource types
 export interface Resource {
@@ -39,11 +27,7 @@ export interface Resource {
 	specialNotes?: string;
 }
 
-// Message types
-export type AssistantContent =
-	| { type: 'text'; content: string }
-	| { type: 'chunks'; chunks: BtcaChunk[] };
-
+// Message types (using AssistantContent from shared)
 export type Message =
 	| {
 			id: string;
@@ -176,5 +160,4 @@ export const COMMANDS: Command[] = [
 	}
 ];
 
-// Cancel state
-export type CancelState = 'none' | 'pending';
+// CancelState is re-exported from @btca/shared above

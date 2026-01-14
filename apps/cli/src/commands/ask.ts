@@ -150,6 +150,7 @@ export const askCommand = new Command('ask')
 
 			console.log('\n');
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);

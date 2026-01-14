@@ -1,8 +1,5 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
-import type { Doc, Id } from './_generated/dataModel';
-
-export type SandboxState = Doc<'threads'>['sandboxState'];
 
 /**
  * Create a new thread
@@ -13,7 +10,6 @@ export const create = mutation({
 		const now = Date.now();
 		return await ctx.db.insert('threads', {
 			userId: args.userId,
-			sandboxState: 'pending',
 			createdAt: now,
 			lastActivityAt: now
 		});
@@ -75,28 +71,16 @@ export const getWithMessages = query({
 });
 
 /**
- * Update sandbox state
+ * Set sandbox ID for a thread
  */
-export const updateSandboxState = mutation({
+export const setSandboxId = mutation({
 	args: {
 		threadId: v.id('threads'),
-		sandboxId: v.optional(v.string()),
-		sandboxState: v.union(
-			v.literal('pending'),
-			v.literal('starting'),
-			v.literal('active'),
-			v.literal('stopped'),
-			v.literal('error')
-		),
-		serverUrl: v.optional(v.string()),
-		errorMessage: v.optional(v.string())
+		sandboxId: v.string()
 	},
 	handler: async (ctx, args) => {
 		await ctx.db.patch(args.threadId, {
 			sandboxId: args.sandboxId,
-			sandboxState: args.sandboxState,
-			serverUrl: args.serverUrl,
-			errorMessage: args.errorMessage,
 			lastActivityAt: Date.now()
 		});
 	}
@@ -157,21 +141,16 @@ export const remove = mutation({
 });
 
 /**
- * Get all threads with active sandboxes for a user
- * Used to enforce "only 1 active sandbox" rule
+ * Get all threads with sandboxes for a user
+ * Used to find other sandboxes to stop when starting a new one
  */
-export const listWithActiveSandbox = query({
+export const listWithSandbox = query({
 	args: { userId: v.id('users') },
 	handler: async (ctx, args) => {
 		const threads = await ctx.db
 			.query('threads')
 			.withIndex('by_user', (q) => q.eq('userId', args.userId))
-			.filter((q) =>
-				q.and(
-					q.neq(q.field('sandboxId'), undefined),
-					q.or(q.eq(q.field('sandboxState'), 'active'), q.eq(q.field('sandboxState'), 'starting'))
-				)
-			)
+			.filter((q) => q.neq(q.field('sandboxId'), undefined))
 			.collect();
 
 		return threads;

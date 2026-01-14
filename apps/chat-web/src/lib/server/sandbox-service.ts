@@ -17,8 +17,6 @@ const AUTO_STOP_INTERVAL = 60;
 // Server port for btca serve
 const BTCA_SERVER_PORT = 3000;
 
-export type SandboxState = 'pending' | 'starting' | 'active' | 'stopped' | 'error';
-
 export interface ResourceConfig {
 	name: string;
 	type: 'git';
@@ -27,6 +25,9 @@ export interface ResourceConfig {
 	searchPath?: string;
 	specialNotes?: string;
 }
+
+// Status updates sent to client during sandbox operations
+export type SandboxStatus = 'creating' | 'starting' | 'ready' | 'error';
 
 function getDaytona(): Daytona {
 	if (!daytonaInstance) {
@@ -89,196 +90,143 @@ async function waitForBtcaServer(sandbox: Sandbox, maxRetries = 15): Promise<boo
 }
 
 /**
- * Create and start a new sandbox for a thread
+ * Get sandbox state and server URL from Daytona
  */
-export async function createSandbox(
-	threadId: Id<'threads'>,
-	resources: ResourceConfig[],
-	onStatusChange?: (status: SandboxState) => void
-): Promise<{ sandboxId: string; serverUrl: string }> {
-	const daytona = getDaytona();
-	const convex = getConvexClient();
-
-	try {
-		// Update status: starting
-		onStatusChange?.('starting');
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'starting'
-		});
-
-		// Create sandbox from pre-built snapshot
-		const sandbox = await daytona.create({
-			snapshot: BTCA_SNAPSHOT_NAME,
-			autoStopInterval: AUTO_STOP_INTERVAL,
-			envVars: {
-				NODE_ENV: 'production',
-				OPENCODE_API_KEY: env.OPENCODE_API_KEY ?? ''
-			},
-			public: true
-		});
-
-		// Generate and upload btca config
-		const btcaConfig = generateBtcaConfig(resources);
-		await sandbox.fs.uploadFile(Buffer.from(btcaConfig), '/root/btca.config.jsonc');
-
-		// Create a session for the long-running server process
-		const sandboxSessionId = 'btca-server-session';
-		await sandbox.process.createSession(sandboxSessionId);
-
-		// Start the btca serve command
-		await sandbox.process.executeSessionCommand(sandboxSessionId, {
-			command: `cd /root && btca serve --port ${BTCA_SERVER_PORT}`,
-			runAsync: true
-		});
-
-		// Wait for server to be ready
-		const serverReady = await waitForBtcaServer(sandbox);
-
-		if (!serverReady) {
-			// Clean up and throw
-			try {
-				await sandbox.delete();
-			} catch {
-				// Ignore cleanup errors
-			}
-			throw new Error('Server failed to start in time');
-		}
-
-		// Get the preview link for the server
-		const previewInfo = await sandbox.getPreviewLink(BTCA_SERVER_PORT);
-
-		// Update Convex with sandbox info
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxId: sandbox.id,
-			sandboxState: 'active',
-			serverUrl: previewInfo.url
-		});
-
-		onStatusChange?.('active');
-
-		return {
-			sandboxId: sandbox.id,
-			serverUrl: previewInfo.url
-		};
-	} catch (error) {
-		// Update Convex with error
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'error',
-			errorMessage: error instanceof Error ? error.message : 'Unknown error creating sandbox'
-		});
-
-		onStatusChange?.('error');
-		throw error;
-	}
-}
-
-/**
- * Get the current state of a sandbox from Daytona
- */
-export async function getSandboxState(
+async function getSandboxInfo(
 	sandboxId: string
-): Promise<'started' | 'stopped' | 'unknown'> {
+): Promise<{ state: 'started' | 'stopped' | 'unknown'; serverUrl: string | null }> {
 	const daytona = getDaytona();
 
 	try {
 		const sandbox = await daytona.get(sandboxId);
-		// Check sandbox state - the Daytona SDK exposes state differently
 		const state = (sandbox as unknown as { instance?: { state?: string } }).instance?.state;
+
 		if (state === 'started') {
-			return 'started';
+			const previewInfo = await sandbox.getPreviewLink(BTCA_SERVER_PORT);
+			return { state: 'started', serverUrl: previewInfo.url };
 		} else if (state === 'stopped') {
-			return 'stopped';
+			return { state: 'stopped', serverUrl: null };
 		}
-		return 'unknown';
+		return { state: 'unknown', serverUrl: null };
 	} catch {
-		return 'unknown';
+		return { state: 'unknown', serverUrl: null };
 	}
+}
+
+/**
+ * Create a new sandbox
+ */
+async function createSandbox(
+	resources: ResourceConfig[],
+	onStatus?: (status: SandboxStatus) => void
+): Promise<{ sandboxId: string; serverUrl: string }> {
+	const daytona = getDaytona();
+
+	onStatus?.('creating');
+
+	// Create sandbox from pre-built snapshot
+	const sandbox = await daytona.create({
+		snapshot: BTCA_SNAPSHOT_NAME,
+		autoStopInterval: AUTO_STOP_INTERVAL,
+		envVars: {
+			NODE_ENV: 'production',
+			OPENCODE_API_KEY: env.OPENCODE_API_KEY ?? ''
+		},
+		public: true
+	});
+
+	// Generate and upload btca config
+	const btcaConfig = generateBtcaConfig(resources);
+	await sandbox.fs.uploadFile(Buffer.from(btcaConfig), '/root/btca.config.jsonc');
+
+	// Create a session for the long-running server process
+	const sandboxSessionId = 'btca-server-session';
+	await sandbox.process.createSession(sandboxSessionId);
+
+	// Start the btca serve command
+	await sandbox.process.executeSessionCommand(sandboxSessionId, {
+		command: `cd /root && btca serve --port ${BTCA_SERVER_PORT}`,
+		runAsync: true
+	});
+
+	// Wait for server to be ready
+	const serverReady = await waitForBtcaServer(sandbox);
+
+	if (!serverReady) {
+		// Clean up and throw
+		try {
+			await sandbox.delete();
+		} catch {
+			// Ignore cleanup errors
+		}
+		throw new Error('Server failed to start in time');
+	}
+
+	// Get the preview link for the server
+	const previewInfo = await sandbox.getPreviewLink(BTCA_SERVER_PORT);
+
+	onStatus?.('ready');
+
+	return {
+		sandboxId: sandbox.id,
+		serverUrl: previewInfo.url
+	};
 }
 
 /**
  * Start a stopped sandbox
  */
-export async function startSandbox(
+async function startSandbox(
 	sandboxId: string,
-	threadId: Id<'threads'>,
-	onStatusChange?: (status: SandboxState) => void
+	onStatus?: (status: SandboxStatus) => void
 ): Promise<string> {
 	const daytona = getDaytona();
-	const convex = getConvexClient();
 
+	onStatus?.('starting');
+
+	const sandbox = await daytona.get(sandboxId);
+	await sandbox.start(60); // 60 second timeout
+
+	// Re-start the btca server (it won't be running after stop)
+	const sandboxSessionId = 'btca-server-session';
 	try {
-		onStatusChange?.('starting');
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'starting'
-		});
-
-		const sandbox = await daytona.get(sandboxId);
-		await sandbox.start(60); // 60 second timeout
-
-		// Re-start the btca server (it won't be running after stop)
-		const sandboxSessionId = 'btca-server-session';
-		try {
-			await sandbox.process.createSession(sandboxSessionId);
-		} catch {
-			// Session may already exist
-		}
-
-		await sandbox.process.executeSessionCommand(sandboxSessionId, {
-			command: `cd /root && btca serve --port ${BTCA_SERVER_PORT}`,
-			runAsync: true
-		});
-
-		// Wait for server to be ready
-		const serverReady = await waitForBtcaServer(sandbox);
-
-		if (!serverReady) {
-			throw new Error('Server failed to start after resume');
-		}
-
-		// Get the preview link
-		const previewInfo = await sandbox.getPreviewLink(BTCA_SERVER_PORT);
-
-		// Update Convex
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'active',
-			serverUrl: previewInfo.url
-		});
-
-		onStatusChange?.('active');
-
-		return previewInfo.url;
-	} catch (error) {
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'error',
-			errorMessage: error instanceof Error ? error.message : 'Unknown error starting sandbox'
-		});
-
-		onStatusChange?.('error');
-		throw error;
+		await sandbox.process.createSession(sandboxSessionId);
+	} catch {
+		// Session may already exist
 	}
+
+	await sandbox.process.executeSessionCommand(sandboxSessionId, {
+		command: `cd /root && btca serve --port ${BTCA_SERVER_PORT}`,
+		runAsync: true
+	});
+
+	// Wait for server to be ready
+	const serverReady = await waitForBtcaServer(sandbox);
+
+	if (!serverReady) {
+		throw new Error('Server failed to start after resume');
+	}
+
+	// Get the preview link
+	const previewInfo = await sandbox.getPreviewLink(BTCA_SERVER_PORT);
+
+	onStatus?.('ready');
+
+	return previewInfo.url;
 }
 
 /**
  * Stop a sandbox (free CPU/memory but keep disk)
  */
-export async function stopSandbox(sandboxId: string, threadId: Id<'threads'>): Promise<void> {
+async function stopSandbox(sandboxId: string): Promise<void> {
 	const daytona = getDaytona();
-	const convex = getConvexClient();
 
 	try {
-		const sandbox = await daytona.get(sandboxId);
-		await sandbox.stop();
-
-		await convex.mutation(api.threads.updateSandboxState, {
-			threadId,
-			sandboxState: 'stopped'
-		});
+		const info = await getSandboxInfo(sandboxId);
+		if (info.state === 'started') {
+			const sandbox = await daytona.get(sandboxId);
+			await sandbox.stop();
+		}
 	} catch (error) {
 		console.error('Error stopping sandbox:', error);
 		// Don't throw - stopping is best effort
@@ -288,7 +236,7 @@ export async function stopSandbox(sandboxId: string, threadId: Id<'threads'>): P
 /**
  * Delete a sandbox completely
  */
-export async function deleteSandbox(sandboxId: string): Promise<void> {
+async function deleteSandbox(sandboxId: string): Promise<void> {
 	const daytona = getDaytona();
 
 	try {
@@ -301,61 +249,7 @@ export async function deleteSandbox(sandboxId: string): Promise<void> {
 }
 
 /**
- * Ensure a sandbox is ready for use
- * - Creates new sandbox if pending
- * - Starts stopped sandbox
- * - Returns server URL
- */
-export async function ensureSandboxReady(
-	threadId: Id<'threads'>,
-	sandboxId: string | undefined,
-	sandboxState: SandboxState,
-	serverUrl: string | undefined,
-	resources: ResourceConfig[],
-	onStatusChange?: (status: SandboxState) => void
-): Promise<string> {
-	// If no sandbox exists, create one
-	if (!sandboxId || sandboxState === 'pending') {
-		const result = await createSandbox(threadId, resources, onStatusChange);
-		return result.serverUrl;
-	}
-
-	// If sandbox is active and we have a URL, check if it's actually running
-	if (sandboxState === 'active' && serverUrl) {
-		const actualState = await getSandboxState(sandboxId);
-
-		if (actualState === 'started') {
-			return serverUrl;
-		}
-
-		// Sandbox was stopped (auto-stop), need to restart
-		if (actualState === 'stopped') {
-			return await startSandbox(sandboxId, threadId, onStatusChange);
-		}
-	}
-
-	// If sandbox is stopped, start it
-	if (sandboxState === 'stopped') {
-		return await startSandbox(sandboxId, threadId, onStatusChange);
-	}
-
-	// If we're in an error state, try to create a new sandbox
-	if (sandboxState === 'error') {
-		// Clean up old sandbox if it exists
-		if (sandboxId) {
-			await deleteSandbox(sandboxId);
-		}
-		const result = await createSandbox(threadId, resources, onStatusChange);
-		return result.serverUrl;
-	}
-
-	// Fallback: create new sandbox
-	const result = await createSandbox(threadId, resources, onStatusChange);
-	return result.serverUrl;
-}
-
-/**
- * Stop all other active sandboxes for a user (enforce 1 active sandbox rule)
+ * Stop all other sandboxes for a user (enforce 1 active sandbox rule)
  */
 export async function stopOtherSandboxes(
 	userId: Id<'users'>,
@@ -364,15 +258,69 @@ export async function stopOtherSandboxes(
 	const convex = getConvexClient();
 
 	try {
-		const activeThreads = await convex.query(api.threads.listWithActiveSandbox, { userId });
+		const threads = await convex.query(api.threads.listWithSandbox, { userId });
 
-		for (const thread of activeThreads) {
+		for (const thread of threads) {
 			if (thread._id !== currentThreadId && thread.sandboxId) {
-				await stopSandbox(thread.sandboxId, thread._id);
+				await stopSandbox(thread.sandboxId);
 			}
 		}
 	} catch (error) {
 		console.error('Error stopping other sandboxes:', error);
 		// Don't throw - this is best effort
 	}
+}
+
+/**
+ * Ensure a sandbox is ready for a thread.
+ * - If thread has no sandbox, create one
+ * - If sandbox exists but is stopped, start it
+ * - If sandbox exists and is running, return its URL
+ *
+ * Returns the server URL to use for requests.
+ */
+export async function ensureSandboxReady(
+	threadId: Id<'threads'>,
+	sandboxId: string | undefined,
+	resources: ResourceConfig[],
+	onStatus?: (status: SandboxStatus) => void
+): Promise<string> {
+	const convex = getConvexClient();
+
+	// No sandbox exists - create one
+	if (!sandboxId) {
+		const result = await createSandbox(resources, onStatus);
+
+		// Save sandbox ID to thread
+		await convex.mutation(api.threads.setSandboxId, {
+			threadId,
+			sandboxId: result.sandboxId
+		});
+
+		return result.serverUrl;
+	}
+
+	// Sandbox exists - check its state from Daytona
+	const info = await getSandboxInfo(sandboxId);
+
+	if (info.state === 'started' && info.serverUrl) {
+		onStatus?.('ready');
+		return info.serverUrl;
+	}
+
+	if (info.state === 'stopped') {
+		// Start the stopped sandbox
+		return await startSandbox(sandboxId, onStatus);
+	}
+
+	// Unknown state - sandbox may have been deleted, create a new one
+	const result = await createSandbox(resources, onStatus);
+
+	// Update sandbox ID in thread
+	await convex.mutation(api.threads.setSandboxId, {
+		threadId,
+		sandboxId: result.sandboxId
+	});
+
+	return result.serverUrl;
 }

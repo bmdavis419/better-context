@@ -32,6 +32,7 @@
 		"vite": "^7.2.2"
 	},
 	"dependencies": {
+		"@btca/shared": "workspace:*",
 		"@clerk/clerk-js": "^5.56.0",
 		"@clerk/types": "^4.49.0",
 		"@daytonaio/sdk": "^0.130.0",

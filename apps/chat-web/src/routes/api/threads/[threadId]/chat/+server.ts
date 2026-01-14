@@ -4,26 +4,22 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../../../convex/_generated/api';
 import type { Id } from '../../../../../convex/_generated/dataModel';
 import type { BtcaChunk, BtcaStreamEvent } from '$lib/types';
+import { formatConversationHistory, type ThreadMessage } from '@btca/shared';
 import { z } from 'zod';
-import { env } from '$env/dynamic/private';
 import {
 	ensureSandboxReady,
 	stopOtherSandboxes,
 	type ResourceConfig,
-	type SandboxState
+	type SandboxStatus
 } from '$lib/server/sandbox-service';
 import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
-// Request body schema
+// Request body schema - simplified since server fetches thread state from Convex
 const ChatRequestSchema = z.object({
 	message: z.string().min(1, 'Message is required'),
 	resources: z.array(z.string()),
-	userId: z.string(), // Convex user ID
-	sandboxId: z.string().optional(),
-	sandboxState: z.enum(['pending', 'starting', 'active', 'stopped', 'error']),
-	serverUrl: z.string().optional(),
-	threadResources: z.array(z.string()),
-	previousMessages: z.array(z.any()) // Messages for history building
+	userId: z.string() // Convex user ID
+	// Note: previousMessages removed - server fetches from Convex directly
 });
 
 function getConvexClient(): ConvexHttpClient {
@@ -35,33 +31,44 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const threadId = params.threadId as Id<'threads'>;
 
 	// Validate request body
-	const rawBody = await request.json();
-	const parseResult = ChatRequestSchema.safeParse(rawBody);
-	if (!parseResult.success) {
-		throw error(
-			400,
-			`Invalid request: ${parseResult.error.issues.map((i) => i.message).join(', ')}`
-		);
+	let rawBody: unknown;
+	try {
+		const text = await request.text();
+		rawBody = JSON.parse(text);
+	} catch {
+		throw error(400, 'Invalid request body: could not parse JSON');
 	}
 
-	const {
-		message,
-		resources,
-		userId,
-		sandboxId,
-		sandboxState,
-		serverUrl,
-		threadResources,
-		previousMessages
-	} = parseResult.data;
+	const parseResult = ChatRequestSchema.safeParse(rawBody);
+	if (!parseResult.success) {
+		const issues = parseResult.error.issues
+			.map((i) => `${i.path.join('.')}: ${i.message}`)
+			.join('; ');
+		throw error(400, `Invalid request: ${issues}`);
+	}
+
+	const { message, resources, userId } = parseResult.data;
 
 	const convex = getConvexClient();
 
-	// Build conversation history
-	const history = buildConversationHistory(previousMessages);
-	const questionWithHistory = history
-		? `=== CONVERSATION HISTORY ===\n${history}\n=== END HISTORY ===\n\nCurrent question: ${message}`
-		: message;
+	// Fetch thread with messages from Convex
+	const threadWithMessages = await convex.query(api.threads.getWithMessages, { threadId });
+	if (!threadWithMessages) {
+		throw error(404, 'Thread not found');
+	}
+
+	const threadResources = threadWithMessages.threadResources ?? [];
+	const sandboxId = threadWithMessages.sandboxId;
+
+	// Convert previous messages to ThreadMessage format and build history
+	const threadMessages: ThreadMessage[] = (threadWithMessages.messages ?? []).map(
+		(m: MessageLike) => ({
+			role: m.role,
+			content: m.content,
+			canceled: m.canceled
+		})
+	);
+	const questionWithHistory = formatConversationHistory(threadMessages, message);
 
 	// Merge resources
 	const updatedResources = [...new Set([...threadResources, ...resources])];
@@ -110,7 +117,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				}
 
 				// Ensure sandbox is ready
-				const sendStatus = (status: SandboxState) => {
+				const sendStatus = (status: SandboxStatus) => {
 					controller.enqueue(
 						encoder.encode(`data: ${JSON.stringify({ type: 'status', status })}\n\n`)
 					);
@@ -119,8 +126,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				const activeServerUrl = await ensureSandboxReady(
 					threadId,
 					sandboxId,
-					sandboxState,
-					serverUrl,
 					resourceConfigs,
 					sendStatus
 				);
@@ -139,8 +144,16 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				});
 
 				if (!response.ok) {
-					const errorData = (await response.json()) as { error?: string };
-					throw new Error(errorData.error ?? `Server error: ${response.status}`);
+					const errorText = await response.text();
+					console.error('[chat] btca server error response:', errorText);
+					let errorMessage = `Server error: ${response.status}`;
+					try {
+						const errorData = JSON.parse(errorText) as { error?: string };
+						errorMessage = errorData.error ?? errorMessage;
+					} catch {
+						errorMessage = errorText || errorMessage;
+					}
+					throw new Error(errorMessage);
 				}
 
 				if (!response.body) {
@@ -223,38 +236,14 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	});
 };
 
+/**
+ * Type for messages from Convex that need to be converted to ThreadMessage.
+ * This matches the shape of messages stored in the Convex database.
+ */
 interface MessageLike {
 	role: 'user' | 'assistant' | 'system';
 	content: string | { type: 'chunks'; chunks: BtcaChunk[] } | { type: 'text'; content: string };
 	canceled?: boolean;
-}
-
-function buildConversationHistory(messages: MessageLike[]): string {
-	const historyParts: string[] = [];
-
-	for (const msg of messages) {
-		if (msg.role === 'user') {
-			const content = typeof msg.content === 'string' ? msg.content : '';
-			const userText = content.replace(/@\w+/g, '').trim();
-			if (userText) {
-				historyParts.push(`User: ${userText}`);
-			}
-		} else if (msg.role === 'assistant' && !msg.canceled) {
-			if (typeof msg.content === 'string') {
-				historyParts.push(`Assistant: ${msg.content}`);
-			} else if (msg.content.type === 'text') {
-				historyParts.push(`Assistant: ${msg.content.content}`);
-			} else if (msg.content.type === 'chunks') {
-				const textChunks = msg.content.chunks.filter((c) => c.type === 'text');
-				const text = textChunks.map((c) => (c as { text: string }).text).join('\n\n');
-				if (text) {
-					historyParts.push(`Assistant: ${text}`);
-				}
-			}
-		}
-	}
-
-	return historyParts.join('\n\n');
 }
 
 type ChunkUpdate =

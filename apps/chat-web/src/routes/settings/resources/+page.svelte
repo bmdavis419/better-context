@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Plus, Trash2, Globe, User, ExternalLink } from '@lucide/svelte';
+	import { Loader2, Plus, Trash2, Globe, User, ExternalLink, Link, Check, X } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { api } from '../../../convex/_generated/api';
@@ -11,11 +11,19 @@
 	// Convex queries
 	const globalResourcesQuery = $derived(useQuery(api.resources.listGlobal, {}));
 	const userResourcesQuery = $derived(
-		auth.convexUserId ? useQuery(api.resources.listUserResources, { userId: auth.convexUserId }) : null
+		auth.convexUserId
+			? useQuery(api.resources.listUserResources, { userId: auth.convexUserId })
+			: null
 	);
+
+	// Quick add state
+	let quickAddUrl = $state('');
+	let isParsingUrl = $state(false);
+	let parseError = $state<string | null>(null);
 
 	// Form state
 	let showAddForm = $state(false);
+	let showConfirmation = $state(false);
 	let formName = $state('');
 	let formUrl = $state('');
 	let formBranch = $state('main');
@@ -23,6 +31,106 @@
 	let formSpecialNotes = $state('');
 	let isSubmitting = $state(false);
 	let formError = $state<string | null>(null);
+
+	/**
+	 * Parse a git URL and extract repo info
+	 * Supports: GitHub, GitLab, Bitbucket URLs
+	 * Formats: https://github.com/owner/repo, git@github.com:owner/repo.git, etc.
+	 */
+	function parseGitUrl(url: string): { name: string; url: string; branch: string } | null {
+		const trimmedUrl = url.trim();
+		if (!trimmedUrl) return null;
+
+		// Normalize the URL
+		let normalizedUrl = trimmedUrl;
+		let owner = '';
+		let repo = '';
+
+		// Handle SSH format: git@github.com:owner/repo.git
+		const sshMatch = trimmedUrl.match(/^git@([^:]+):([^/]+)\/(.+?)(\.git)?$/);
+		if (sshMatch) {
+			const [, host, o, r] = sshMatch;
+			owner = o;
+			repo = r.replace(/\.git$/, '');
+			normalizedUrl = `https://${host}/${owner}/${repo}`;
+		} else {
+			// Handle HTTPS format
+			try {
+				const urlObj = new URL(trimmedUrl);
+				const pathParts = urlObj.pathname.split('/').filter(Boolean);
+
+				// Remove .git suffix if present
+				if (pathParts.length >= 2) {
+					owner = pathParts[0];
+					repo = pathParts[1].replace(/\.git$/, '');
+					// Reconstruct clean URL
+					normalizedUrl = `${urlObj.protocol}//${urlObj.host}/${owner}/${repo}`;
+				} else {
+					return null;
+				}
+			} catch {
+				return null;
+			}
+		}
+
+		if (!owner || !repo) return null;
+
+		// Generate a sensible name from the repo
+		// Convert kebab-case or snake_case to camelCase
+		const name = repo
+			.replace(/[-_](.)/g, (_, c) => c.toUpperCase())
+			.replace(/^(.)/, (_, c) => c.toLowerCase());
+
+		return {
+			name,
+			url: normalizedUrl,
+			branch: 'main'
+		};
+	}
+
+	async function handleQuickAdd() {
+		parseError = null;
+		isParsingUrl = true;
+
+		try {
+			const parsed = parseGitUrl(quickAddUrl);
+			if (!parsed) {
+				parseError =
+					'Could not parse git URL. Please enter a valid GitHub, GitLab, or Bitbucket URL.';
+				return;
+			}
+
+			// Prefill the form
+			formName = parsed.name;
+			formUrl = parsed.url;
+			formBranch = parsed.branch;
+			formSearchPath = '';
+			formSpecialNotes = '';
+
+			// Show confirmation
+			showConfirmation = true;
+			quickAddUrl = '';
+		} finally {
+			isParsingUrl = false;
+		}
+	}
+
+	function handleCancelConfirmation() {
+		showConfirmation = false;
+		formName = '';
+		formUrl = '';
+		formBranch = 'main';
+		formSearchPath = '';
+		formSpecialNotes = '';
+		formError = null;
+	}
+
+	async function handleConfirmAdd() {
+		await handleAddResource();
+		if (!formError) {
+			showConfirmation = false;
+		}
+	}
 
 	// Redirect if not authenticated
 	$effect(() => {
@@ -104,9 +212,7 @@
 				<Globe size={18} />
 				<h2 class="text-lg font-medium">Global Catalog</h2>
 			</div>
-			<p class="bc-muted mb-4 text-sm">
-				These resources are available to everyone.
-			</p>
+			<p class="bc-muted mb-4 text-sm">These resources are available to everyone.</p>
 
 			{#if globalResourcesQuery?.isLoading}
 				<div class="flex items-center justify-center py-8">
@@ -164,20 +270,151 @@
 					onclick={() => (showAddForm = !showAddForm)}
 				>
 					<Plus size={16} />
-					Add Resource
+					Add Manually
 				</button>
 			</div>
-			<p class="bc-muted mb-4 text-sm">
-				Add your own git repositories as documentation resources.
-			</p>
+			<p class="bc-muted mb-4 text-sm">Add your own git repositories as documentation resources.</p>
 
-			<!-- Add Form -->
+			<!-- Quick Add Section -->
+			<div class="bc-card mb-4 p-4">
+				<div class="flex items-center gap-2 mb-3">
+					<Link size={16} />
+					<h3 class="font-medium">Quick Add from URL</h3>
+				</div>
+				<div class="flex gap-2">
+					<input
+						type="text"
+						class="bc-input flex-1"
+						placeholder="Paste a git repo URL (e.g., https://github.com/owner/repo)"
+						bind:value={quickAddUrl}
+						onkeydown={(e) => e.key === 'Enter' && quickAddUrl.trim() && handleQuickAdd()}
+					/>
+					<button
+						type="button"
+						class="bc-btn bc-btn-primary text-sm"
+						onclick={handleQuickAdd}
+						disabled={!quickAddUrl.trim() || isParsingUrl}
+					>
+						{#if isParsingUrl}
+							<Loader2 size={16} class="animate-spin" />
+						{:else}
+							Add
+						{/if}
+					</button>
+				</div>
+				{#if parseError}
+					<div class="mt-2 text-sm text-red-500">{parseError}</div>
+				{/if}
+			</div>
+
+			<!-- Confirmation Dialog -->
+			{#if showConfirmation}
+				<div class="bc-card mb-4 border-2 border-blue-500/50 p-4">
+					<div class="flex items-center gap-2 mb-4">
+						<Check size={16} class="text-blue-500" />
+						<h3 class="font-medium">Confirm Resource Details</h3>
+					</div>
+
+					{#if formError}
+						<div
+							class="mb-4 rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-500"
+						>
+							{formError}
+						</div>
+					{/if}
+
+					<div class="grid gap-4">
+						<div>
+							<label for="confirm-name" class="mb-1 block text-sm font-medium">Name *</label>
+							<input
+								id="confirm-name"
+								type="text"
+								class="bc-input w-full"
+								placeholder="e.g., myFramework"
+								bind:value={formName}
+							/>
+							<p class="bc-muted mt-1 text-xs">Used as @mention (e.g., @{formName || 'name'})</p>
+						</div>
+
+						<div>
+							<label for="confirm-url" class="mb-1 block text-sm font-medium">Git URL *</label>
+							<input id="confirm-url" type="url" class="bc-input w-full" bind:value={formUrl} />
+						</div>
+
+						<div class="grid grid-cols-2 gap-4">
+							<div>
+								<label for="confirm-branch" class="mb-1 block text-sm font-medium">Branch</label>
+								<input
+									id="confirm-branch"
+									type="text"
+									class="bc-input w-full"
+									placeholder="main"
+									bind:value={formBranch}
+								/>
+							</div>
+							<div>
+								<label for="confirm-searchPath" class="mb-1 block text-sm font-medium"
+									>Search Path</label
+								>
+								<input
+									id="confirm-searchPath"
+									type="text"
+									class="bc-input w-full"
+									placeholder="docs/"
+									bind:value={formSearchPath}
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label for="confirm-notes" class="mb-1 block text-sm font-medium">Notes</label>
+							<textarea
+								id="confirm-notes"
+								class="bc-input w-full"
+								rows="2"
+								placeholder="Additional context for the AI..."
+								bind:value={formSpecialNotes}
+							></textarea>
+						</div>
+
+						<div class="flex justify-end gap-2">
+							<button
+								type="button"
+								class="bc-btn text-sm"
+								onclick={handleCancelConfirmation}
+								disabled={isSubmitting}
+							>
+								<X size={16} />
+								Cancel
+							</button>
+							<button
+								type="button"
+								class="bc-btn bc-btn-primary text-sm"
+								onclick={handleConfirmAdd}
+								disabled={isSubmitting}
+							>
+								{#if isSubmitting}
+									<Loader2 size={16} class="animate-spin" />
+									Adding...
+								{:else}
+									<Check size={16} />
+									Confirm & Add
+								{/if}
+							</button>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Add Form (Manual) -->
 			{#if showAddForm}
 				<div class="bc-card mb-4 p-4">
 					<h3 class="mb-4 font-medium">Add Custom Resource</h3>
-					
+
 					{#if formError}
-						<div class="mb-4 rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+						<div
+							class="mb-4 rounded border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-500"
+						>
 							{formError}
 						</div>
 					{/if}

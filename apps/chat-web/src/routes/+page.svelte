@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { MessageSquare, Plus, Trash2, Loader2, Settings, BookOpen } from '@lucide/svelte';
+	import { MessageSquare, Plus, Trash2, Loader2, BookOpen } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { api } from '../convex/_generated/api';
@@ -13,22 +13,9 @@
 		auth.convexUserId ? useQuery(api.threads.list, { userId: auth.convexUserId }) : null
 	);
 
-	// UI state
-	let isCreatingThread = $state(false);
-
-	async function createNewThread() {
-		if (!auth.convexUserId) return;
-
-		isCreatingThread = true;
-		try {
-			const threadId = await client.mutation(api.threads.create, { userId: auth.convexUserId });
-			goto(`/chat/${threadId}`);
-		} catch (error) {
-			console.error('Failed to create thread:', error);
-			alert(error instanceof Error ? error.message : 'Failed to create thread');
-		} finally {
-			isCreatingThread = false;
-		}
+	function createNewThread() {
+		// Navigate to /chat/new - thread will be created when first message is sent
+		goto('/chat/new');
 	}
 
 	async function destroyThread(threadId: string) {
@@ -62,11 +49,7 @@
 				Ask questions about your favorite frameworks and libraries. Sign in to get started.
 			</p>
 		</div>
-		<button
-			type="button"
-			class="bc-btn bc-btn-primary"
-			onclick={() => auth.clerk?.openSignIn()}
-		>
+		<button type="button" class="bc-btn bc-btn-primary" onclick={() => auth.clerk?.openSignIn()}>
 			Sign in to get started
 		</button>
 	</div>
@@ -85,17 +68,8 @@
 						<BookOpen size={16} />
 						<span class="hidden sm:inline">Resources</span>
 					</a>
-					<button
-						type="button"
-						class="bc-btn bc-btn-primary"
-						onclick={createNewThread}
-						disabled={isCreatingThread}
-					>
-						{#if isCreatingThread}
-							<Loader2 size={16} class="animate-spin" /> Creating...
-						{:else}
-							<Plus size={16} /> New Thread
-						{/if}
+					<button type="button" class="bc-btn bc-btn-primary" onclick={createNewThread}>
+						<Plus size={16} /> New Thread
 					</button>
 				</div>
 			</div>
@@ -112,17 +86,8 @@
 						<h2 class="font-semibold">No threads yet</h2>
 						<p class="bc-muted mt-1 text-sm">Create a new thread to get started</p>
 					</div>
-					<button
-						type="button"
-						class="bc-btn bc-btn-primary"
-						onclick={createNewThread}
-						disabled={isCreatingThread}
-					>
-						{#if isCreatingThread}
-							<Loader2 size={16} class="animate-spin" /> Creating...
-						{:else}
-							<Plus size={16} /> New Thread
-						{/if}
+					<button type="button" class="bc-btn bc-btn-primary" onclick={createNewThread}>
+						<Plus size={16} /> New Thread
 					</button>
 				</div>
 			{:else}
@@ -140,16 +105,8 @@
 									<span class="font-medium">
 										{thread.title ?? `Thread ${thread._id.slice(0, 8)}...`}
 									</span>
-									{#if thread.sandboxState === 'active'}
-										<span class="bc-badge bc-badge-success">Active</span>
-									{:else if thread.sandboxState === 'pending'}
-										<span class="bc-badge">Ready</span>
-									{:else if thread.sandboxState === 'starting'}
-										<span class="bc-badge bc-badge-warning">Starting</span>
-									{:else if thread.sandboxState === 'stopped'}
-										<span class="bc-badge">Stopped</span>
-									{:else if thread.sandboxState === 'error'}
-										<span class="bc-badge bc-badge-error">Error</span>
+									{#if thread.sandboxId}
+										<span class="bc-badge bc-badge-success">Has Sandbox</span>
 									{/if}
 								</div>
 								<div class="bc-muted mt-1 text-xs">

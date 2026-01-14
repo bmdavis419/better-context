@@ -20,7 +20,11 @@ export const getOrCreate = mutation({
 
 		if (existing) {
 			// Update user info if changed
-			if (existing.email !== args.email || existing.name !== args.name || existing.imageUrl !== args.imageUrl) {
+			if (
+				existing.email !== args.email ||
+				existing.name !== args.name ||
+				existing.imageUrl !== args.imageUrl
+			) {
 				await ctx.db.patch(existing._id, {
 					email: args.email,
 					name: args.name,

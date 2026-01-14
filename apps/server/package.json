@@ -49,6 +49,7 @@
 		"prettier": "^3.7.4"
 	},
 	"dependencies": {
+		"@btca/shared": "workspace:*",
 		"@opencode-ai/sdk": "^1.0.208",
 		"hono": "^4.7.11",
 		"zod": "^3.25.76"

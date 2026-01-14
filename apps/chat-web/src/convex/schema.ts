@@ -35,15 +35,6 @@ const messageContentValidator = v.union(
 	})
 );
 
-// Sandbox state
-const sandboxStateValidator = v.union(
-	v.literal('pending'),
-	v.literal('starting'),
-	v.literal('active'),
-	v.literal('stopped'),
-	v.literal('error')
-);
-
 export default defineSchema({
 	// Users (synced from Clerk)
 	users: defineTable({
@@ -78,14 +69,12 @@ export default defineSchema({
 		createdAt: v.number()
 	}).index('by_user', ['userId']),
 
-	// Chat threads
+	// Chat threads - sandboxId is the only sandbox info stored
+	// Sandbox state is derived from Daytona on each request
 	threads: defineTable({
 		userId: v.id('users'),
 		title: v.optional(v.string()),
 		sandboxId: v.optional(v.string()),
-		sandboxState: sandboxStateValidator,
-		serverUrl: v.optional(v.string()),
-		errorMessage: v.optional(v.string()),
 		createdAt: v.number(),
 		lastActivityAt: v.number()
 	})

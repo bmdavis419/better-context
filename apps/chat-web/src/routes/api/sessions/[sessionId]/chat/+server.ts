@@ -7,6 +7,7 @@ import {
 	initializeSandbox
 } from '$lib/server/session-manager';
 import type { Message, BtcaChunk, BtcaStreamEvent, ChatSession } from '$lib/types';
+import { formatConversationHistory, type ThreadMessage } from '@btca/shared';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
@@ -37,10 +38,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	// Build conversation history BEFORE adding the new user message
 	const previousMessages = session.messages;
-	const history = buildConversationHistory(previousMessages);
-	const questionWithHistory = history
-		? `=== CONVERSATION HISTORY ===\n${history}\n=== END HISTORY ===\n\nCurrent question: ${message}`
-		: message;
+	// Convert to ThreadMessage format for shared history builder
+	const threadMessages: ThreadMessage[] = previousMessages.map((m) => ({
+		role: m.role,
+		content: m.role === 'user' ? m.content : m.content,
+		canceled: m.role === 'assistant' ? m.canceled : undefined
+	}));
+	const questionWithHistory = formatConversationHistory(threadMessages, message);
 
 	// Add user message
 	const userMessage: Message = {
@@ -179,31 +183,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 	});
 };
-
-function buildConversationHistory(messages: Message[]): string {
-	const historyParts: string[] = [];
-
-	for (const msg of messages) {
-		if (msg.role === 'user') {
-			const userText = msg.content.replace(/@\w+/g, '').trim();
-			if (userText) {
-				historyParts.push(`User: ${userText}`);
-			}
-		} else if (msg.role === 'assistant' && !msg.canceled) {
-			if (msg.content.type === 'text') {
-				historyParts.push(`Assistant: ${msg.content.content}`);
-			} else if (msg.content.type === 'chunks') {
-				const textChunks = msg.content.chunks.filter((c) => c.type === 'text');
-				const text = textChunks.map((c) => (c as { text: string }).text).join('\n\n');
-				if (text) {
-					historyParts.push(`Assistant: ${text}`);
-				}
-			}
-		}
-	}
-
-	return historyParts.join('\n\n');
-}
 
 type ChunkUpdate =
 	| { type: 'add'; chunk: BtcaChunk }
