@@ -5,7 +5,7 @@
 
 	const INSTALL_CMD = `bun add -g btca opencode-ai && btca`;
 
-	const DEMO = `btca ask -r svelte -q "How does the $state rune work?"
+	const DEMO = `btca ask --resource svelte --question "How does the $state rune work?"
 
 # clones & indexes the repo locally
 # searches real files (not docs)

@@ -22,15 +22,14 @@ btca queries local clones of library/framework repositories to answer questions 
 
 ---
 
-## Command Reference
+- If unsure what's configured: `btca config resources list`
+- If missing: add it with `btca config resources add --name svelte --type git --url https://github.com/sveltejs/svelte --branch main`
 
 ### `btca ask` (Primary Command for Agents)
 
-Ask a question.
-
-```bash
-btca ask -r <resource> -q "<question>"
-```
+- `btca ask --resource <resource> --question '<question>'`
+- For multiple resources: `btca ask --resource svelte --resource effect --question '<question>'`
+- You can also use @mentions in the question: `btca ask --question 'How do @svelte stores work?'`
 
 | Flag                       | Required | Description                                                                  |
 | -------------------------- | -------- | ---------------------------------------------------------------------------- |
@@ -38,10 +37,19 @@ btca ask -r <resource> -q "<question>"
 | `-r, --resource <name...>` | No       | Resource(s) to search; repeatable. If omitted, uses all configured resources |
 
 **Features:**
+
 - Supports `@mentions` in the question: `btca ask -q "@svelte @tailwind How do I style components?"`
 - Combine `-r` flags with `@mentions`; duplicates are deduplicated
 
-**Examples:**
+# **Examples:**
+
+- `btca ask --question '<question>' [--resource <resource>...]`
+  - Ask one question and stream the answer.
+  - `--resource` can be repeated for multiple resources.
+  - Supports @mentions in the question to specify resources.
+
+- `btca chat [--resource <resource>...]`
+  - Launch the interactive TUI for multi-turn conversation.
 
 ```bash
 # Single resource
@@ -78,17 +86,18 @@ btca config resources add -n <name> -t git -u <url> -b <branch> [--search-path <
 btca config resources add -n <name> -t local --path <absolutePath> [--notes <text>]
 ```
 
-| Flag                    | Required    | Description                                                                   |
-| ----------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `-n, --name <name>`     | Yes         | Unique resource name (Camelcase! and alphanumeric + hyphens, must start with letter)         |
-| `-t, --type <type>`     | Yes         | `git` or `local`                                                              |
-| `-u, --url <url>`       | Yes (git)   | HTTPS git repository URL                                                      |
-| `-b, --branch <branch>` | No (git)    | Branch to clone (default: `main`)                                             |
-| `--path <path>`         | Yes (local) | Absolute path to local directory                                              |
-| `--search-path <path>`  | No          | Subdirectory within repo to focus searches on                                 |
-| `--notes <text>`        | No          | Hints for the AI about this resource (e.g., "Focus on the docs/ directory")   |
+| Flag                    | Required    | Description                                                                          |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------ |
+| `-n, --name <name>`     | Yes         | Unique resource name (Camelcase! and alphanumeric + hyphens, must start with letter) |
+| `-t, --type <type>`     | Yes         | `git` or `local`                                                                     |
+| `-u, --url <url>`       | Yes (git)   | HTTPS git repository URL                                                             |
+| `-b, --branch <branch>` | No (git)    | Branch to clone (default: `main`)                                                    |
+| `--path <path>`         | Yes (local) | Absolute path to local directory                                                     |
+| `--search-path <path>`  | No          | Subdirectory within repo to focus searches on                                        |
+| `--notes <text>`        | No          | Hints for the AI about this resource (e.g., "Focus on the docs/ directory")          |
 
 **If user says "add svelte" without details, ask:**
+
 > Which repository URL should I use? Common choice for Svelte docs: `https://github.com/sveltejs/svelte.dev` with `searchPath: apps/svelte.dev`. Should I use that, or do you have a different repo in mind? Ask for each required information if missing! Do not assume!
 
 ---
@@ -111,13 +120,15 @@ Change the AI model/provider.
 btca config model -p <provider> -m <model>
 ```
 
-| Flag                  | Required | Description                                         |
-| --------------------- | -------- | --------------------------------------------------- |
-| `-p, --provider <id>` | Yes      | Provider ID (e.g., `opencode`, `anthropic`)         |
-| `-m, --model <id>`    | Yes      | Model ID (e.g., `claude-haiku-4-5`, `big-pickle`)   |
+| Flag                  | Required | Description                                       |
+| --------------------- | -------- | ------------------------------------------------- |
+| `-p, --provider <id>` | Yes      | Provider ID (e.g., `opencode`, `anthropic`)       |
+| `-m, --model <id>`    | Yes      | Model ID (e.g., `claude-haiku-4-5`, `big-pickle`) |
 
 **If user says "change the model" without specifying which, ask:**
+
 > Which model would you like to use? Recommended options with `opencode` provider:
+>
 > - `claude-haiku-4-5` – fast, highly recommended
 > - `big-pickle` – free, surprisingly good (default)
 > - `minimax-m2.1-free` – very fast, very cheap
@@ -161,20 +172,20 @@ Default port: 8080. Server runs until `Ctrl+C`.
 
 These apply to all subcommands:
 
-| Flag             | Description                                                      |
-| ---------------- | ---------------------------------------------------------------- |
-| `--server <url>` | Connect to an existing btca server instead of auto-starting one  |
-| `--port <port>`  | Port for the auto-started server (default: random 3000-6000)     |
-| `-v, --version`  | Print version number                                             |
+| Flag             | Description                                                     |
+| ---------------- | --------------------------------------------------------------- |
+| `--server <url>` | Connect to an existing btca server instead of auto-starting one |
+| `--port <port>`  | Port for the auto-started server (default: random 3000-6000)    |
+| `-v, --version`  | Print version number                                            |
 
 ---
 
 ## Config Locations
 
-| Location                           | Purpose                                         |
-| ---------------------------------- | ----------------------------------------------- |
-| `~/.config/btca/btca.config.jsonc` | Global config (used when no project config)     |
-| `./btca.config.jsonc`              | Project config (overrides global per-project)   |
+| Location                           | Purpose                                       |
+| ---------------------------------- | --------------------------------------------- |
+| `~/.config/btca/btca.config.jsonc` | Global config (used when no project config)   |
+| `./btca.config.jsonc`              | Project config (overrides global per-project) |
 
 When both exist, resources merge by name (project overrides global).
 
@@ -184,25 +195,25 @@ When both exist, resources merge by name (project overrides global).
 
 If the user wants to use the interactive TUI (`btca` without subcommands):
 
-| Feature      | How to use                                         |
-| ------------ | -------------------------------------------------- |
-| @Mentions    | `@svelte How do I...?` – first message needs one   |
-| `/model`     | Change model                                       |
-| `/add`       | Add resource via wizard                            |
-| `/clear`     | Clear chat history                                 |
-| `Escape`     | Cancel streaming (press twice to confirm)          |
-| `Ctrl+Q`     | Quit                                               |
+| Feature   | How to use                                       |
+| --------- | ------------------------------------------------ |
+| @Mentions | `@svelte How do I...?` – first message needs one |
+| `/model`  | Change model                                     |
+| `/add`    | Add resource via wizard                          |
+| `/clear`  | Clear chat history                               |
+| `Escape`  | Cancel streaming (press twice to confirm)        |
+| `Ctrl+Q`  | Quit                                             |
 
 ---
 
 ## Troubleshooting
 
-| Problem                    | Solution                                                                 |
-| -------------------------- | ------------------------------------------------------------------------ |
+| Problem                    | Solution                                                                   |
+| -------------------------- | -------------------------------------------------------------------------- |
 | "No resources configured"  | Run `btca config resources add ...` or check if `btca.config.jsonc` exists |
-| "Provider not connected"   | Run `opencode auth` in terminal to configure provider credentials        |
-| Stale/corrupted cache      | Run `btca clear` to reset                                                |
-| Deprecated `-t` flag error | Use `-r` instead: `btca ask -r svelte ...`                               |
+| "Provider not connected"   | Run `opencode auth` in terminal to configure provider credentials          |
+| Stale/corrupted cache      | Run `btca clear` to reset                                                  |
+| Deprecated `-t` flag error | Use `-r` instead: `btca ask -r svelte ...`                                 |
 
 ---
 

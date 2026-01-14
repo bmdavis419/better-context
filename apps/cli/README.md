@@ -39,7 +39,7 @@ Use `@mentions` to reference resources:
 Ask a single question and exit:
 
 ```bash
-btca ask -r svelte -q "How do I create a reactive store?"
+btca ask --resource svelte --question "How do I create a reactive store?"
 ```
 
 Options:
@@ -51,13 +51,13 @@ Examples:
 
 ```bash
 # Single resource
-btca ask -r svelte -q "How do signals work?"
+btca ask --resource svelte --question "How do signals work?"
 
 # Multiple resources
-btca ask -r react -r typescript -q "How do I type useState?"
+btca ask --resource react --resource typescript --question "How do I type useState?"
 
 # Using @mentions in question
-btca ask -q "@svelte @tailwind How do I style components?"
+btca ask --question "@svelte @tailwind How do I style components?"
 ```
 
 ### OpenCode TUI Session
@@ -65,7 +65,7 @@ btca ask -q "@svelte @tailwind How do I style components?"
 Start an interactive OpenCode session with resource context:
 
 ```bash
-btca chat -r svelte -r effect
+btca chat --resource svelte --resource effect
 ```
 
 ### Start Server
@@ -77,7 +77,7 @@ Start the btca server and keep it running to handle HTTP requests:
 btca serve
 
 # Start on custom port
-btca serve -p 3000
+btca serve --port 3000
 ```
 
 The server will run until you press `Ctrl+C` to stop it.
@@ -89,7 +89,7 @@ btca uses a config file at `~/.config/btca/btca.config.jsonc`. Manage configurat
 ### Set Model
 
 ```bash
-btca config model -p opencode -m claude-haiku-4-5
+btca config model --provider opencode --model claude-haiku-4-5
 ```
 
 ### List Resources
@@ -102,19 +102,19 @@ btca config resources list
 
 ```bash
 # Add a git repository
-btca config resources add -n effect -t git -u https://github.com/Effect-TS/effect -b main
+btca config resources add --name effect --type git --url https://github.com/Effect-TS/effect --branch main
 
 # Add with search path (focus on specific subdirectory)
-btca config resources add -n svelte -t git -u https://github.com/sveltejs/svelte.dev -b main --search-path apps/svelte.dev
+btca config resources add --name svelte --type git --url https://github.com/sveltejs/svelte.dev --branch main --search-path apps/svelte.dev
 
 # Add a local directory
-btca config resources add -n myproject -t local --path /path/to/project
+btca config resources add --name myproject --type local --path /path/to/project
 ```
 
 ### Remove Resource
 
 ```bash
-btca config resources remove -n effect
+btca config resources remove --name effect
 ```
 
 ### Clear Cached Resources

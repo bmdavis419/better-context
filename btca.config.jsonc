@@ -1,89 +1,95 @@
 {
-	"$schema": "https://btca.dev/btca.schema.json",
-	"resources": [
-		{
-			"name": "daytona",
-			"type": "git",
-			"url": "https://github.com/daytonaio/daytona",
-			"branch": "main",
-			"specialNotes": "this is the full daytona codebase. focus on the guides and examples for answers"
-		},
-		{
-			"name": "svelte",
-			"type": "git",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
-		},
-		{
-			"name": "svelteKit",
-			"type": "git",
-			"url": "https://github.com/sveltejs/kit",
-			"branch": "main",
-			"searchPath": "documentation"
-		},
-		{
-			"name": "tailwind",
-			"type": "git",
-			"url": "https://github.com/tailwindlabs/tailwindcss.com",
-			"branch": "main",
-			"searchPath": "src/docs"
-		},
-		{
-			"name": "hono",
-			"type": "git",
-			"url": "https://github.com/honojs/website",
-			"branch": "main",
-			"searchPath": "docs"
-		},
-		{
-			"name": "zod",
-			"type": "git",
-			"url": "https://github.com/colinhacks/zod",
-			"branch": "main",
-			"searchPath": "packages/docs/content"
-		},
-		{
-			"name": "solidJs",
-			"type": "git",
-			"url": "https://github.com/solidjs/solid-docs",
-			"branch": "main",
-			"searchPath": "src/routes"
-		},
-		{
-			"name": "commander",
-			"type": "git",
-			"url": "https://github.com/tj/commander.js",
-			"branch": "master",
-			"searchPath": "docs"
-		},
-		{
-			"name": "vite",
-			"type": "git",
-			"url": "https://github.com/vitejs/vite",
-			"branch": "main",
-			"searchPath": "docs"
-		},
-		{
-			"name": "opencode",
-			"type": "git",
-			"url": "https://github.com/anomalyco/opencode",
-			"branch": "dev"
-		},
-		{
-			"type": "git",
-			"name": "clerk",
-			"url": "https://github.com/clerk/javascript",
-			"branch": "main"
-		},
-		{
-			"type": "git",
-			"name": "convexJs",
-			"url": "https://github.com/get-convex/convex-js",
-			"branch": "main"
-		}
-	],
-	"model": "claude-haiku-4-5",
-	"provider": "opencode"
+  "$schema": "https://btca.dev/btca.schema.json",
+  "resources": [
+    {
+      "type": "git",
+      "name": "daytona",
+      "url": "https://github.com/daytonaio/daytona",
+      "branch": "main",
+      "specialNotes": "this is the full daytona codebase. focus on the guides and examples for answers"
+    },
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
+    },
+    {
+      "type": "git",
+      "name": "svelteKit",
+      "url": "https://github.com/sveltejs/kit",
+      "branch": "main",
+      "searchPath": "documentation"
+    },
+    {
+      "type": "git",
+      "name": "tailwind",
+      "url": "https://github.com/tailwindlabs/tailwindcss.com",
+      "branch": "main",
+      "searchPath": "src/docs"
+    },
+    {
+      "type": "git",
+      "name": "hono",
+      "url": "https://github.com/honojs/website",
+      "branch": "main",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "zod",
+      "url": "https://github.com/colinhacks/zod",
+      "branch": "main",
+      "searchPath": "packages/docs/content"
+    },
+    {
+      "type": "git",
+      "name": "solidJs",
+      "url": "https://github.com/solidjs/solid-docs",
+      "branch": "main",
+      "searchPath": "src/routes"
+    },
+    {
+      "type": "git",
+      "name": "commander",
+      "url": "https://github.com/tj/commander.js",
+      "branch": "master",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "vite",
+      "url": "https://github.com/vitejs/vite",
+      "branch": "main",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "opencode",
+      "url": "https://github.com/anomalyco/opencode",
+      "branch": "dev"
+    },
+    {
+      "type": "git",
+      "name": "clerk",
+      "url": "https://github.com/clerk/javascript",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "convexJs",
+      "url": "https://github.com/get-convex/convex-js",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "effectDeej",
+      "url": "https://github.com/Effect-TS/effect",
+      "branch": "main"
+    }
+  ],
+  "model": "claude-haiku-4-5",
+  "provider": "opencode"
 }

@@ -12,22 +12,22 @@
 		{
 			name: 'btca ask',
 			description: 'Ask a single question about configured resources.',
-			example: 'btca ask -r svelte -q "How does $state work?"'
+			example: 'btca ask --resource svelte --question "How does $state work?"'
 		},
 		{
 			name: 'btca chat',
 			description: 'Open an interactive TUI session for multi-turn conversations.',
-			example: 'btca chat -r svelte'
+			example: 'btca chat --resource svelte'
 		},
 		{
 			name: 'btca serve',
 			description: 'Start the btca server and listen for HTTP requests.',
-			example: 'btca serve -p 3000'
+			example: 'btca serve --port 3000'
 		},
 		{
 			name: 'btca config model',
 			description: 'Set the AI model and provider.',
-			example: 'btca config model -p opencode -m claude-haiku-4-5'
+			example: 'btca config model --provider opencode --model claude-haiku-4-5'
 		},
 		{
 			name: 'btca config resources list',
@@ -38,12 +38,12 @@
 			name: 'btca config resources add',
 			description: 'Add a new git repository as a resource.',
 			example:
-				'btca config resources add -n effect -t git -u https://github.com/Effect-TS/effect -b main'
+				'btca config resources add --name effect --type git --url https://github.com/Effect-TS/effect --branch main'
 		},
 		{
 			name: 'btca config resources remove',
 			description: 'Remove a resource from the configuration.',
-			example: 'btca config resources remove -n effect'
+			example: 'btca config resources remove --name effect'
 		},
 		{
 			name: 'btca clear',

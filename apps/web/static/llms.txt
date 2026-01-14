@@ -21,7 +21,7 @@ It ships:
 - Install (recommended):
   - `bun add -g btca`
 - Ask a question:
-  - `btca ask -r svelte -q 'How do runes work in Svelte 5?'`
+  - `btca ask --resource svelte --question 'How do runes work in Svelte 5?'`
 - Run the interactive TUI:
   - `btca chat`
 - Print config path:
@@ -33,13 +33,12 @@ It ships:
 - `btca --help`: show help.
 - `btca --version` / `btca -v`: print version.
 
-- `btca ask -q '<question>' [-t <tech>] [-r <resource>...]`
+- `btca ask --question '<question>' [--resource <resource>...]`
   - Ask one question and stream the answer.
-  - `-t` is shorthand for a single resource.
-  - `-r` can be repeated for multiple resources.
+  - `--resource` can be repeated for multiple resources.
   - Supports @mentions in the question to specify resources.
 
-- `btca chat [-r <resource>...]`
+- `btca chat [--resource <resource>...]`
   - Launch the interactive TUI for multi-turn conversation.
 
 - `btca config`
@@ -47,16 +46,16 @@ It ships:
 
 - `btca config model`
   - Show current provider/model.
-- `btca config model -p <provider> -m <model>`
+- `btca config model --provider <provider> --model <model>`
   - Set provider/model (both must be provided together).
 
 - `btca config resources list`
   - List configured resources.
-- `btca config resources add -n <name> -t <type> [-u <url>] [-b <branch>] [--path <path>] [--notes '<specialNotes>'] [--search-path '<path>']`
+- `btca config resources add --name <name> --type <type> [--url <url>] [--branch <branch>] [--path <path>] [--notes '<specialNotes>'] [--search-path '<path>']`
   - Add a resource. Type is `git` (default) or `local`.
-  - Git resources require `-u <url>`, optional `-b <branch>` (default: main).
+  - Git resources require `--url <url>`, optional `--branch <branch>` (default: main).
   - Local resources require `--path <path>`.
-- `btca config resources remove [-n <name>]`
+- `btca config resources remove [--name <name>]`
   - Remove a resource from config (with confirmation).
 
 - `btca config collections list`

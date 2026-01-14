@@ -13,7 +13,7 @@ import { Resources } from './resources/service.ts';
 import { GitResourceSchema, LocalResourceSchema } from './resources/schema.ts';
 import { StreamService } from './stream/service.ts';
 import type { BtcaStreamMetaEvent } from './stream/types.ts';
-import { LIMITS } from './validation/index.ts';
+import { LIMITS, normalizeGitHubUrl } from './validation/index.ts';
 
 /**
  * BTCA Server API
@@ -375,14 +375,17 @@ const createApp = (deps: {
 
 		// POST /config/resources - Add a new resource
 		// All validation (URL, branch, path traversal, etc.) is handled by the schema
+		// GitHub URLs are normalized to their base repository format
 		.post('/config/resources', async (c: HonoContext) => {
 			const decoded = await decodeJson(c.req.raw, AddResourceRequestSchema);
 
 			if (decoded.type === 'git') {
+				// Normalize GitHub URLs (e.g., /blob/main/file.txt → base repo URL)
+				const normalizedUrl = normalizeGitHubUrl(decoded.url);
 				const resource = {
 					type: 'git' as const,
 					name: decoded.name,
-					url: decoded.url,
+					url: normalizedUrl,
 					branch: decoded.branch ?? 'main',
 					...(decoded.searchPath && { searchPath: decoded.searchPath }),
 					...(decoded.specialNotes && { specialNotes: decoded.specialNotes })

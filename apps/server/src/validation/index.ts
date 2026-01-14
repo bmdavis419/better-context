@@ -59,8 +59,17 @@ export const LIMITS = {
 
 export type ValidationResult = { valid: true } | { valid: false; error: string };
 
+/**
+ * Validation result that includes a normalized value.
+ */
+export type ValidationResultWithValue<T> =
+	| { valid: true; value: T }
+	| { valid: false; error: string };
+
 const ok = (): ValidationResult => ({ valid: true });
+const okWithValue = <T>(value: T): ValidationResultWithValue<T> => ({ valid: true, value });
 const fail = (error: string): ValidationResult => ({ valid: false, error });
+const failWithValue = <T>(error: string): ValidationResultWithValue<T> => ({ valid: false, error });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validators
@@ -127,36 +136,83 @@ export const validateBranchName = (branch: string): ValidationResult => {
 };
 
 /**
+ * Normalize a GitHub URL to its base repository format.
+ *
+ * Handles URLs like:
+ * - https://github.com/owner/repo/blob/main/README.md → https://github.com/owner/repo
+ * - https://github.com/owner/repo/tree/branch/path → https://github.com/owner/repo
+ * - https://github.com/owner/repo.git → https://github.com/owner/repo
+ * - https://github.com/owner/repo/ → https://github.com/owner/repo
+ *
+ * Non-GitHub URLs are returned unchanged.
+ */
+export const normalizeGitHubUrl = (url: string): string => {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return url; // Return as-is if not a valid URL
+	}
+
+	const hostname = parsed.hostname.toLowerCase();
+	if (hostname !== 'github.com') {
+		return url; // Non-GitHub URLs pass through unchanged
+	}
+
+	// Extract path segments, filtering out empty strings
+	const segments = parsed.pathname.split('/').filter((s) => s.length > 0);
+
+	// Need at least owner and repo
+	if (segments.length < 2) {
+		return url;
+	}
+
+	// Get owner and repo (first two segments)
+	const owner = segments[0];
+	let repo = segments[1]!;
+
+	// Remove .git suffix if present
+	if (repo.endsWith('.git')) {
+		repo = repo.slice(0, -4);
+	}
+
+	return `https://github.com/${owner}/${repo}`;
+};
+
+/**
  * Validate a git URL to prevent unsafe git operations.
+ * Returns the normalized URL on success.
  *
  * Requirements:
  * - Valid URL format
  * - HTTPS protocol only (rejects file://, git://, ssh://, ext::, etc.)
  * - No embedded credentials
  * - No localhost or private IP addresses
+ *
+ * For GitHub URLs, the URL is normalized to the base repository format.
  */
-export const validateGitUrl = (url: string): ValidationResult => {
+export const validateGitUrl = (url: string): ValidationResultWithValue<string> => {
 	if (!url || url.trim().length === 0) {
-		return fail('Git URL cannot be empty');
+		return failWithValue('Git URL cannot be empty');
 	}
 
 	let parsed: URL;
 	try {
 		parsed = new URL(url);
 	} catch {
-		return fail(`Invalid URL format: "${url}"`);
+		return failWithValue(`Invalid URL format: "${url}"`);
 	}
 
 	// Only allow HTTPS protocol
 	if (parsed.protocol !== 'https:') {
-		return fail(
+		return failWithValue(
 			`Invalid URL protocol: ${parsed.protocol}. Only HTTPS URLs are allowed for security reasons`
 		);
 	}
 
 	// Reject embedded credentials
 	if (parsed.username || parsed.password) {
-		return fail('URL must not contain embedded credentials');
+		return failWithValue('URL must not contain embedded credentials');
 	}
 
 	// Reject localhost and private IP addresses
@@ -170,10 +226,12 @@ export const validateGitUrl = (url: string): ValidationResult => {
 		hostname === '::1' ||
 		hostname === '0.0.0.0'
 	) {
-		return fail(`URL must not point to localhost or private IP addresses: ${hostname}`);
+		return failWithValue(`URL must not point to localhost or private IP addresses: ${hostname}`);
 	}
 
-	return ok();
+	// Normalize GitHub URLs
+	const normalizedUrl = normalizeGitHubUrl(url);
+	return okWithValue(normalizedUrl);
 };
 
 /**
@@ -352,7 +410,28 @@ export const validateResourcesArray = (resources: string[] | undefined): Validat
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Validated git resource with normalized URL.
+ */
+export interface ValidatedGitResource {
+	name: string;
+	url: string;
+	branch: string;
+	searchPath?: string;
+	specialNotes?: string;
+}
+
+/**
+ * Validated local resource.
+ */
+export interface ValidatedLocalResource {
+	name: string;
+	path: string;
+	specialNotes?: string;
+}
+
+/**
  * Validate a complete git resource definition.
+ * Returns the resource with a normalized URL on success.
  */
 export const validateGitResource = (resource: {
 	name: string;
@@ -360,43 +439,54 @@ export const validateGitResource = (resource: {
 	branch: string;
 	searchPath?: string;
 	specialNotes?: string;
-}): ValidationResult => {
+}): ValidationResultWithValue<ValidatedGitResource> => {
 	const nameResult = validateResourceName(resource.name);
-	if (!nameResult.valid) return nameResult;
+	if (!nameResult.valid) return failWithValue(nameResult.error);
 
 	const urlResult = validateGitUrl(resource.url);
-	if (!urlResult.valid) return urlResult;
+	if (!urlResult.valid) return failWithValue(urlResult.error);
 
 	const branchResult = validateBranchName(resource.branch);
-	if (!branchResult.valid) return branchResult;
+	if (!branchResult.valid) return failWithValue(branchResult.error);
 
 	const searchPathResult = validateSearchPath(resource.searchPath);
-	if (!searchPathResult.valid) return searchPathResult;
+	if (!searchPathResult.valid) return failWithValue(searchPathResult.error);
 
 	const notesResult = validateNotes(resource.specialNotes);
-	if (!notesResult.valid) return notesResult;
+	if (!notesResult.valid) return failWithValue(notesResult.error);
 
-	return ok();
+	return okWithValue({
+		name: resource.name,
+		url: urlResult.value, // Use the normalized URL
+		branch: resource.branch,
+		...(resource.searchPath && { searchPath: resource.searchPath }),
+		...(resource.specialNotes && { specialNotes: resource.specialNotes })
+	});
 };
 
 /**
  * Validate a complete local resource definition.
+ * Returns the validated resource on success.
  */
 export const validateLocalResource = (resource: {
 	name: string;
 	path: string;
 	specialNotes?: string;
-}): ValidationResult => {
+}): ValidationResultWithValue<ValidatedLocalResource> => {
 	const nameResult = validateResourceName(resource.name);
-	if (!nameResult.valid) return nameResult;
+	if (!nameResult.valid) return failWithValue(nameResult.error);
 
 	const pathResult = validateLocalPath(resource.path);
-	if (!pathResult.valid) return pathResult;
+	if (!pathResult.valid) return failWithValue(pathResult.error);
 
 	const notesResult = validateNotes(resource.specialNotes);
-	if (!notesResult.valid) return notesResult;
+	if (!notesResult.valid) return failWithValue(notesResult.error);
 
-	return ok();
+	return okWithValue({
+		name: resource.name,
+		path: resource.path,
+		...(resource.specialNotes && { specialNotes: resource.specialNotes })
+	});
 };
 
 /**

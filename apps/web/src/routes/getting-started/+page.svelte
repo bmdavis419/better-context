@@ -20,7 +20,7 @@
 	// Step 2: Provider setup (show recommended model)
 	const recommendedModel =
 		BLESSED_MODELS.find((m) => m.model === 'claude-haiku-4-5') ?? BLESSED_MODELS[0];
-	const MODEL_CMD = `btca config model -p ${recommendedModel.provider} -m ${recommendedModel.model}`;
+	const MODEL_CMD = `btca config model --provider ${recommendedModel.provider} --model ${recommendedModel.model}`;
 
 	// Step 3: Agent setup prompt - extract detailed instructions from the markdown file
 	// (everything after "## Detailed Instructions")
@@ -408,7 +408,7 @@
 					<div class="p-3">
 						{#if shikiStore.highlighter}
 							{@html shikiStore.highlighter.codeToHtml(
-								'btca ask -r svelte -q "How do stores work?"',
+								'btca ask --resource svelte --question "How do stores work?"',
 								{
 									theme: shikiTheme,
 									lang: 'bash',
@@ -416,7 +416,8 @@
 								}
 							)}
 						{:else}
-							<pre class="m-0 text-sm"><code>btca ask -r svelte -q "How do stores work?"</code
+							<pre class="m-0 text-sm"><code
+									>btca ask --resource svelte --question "How do stores work?"</code
 								></pre>
 						{/if}
 					</div>

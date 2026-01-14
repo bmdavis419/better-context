@@ -9,20 +9,20 @@ When you need up-to-date information about technologies used in this project, us
 Ask a question about one or more resources:
 
 ```bash
-btca ask -r <resource> -q "<question>"
+btca ask --resource <resource> --question "<question>"
 ```
 
 Examples:
 
 ```bash
 # Single resource
-btca ask -r svelte -q "How do stores work in Svelte 5?"
+btca ask --resource svelte --question "How do stores work in Svelte 5?"
 
 # Multiple resources
-btca ask -r svelte -r effect -q "How do I integrate Effect with Svelte?"
+btca ask --resource svelte --resource effect --question "How do I integrate Effect with Svelte?"
 
 # Using @mentions in the question
-btca ask -q "@svelte @tailwind How do I style components?"
+btca ask --question "@svelte @tailwind How do I style components?"
 ```
 
 ### Interactive Mode
@@ -30,7 +30,7 @@ btca ask -q "@svelte @tailwind How do I style components?"
 Start a chat session for deeper exploration:
 
 ```bash
-btca chat -r svelte -r effect
+btca chat --resource svelte --resource effect
 ```
 
 Or use the TUI:
