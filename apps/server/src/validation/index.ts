@@ -47,8 +47,8 @@ export const LIMITS = {
 	NOTES_MAX: 500,
 	/** Maximum length for search paths */
 	SEARCH_PATH_MAX: 256,
-	/** Maximum length for questions */
-	QUESTION_MAX: 10_000,
+	/** Maximum length for questions (includes conversation history when formatted) */
+	QUESTION_MAX: 100_000,
 	/** Maximum number of resources per request */
 	MAX_RESOURCES_PER_REQUEST: 20
 } as const;

@@ -1,0 +1,39 @@
+{
+	"name": "btca-sandbox",
+	"version": "0.0.1",
+	"description": "Sandbox environment for spinning up btca instances",
+	"author": "Ben Davis",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/bmdavis419/better-context",
+		"directory": "apps/sandbox"
+	},
+	"keywords": [
+		"btca",
+		"sandbox",
+		"ai",
+		"bun"
+	],
+	"private": true,
+	"engines": {
+		"bun": ">=1.1.0"
+	},
+	"module": "src/index.ts",
+	"type": "module",
+	"scripts": {
+		"check": "tsgo --noEmit",
+		"dev": "bun --watch src/index.ts",
+		"format": "prettier --write .",
+		"sandbox": "bun run src/index.ts",
+		"snapshot": "bun run src/snapshot.ts"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@typescript/native-preview": "^7.0.0-dev.20260109.1",
+		"prettier": "^3.7.4"
+	},
+	"dependencies": {
+		"@daytonaio/sdk": "^0.130.0"
+	}
+}

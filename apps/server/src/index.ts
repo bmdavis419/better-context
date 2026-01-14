@@ -62,7 +62,10 @@ const QuestionRequestSchema = z.object({
 	question: z
 		.string()
 		.min(1, 'Question cannot be empty')
-		.max(LIMITS.QUESTION_MAX, `Question too long (max ${LIMITS.QUESTION_MAX} chars)`),
+		.max(
+			LIMITS.QUESTION_MAX,
+			`Question too long (max ${LIMITS.QUESTION_MAX.toLocaleString()} chars). This includes conversation history - try starting a new thread or clearing the chat.`
+		),
 	resources: z
 		.array(ResourceNameField)
 		.max(
@@ -319,7 +322,11 @@ const createApp = (deps: {
 			} satisfies BtcaStreamMetaEvent;
 
 			Metrics.info('question.stream.start', { collectionKey });
-			const stream = StreamService.createSseStream({ meta, eventStream });
+			const stream = StreamService.createSseStream({
+				meta,
+				eventStream,
+				question: decoded.question
+			});
 
 			return new Response(stream, {
 				headers: {
@@ -461,7 +468,8 @@ export const startServer = async (options: StartServerOptions = {}): Promise<Ser
 
 	const server = Bun.serve({
 		port: requestedPort,
-		fetch: app.fetch
+		fetch: app.fetch,
+		idleTimeout: 60
 	});
 
 	const actualPort = server.port ?? requestedPort;

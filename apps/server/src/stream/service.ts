@@ -1,6 +1,11 @@
 import type { OcEvent } from '../agent/types.ts';
 import { getErrorMessage, getErrorTag } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
+import {
+	StreamingTagStripper,
+	extractCoreQuestion,
+	stripUserQuestionFromStart
+} from '@btca/shared';
 
 import type {
 	BtcaStreamDoneEvent,
@@ -41,6 +46,7 @@ export namespace StreamService {
 	export const createSseStream = (args: {
 		meta: BtcaStreamMetaEvent;
 		eventStream: AsyncIterable<OcEvent>;
+		question?: string; // Original question - used to filter echoed user message
 	}): ReadableStream<Uint8Array> => {
 		const encoder = new TextEncoder();
 
@@ -51,6 +57,15 @@ export namespace StreamService {
 		let toolUpdates = 0;
 		let textEvents = 0;
 		let reasoningEvents = 0;
+
+		// Create streaming tag stripper for filtering history markers
+		const tagStripper = new StreamingTagStripper();
+
+		// Extract the core question for stripping echoed user message from final response
+		const coreQuestion = extractCoreQuestion(args.question);
+
+		// Track total emitted text for accurate final text reconstruction
+		let emittedText = '';
 
 		const emit = (
 			controller: ReadableStreamDefaultController<Uint8Array>,
@@ -73,17 +88,36 @@ export namespace StreamService {
 					try {
 						for await (const event of args.eventStream) {
 							if (event.type === 'message.part.updated') {
-								const part: any = (event.properties as any).part;
+								const props = event.properties as any;
+								const part: any = props?.part;
 								if (!part || typeof part !== 'object') continue;
+
+								// Skip user messages - only stream assistant responses
+								const messageRole = props?.message?.role ?? props?.role;
+								if (messageRole === 'user') {
+									continue;
+								}
 
 								if (part.type === 'text') {
 									const partId = String(part.id);
 									const nextText = String(part.text ?? '');
-									const delta = updateAccumulator(text, partId, nextText);
-									if (delta.length > 0) {
-										textEvents += 1;
-										const msg: BtcaStreamTextDeltaEvent = { type: 'text.delta', delta };
-										emit(controller, msg);
+
+									// Get the raw delta from accumulator
+									const rawDelta = updateAccumulator(text, partId, nextText);
+
+									if (rawDelta.length > 0) {
+										// Filter through the streaming tag stripper
+										const cleanDelta = tagStripper.process(rawDelta);
+
+										if (cleanDelta.length > 0) {
+											textEvents += 1;
+											emittedText += cleanDelta;
+											const msg: BtcaStreamTextDeltaEvent = {
+												type: 'text.delta',
+												delta: cleanDelta
+											};
+											emit(controller, msg);
+										}
 									}
 									continue;
 								}
@@ -120,18 +154,29 @@ export namespace StreamService {
 
 							if (event.type === 'session.idle') {
 								const tools = Array.from(toolsByCallId.values());
+
+								// Flush any remaining buffered content from the tag stripper
+								const flushed = tagStripper.flush();
+								if (flushed.length > 0) {
+									emittedText += flushed;
+								}
+
+								// Strip the echoed user question from the final text
+								let finalText = stripUserQuestionFromStart(emittedText, coreQuestion);
+
 								Metrics.info('stream.done', {
 									collectionKey: args.meta.collection.key,
-									textLength: text.combined.length,
+									textLength: finalText.length,
 									reasoningLength: reasoning.combined.length,
 									toolCount: tools.length,
 									toolUpdates,
 									textEvents,
 									reasoningEvents
 								});
+
 								const done: BtcaStreamDoneEvent = {
 									type: 'done',
-									text: text.combined,
+									text: finalText,
 									reasoning: reasoning.combined,
 									tools
 								};

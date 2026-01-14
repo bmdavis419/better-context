@@ -1,7 +1,7 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "1.0.30",
+	"version": "1.0.40",
 	"homepage": "https://btca.dev",
 	"description": "CLI tool for asking questions about technologies using btca server",
 	"type": "module",
@@ -39,6 +39,7 @@
 		"build": "bun run scripts/build-binaries.ts"
 	},
 	"devDependencies": {
+		"@btca/shared": "workspace:*",
 		"btca-server": "workspace:*",
 		"@opentui/core": "^0.1.65",
 		"@opentui/solid": "^0.1.65",

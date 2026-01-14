@@ -21,6 +21,7 @@ After making changes in a specific package, run its check script:
 | `apps/cli`           | `bun run check:cli`           | `bun run format:cli`           |
 | `apps/web`           | `bun run check:web`           | `bun run format:web`           |
 | `apps/server`        | `bun run check:server`        | `bun run format:server`        |
+| `apps/sandbox`       | `bun run check:sandbox`       | `bun run format:sandbox`       |
 | `apps/server-simple` | `bun run check:server-simple` | `bun run format:server-simple` |
 | `packages/shared`    | `bun run check:shared`        | `bun run format:shared`        |
 
@@ -36,7 +37,7 @@ After making changes in a specific package, run its check script:
 
 When the user says "use btca" for codebase/docs questions.
 
-**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite
+**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite, clerk, convexJs
 
 ### Usage
 

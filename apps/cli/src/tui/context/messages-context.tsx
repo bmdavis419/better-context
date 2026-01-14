@@ -7,6 +7,7 @@ import {
 	type ParentProps
 } from 'solid-js';
 import type { Message, InputState, CancelState, BtcaChunk } from '../types.ts';
+import { formatConversationHistory, type ThreadMessage } from '@btca/shared';
 import { services, type ChunkUpdate } from '../services.ts';
 import { copyToClipboard } from '../clipboard.ts';
 
@@ -59,7 +60,11 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 			const newHistory = [...prev];
 			for (let i = newHistory.length - 1; i >= 0; i--) {
 				const msg = newHistory[i];
-				if (msg?.role === 'assistant' && msg.content.type === 'chunks') {
+				if (
+					msg?.role === 'assistant' &&
+					typeof msg.content === 'object' &&
+					msg.content.type === 'chunks'
+				) {
 					newHistory[i] = {
 						role: 'assistant',
 						content: { type: 'chunks', chunks: [...msg.content.chunks, chunk] }
@@ -76,8 +81,12 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 			const newHistory = [...prev];
 			for (let i = newHistory.length - 1; i >= 0; i--) {
 				const msg = newHistory[i];
-				if (msg?.role === 'assistant' && msg.content.type === 'chunks') {
-					const updatedChunks = msg.content.chunks.map((c): BtcaChunk => {
+				if (
+					msg?.role === 'assistant' &&
+					typeof msg.content === 'object' &&
+					msg.content.type === 'chunks'
+				) {
+					const updatedChunks = msg.content.chunks.map((c: BtcaChunk): BtcaChunk => {
 						if (c.id !== id) return c;
 						if (c.type === 'text' && 'text' in updates) {
 							return { ...c, text: updates.text as string };
@@ -123,43 +132,39 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 		}
 	};
 
-	// Build conversation history string from messages
-	const buildConversationHistory = (): string => {
-		const msgs = messages();
-		const historyParts: string[] = [];
-
-		for (const msg of msgs) {
-			if (msg.role === 'user') {
-				const userText = msg.content
-					.map((s) => s.content)
-					.join('')
-					.replace(/@\w+/g, '')
-					.trim();
-				if (userText) {
-					historyParts.push(`User: ${userText}`);
+	/**
+	 * Convert local TUI messages to ThreadMessage format for history building.
+	 * The TUI uses InputState for user messages, which needs to be flattened to string.
+	 */
+	const convertToThreadMessages = (): ThreadMessage[] => {
+		return messages()
+			.filter(
+				(m): m is Exclude<Message, { role: 'system' }> =>
+					m.role === 'user' || m.role === 'assistant'
+			)
+			.map((m): ThreadMessage => {
+				if (m.role === 'user') {
+					// Flatten InputState segments to plain string
+					return {
+						role: 'user',
+						content: m.content.map((s) => s.content).join('')
+					};
 				}
-			} else if (msg.role === 'assistant' && !msg.canceled) {
-				if (msg.content.type === 'text') {
-					historyParts.push(`Assistant: ${msg.content.content}`);
-				} else if (msg.content.type === 'chunks') {
-					const textChunks = msg.content.chunks.filter((c) => c.type === 'text');
-					const text = textChunks.map((c) => (c as { text: string }).text).join('\n\n');
-					if (text) {
-						historyParts.push(`Assistant: ${text}`);
-					}
-				}
-			}
-		}
-
-		return historyParts.join('\n\n');
+				// Assistant messages - content is already compatible with ThreadMessage
+				return {
+					role: 'assistant',
+					content: m.content,
+					canceled: m.canceled
+				};
+			});
 	};
 
 	// Main send method
 	const send = async (input: InputState, newResources: string[]) => {
+		// Keep @mentions in the question - they provide context about what the user is asking about
 		const question = input
 			.map((s) => s.content)
 			.join('')
-			.replace(/@\w+/g, '')
 			.trim()
 			.replace(/\s+/g, ' ');
 
@@ -168,8 +173,8 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 		const updatedResources = [...new Set([...currentResources, ...newResources])];
 		setThreadResources(updatedResources);
 
-		// Build conversation history (before adding new message)
-		const history = buildConversationHistory();
+		// Convert messages to thread format for history building (before adding new message)
+		const threadMessages = convertToThreadMessages();
 
 		// Add user message
 		addMessage({ role: 'user', content: input });
@@ -180,10 +185,8 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 		setIsStreaming(true);
 		setCancelState('none');
 
-		// Build the full question with history if we have prior conversation
-		const questionWithHistory = history
-			? `=== CONVERSATION HISTORY ===\n${history}\n=== END HISTORY ===\n\nCurrent question: ${question}`
-			: question;
+		// Build the full question with history using shared formatting
+		const questionWithHistory = formatConversationHistory(threadMessages, question);
 
 		try {
 			const finalChunks = await services.askQuestion(

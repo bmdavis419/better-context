@@ -1,6 +1,6 @@
 {
 	"name": "btca-server",
-	"version": "1.0.30",
+	"version": "1.0.40",
 	"description": "BTCA server for answering questions about your codebase using OpenCode AI",
 	"author": "Ben Davis",
 	"license": "MIT",
@@ -49,6 +49,7 @@
 		"prettier": "^3.7.4"
 	},
 	"dependencies": {
+		"@btca/shared": "workspace:*",
 		"@opencode-ai/sdk": "^1.0.208",
 		"hono": "^4.7.11",
 		"zod": "^3.25.76"
