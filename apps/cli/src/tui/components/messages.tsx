@@ -9,12 +9,26 @@ const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '
 
 /**
  * Strip conversation history markers from displayed text.
- * The history is passed to the agent for context but shouldn't be shown in the UI.
+ * This is a fallback safety net - the server should strip these before sending.
+ * Handles cases where the AI echoes back parts of the formatted prompt.
  */
-const stripConversationHistory = (text: string): string => {
-	// Remove the conversation history block if present
-	const historyRegex = /=== CONVERSATION HISTORY ===[\s\S]*?=== END HISTORY ===/g;
-	return text.replace(historyRegex, '').trim();
+const stripHistoryTags = (text: string): string => {
+	return (
+		text
+			// Full history blocks
+			.replace(/<conversation_history>[\s\S]*?<\/conversation_history>\s*/g, '')
+			// Current message wrapper
+			.replace(/<current_message>[\s\S]*?<\/current_message>\s*/g, '')
+			// Orphaned/partial tags
+			.replace(/<\/?conversation_history>\s*/g, '')
+			.replace(/<\/?current_message>\s*/g, '')
+			.replace(/<\/?human>\s*/g, '')
+			.replace(/<\/?assistant>\s*/g, '')
+			// Old format markers (legacy)
+			.replace(/=== CONVERSATION HISTORY ===[\s\S]*?=== END HISTORY ===/g, '')
+			.replace(/^Current question:\s*/i, '')
+			.trim()
+	);
 };
 
 const LoadingSpinner: Component = () => {
@@ -90,7 +104,7 @@ const TextChunk: Component<{
 	chunk: Extract<BtcaChunk, { type: 'text' }>;
 	isStreaming: boolean;
 }> = (props) => {
-	const displayText = () => stripConversationHistory(props.chunk.text);
+	const displayText = () => stripHistoryTags(props.chunk.text);
 
 	return (
 		<Show when={!props.isStreaming} fallback={<text>{displayText()}</text>}>
@@ -172,9 +186,7 @@ const ChunksRenderer: Component<{
 							<ChunkRenderer chunk={chunk} isStreaming={props.isStreaming && isLastChunk(idx())} />
 						}
 					>
-						<text fg={props.textColor}>
-							{stripConversationHistory((chunk as { text: string }).text)}
-						</text>
+						<text fg={props.textColor}>{stripHistoryTags((chunk as { text: string }).text)}</text>
 					</Show>
 				)}
 			</For>
@@ -189,18 +201,37 @@ const AssistantMessage: Component<{
 }> = (props) => {
 	const textColor = () => (props.isCanceled ? colors.textMuted : undefined);
 	const getTextContent = () =>
-		stripConversationHistory((props.content as { type: 'text'; content: string }).content);
+		stripHistoryTags((props.content as { type: 'text'; content: string }).content);
+
+	// Type guards for AssistantContent which can be string | { type: 'text' } | { type: 'chunks' }
+	const isTextContent = () => typeof props.content === 'object' && props.content.type === 'text';
+	const isChunksContent = () =>
+		typeof props.content === 'object' && props.content.type === 'chunks';
+	const isStringContent = () => typeof props.content === 'string';
 
 	return (
 		<Switch>
-			<Match when={props.content.type === 'text'}>
+			<Match when={isStringContent()}>
+				<Show
+					when={!props.isStreaming}
+					fallback={<text fg={textColor()}>{props.content as string}</text>}
+				>
+					<Show
+						when={props.isCanceled}
+						fallback={<MarkdownText content={props.content as string} />}
+					>
+						<text fg={textColor()}>{props.content as string}</text>
+					</Show>
+				</Show>
+			</Match>
+			<Match when={isTextContent()}>
 				<Show when={!props.isStreaming} fallback={<text fg={textColor()}>{getTextContent()}</text>}>
 					<Show when={props.isCanceled} fallback={<MarkdownText content={getTextContent()} />}>
 						<text fg={textColor()}>{getTextContent()}</text>
 					</Show>
 				</Show>
 			</Match>
-			<Match when={props.content.type === 'chunks'}>
+			<Match when={isChunksContent()}>
 				<ChunksRenderer
 					chunks={(props.content as { type: 'chunks'; chunks: BtcaChunk[] }).chunks}
 					isStreaming={props.isStreaming}

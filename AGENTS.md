@@ -37,7 +37,7 @@ After making changes in a specific package, run its check script:
 
 When the user says "use btca" for codebase/docs questions.
 
-**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite
+**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite, clerk, convexJs
 
 ### Usage
 

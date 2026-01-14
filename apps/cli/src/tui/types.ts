@@ -1,30 +1,15 @@
-// Chunk types for streaming responses
-export interface TextChunk {
-	type: 'text';
-	id: string;
-	text: string;
-}
+// Re-export shared types
+export type {
+	TextChunk,
+	ReasoningChunk,
+	ToolChunk,
+	FileChunk,
+	BtcaChunk,
+	CancelState,
+	AssistantContent
+} from '@btca/shared';
 
-export interface ReasoningChunk {
-	type: 'reasoning';
-	id: string;
-	text: string;
-}
-
-export interface ToolChunk {
-	type: 'tool';
-	id: string;
-	toolName: string;
-	state: 'pending' | 'running' | 'completed';
-}
-
-export interface FileChunk {
-	type: 'file';
-	id: string;
-	filePath: string;
-}
-
-export type BtcaChunk = TextChunk | ReasoningChunk | ToolChunk | FileChunk;
+import type { AssistantContent } from '@btca/shared';
 
 export interface Repo {
 	name: string;
@@ -33,8 +18,6 @@ export interface Repo {
 	specialNotes?: string | undefined;
 	searchPath?: string | undefined;
 }
-
-export type CancelState = 'none' | 'pending';
 
 export type InputState = (
 	| {
@@ -47,10 +30,6 @@ export type InputState = (
 			lines: number;
 	  }
 )[];
-
-export type AssistantContent =
-	| { type: 'text'; content: string }
-	| { type: 'chunks'; chunks: BtcaChunk[] };
 
 export type Message =
 	| {

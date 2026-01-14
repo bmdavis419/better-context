@@ -70,6 +70,18 @@
 			"type": "git",
 			"url": "https://github.com/anomalyco/opencode",
 			"branch": "dev"
+		},
+		{
+			"type": "git",
+			"name": "clerk",
+			"url": "https://github.com/clerk/javascript",
+			"branch": "main"
+		},
+		{
+			"type": "git",
+			"name": "convexJs",
+			"url": "https://github.com/get-convex/convex-js",
+			"branch": "main"
 		}
 	],
 	"model": "claude-haiku-4-5",
