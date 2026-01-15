@@ -32,3 +32,7 @@ Set up btca for this project: scan package.json for major dependencies (framewor
 ```
 
 See the full [Getting Started guide](https://btca.dev/getting-started) for more details.
+
+## Community Repos
+
+- Nuxt 4 + Vue 3 + NuxtHub knowledge base: https://github.com/onmax/nuxt-skills
