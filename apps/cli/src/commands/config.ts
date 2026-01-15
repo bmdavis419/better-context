@@ -4,6 +4,7 @@ import { ensureServer } from '../server/manager.ts';
 import {
 	createClient,
 	getResources,
+	getProviders,
 	updateModel,
 	addResource,
 	removeResource,
@@ -102,6 +103,37 @@ const modelCommand = new Command('model')
 				options.model as string
 			);
 			console.log(`Model updated: ${result.provider}/${result.model}`);
+
+			try {
+				const client = createClient(server.url);
+				const providers = await getProviders(client);
+				const provider = providers.all.find(
+					(p: { id: string }) => p.id === result.provider
+				);
+				if (!provider) {
+					console.warn(
+						`Warning: Provider "${result.provider}" is not available. ` +
+							`Available providers: ${providers.all.map((p: { id: string }) => p.id).join(', ')}`
+					);
+				} else if (!providers.connected.includes(result.provider)) {
+					console.warn(
+						`Warning: Provider "${result.provider}" is not connected. ` +
+							'Run "opencode auth" to configure credentials.'
+					);
+				} else {
+					const modelIds = Object.keys(provider.models ?? {});
+					if (modelIds.length > 0 && !modelIds.includes(result.model)) {
+						console.warn(
+							`Warning: Model "${result.model}" not found for provider "${result.provider}". ` +
+								`Available models: ${modelIds.join(', ')}`
+						);
+					}
+				}
+			} catch (error) {
+				console.warn(
+					`Warning: Unable to validate provider/model. ${error instanceof BtcaError ? error.message : ''}`.trim()
+				);
+			}
 
 			server.stop();
 		} catch (error) {

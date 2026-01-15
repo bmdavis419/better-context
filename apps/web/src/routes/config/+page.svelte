@@ -12,6 +12,7 @@
   "$schema": "https://btca.dev/btca.schema.json",
   "model": "claude-haiku-4-5",
   "provider": "opencode",
+  "providerTimeoutMs": 300000,
   "resources": [
     {
       "type": "git",
@@ -97,6 +98,10 @@ Available resources: svelte, effect`;
 		<p class="mt-2 max-w-2xl text-sm bc-prose">
 			btca uses the OpenCode SDK under the hood, so any model that works with OpenCode works with
 			btca. Set your model via CLI or edit the config file directly.
+		</p>
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			Providers require credentials configured in OpenCode. Run <code class="bc-inlineCode">opencode auth</code>
+			to connect a provider, or edit your OpenCode config directly.
 		</p>
 
 		<div class="mt-4 flex flex-col gap-4">
@@ -220,6 +225,11 @@ Available resources: svelte, effect`;
 							<td class="py-2 pr-4"><code class="bc-inlineCode">searchPath</code></td>
 							<td class="py-2 pr-4">No</td>
 							<td class="py-2">Subdirectory to search within the repo</td>
+						</tr>
+						<tr class="border-b border-[color:hsl(var(--bc-border))]">
+							<td class="py-2 pr-4"><code class="bc-inlineCode">searchPaths</code></td>
+							<td class="py-2 pr-4">No</td>
+							<td class="py-2">Multiple subdirectories to search within the repo</td>
 						</tr>
 						<tr>
 							<td class="py-2 pr-4"><code class="bc-inlineCode">specialNotes</code></td>

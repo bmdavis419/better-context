@@ -224,6 +224,7 @@ const createApp = (deps: {
 			return c.json({
 				provider: config.provider,
 				model: config.model,
+				providerTimeoutMs: config.providerTimeoutMs ?? null,
 				resourcesDirectory: config.resourcesDirectory,
 				collectionsDirectory: config.collectionsDirectory,
 				resourceCount: config.resources.length
@@ -254,6 +255,12 @@ const createApp = (deps: {
 					}
 				})
 			});
+		})
+
+		// GET /providers
+		.get('/providers', async (c: HonoContext) => {
+			const providers = await agent.listProviders();
+			return c.json(providers);
 		})
 
 		// POST /question

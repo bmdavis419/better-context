@@ -15,6 +15,7 @@ export const CONFIG_SCHEMA_URL = 'https://btca.dev/btca.schema.json';
 
 export const DEFAULT_MODEL = 'claude-haiku-4-5';
 export const DEFAULT_PROVIDER = 'opencode';
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 300_000;
 
 export const DEFAULT_RESOURCES: ResourceDefinition[] = [
 	{
@@ -49,6 +50,7 @@ export const DEFAULT_RESOURCES: ResourceDefinition[] = [
 const StoredConfigSchema = z.object({
 	$schema: z.string().optional(),
 	dataDirectory: z.string().optional(),
+	providerTimeoutMs: z.number().int().positive().optional(),
 	resources: z.array(ResourceDefinitionSchema),
 	model: z.string(),
 	provider: z.string()
@@ -114,6 +116,7 @@ export namespace Config {
 		resources: readonly ResourceDefinition[];
 		model: string;
 		provider: string;
+		providerTimeoutMs?: number;
 		configPath: string;
 		getResource: (name: string) => ResourceDefinition | undefined;
 		updateModel: (provider: string, model: string) => Promise<{ provider: string; model: string }>;
@@ -434,7 +437,8 @@ export namespace Config {
 			$schema: CONFIG_SCHEMA_URL,
 			resources: DEFAULT_RESOURCES,
 			model: DEFAULT_MODEL,
-			provider: DEFAULT_PROVIDER
+			provider: DEFAULT_PROVIDER,
+			providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS
 		};
 
 		try {
@@ -532,6 +536,9 @@ export namespace Config {
 			},
 			get provider() {
 				return getActiveConfig().provider;
+			},
+			get providerTimeoutMs() {
+				return getActiveConfig().providerTimeoutMs;
 			},
 			getResource: (name: string) => getMergedResources().find((r) => r.name === name),
 

@@ -75,7 +75,8 @@ Once I approve the resource list, prepare the full `btca.config.jsonc` with sens
 		// ... all approved resources
 	],
 	"model": "claude-haiku-4-5",
-	"provider": "opencode"
+	"provider": "opencode",
+	"providerTimeoutMs": 300000
 }
 ```
 

@@ -65,6 +65,14 @@ export async function getResources(client: Client) {
 	return res.json();
 }
 
+export async function getProviders(client: Client) {
+	const res = await client.providers.$get();
+	if (!res.ok) {
+		throw await parseErrorResponse(res, `Failed to get providers: ${res.status}`);
+	}
+	return res.json();
+}
+
 /**
  * Ask a question (non-streaming)
  */

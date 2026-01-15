@@ -89,15 +89,32 @@ export namespace Agent {
 			url: string;
 			model: { provider: string; model: string };
 		}>;
+
+		listProviders: () => Promise<{ all: { id: string; models: Record<string, unknown> }[]; connected: string[] }>;
 	};
 
-	const buildOpenCodeConfig = (args: { agentInstructions: string }): OpenCodeConfig => {
+	const buildOpenCodeConfig = (args: {
+		agentInstructions: string;
+		providerId?: string;
+		providerTimeoutMs?: number;
+	}): OpenCodeConfig => {
 		const prompt = [
 			'You are an expert internal agent whose job is to answer questions about the collection.',
 			'You operate inside a collection directory.',
 			"Use the resources in this collection to answer the user's question.",
 			args.agentInstructions
 		].join('\n');
+
+		const providerConfig =
+			args.providerId && typeof args.providerTimeoutMs === 'number'
+				? {
+						[args.providerId]: {
+							options: {
+								timeout: args.providerTimeoutMs
+							}
+						}
+					}
+				: undefined;
 
 		return {
 			agent: {
@@ -135,7 +152,8 @@ export namespace Agent {
 						edit: false
 					}
 				}
-			}
+			},
+			...(providerConfig ? { provider: providerConfig } : {})
 		};
 	};
 
@@ -164,7 +182,7 @@ export namespace Agent {
 		}
 	};
 
-	const getOpencodeInstance = async (args: {
+	const createOpencodeInstance = async (args: {
 		collectionPath: string;
 		ocConfig: OpenCodeConfig;
 	}): Promise<{
@@ -248,8 +266,12 @@ export namespace Agent {
 
 	export const create = (config: Config.Service): Service => {
 		const askStream: Service['askStream'] = async ({ collection, question }) => {
-			const ocConfig = buildOpenCodeConfig({ agentInstructions: collection.agentInstructions });
-			const { client, server, baseUrl } = await getOpencodeInstance({
+			const ocConfig = buildOpenCodeConfig({
+				agentInstructions: collection.agentInstructions,
+				providerId: config.provider,
+				providerTimeoutMs: config.providerTimeoutMs
+			});
+			const { client, server, baseUrl } = await createOpencodeInstance({
 				collectionPath: collection.path,
 				ocConfig
 			});
@@ -354,8 +376,12 @@ export namespace Agent {
 		};
 
 		const getOpencodeInstanceMethod: Service['getOpencodeInstance'] = async ({ collection }) => {
-			const ocConfig = buildOpenCodeConfig({ agentInstructions: collection.agentInstructions });
-			const { baseUrl } = await getOpencodeInstance({
+			const ocConfig = buildOpenCodeConfig({
+				agentInstructions: collection.agentInstructions,
+				providerId: config.provider,
+				providerTimeoutMs: config.providerTimeoutMs
+			});
+			const { baseUrl } = await createOpencodeInstance({
 				collectionPath: collection.path,
 				ocConfig
 			});
@@ -371,6 +397,41 @@ export namespace Agent {
 			};
 		};
 
-		return { askStream, ask, getOpencodeInstance: getOpencodeInstanceMethod };
+		const listProviders: Service['listProviders'] = async () => {
+			const ocConfig = buildOpenCodeConfig({
+				agentInstructions: '',
+				providerId: config.provider,
+				providerTimeoutMs: config.providerTimeoutMs
+			});
+			const { client, server } = await createOpencodeInstance({
+				collectionPath: process.cwd(),
+				ocConfig
+			});
+
+			try {
+				const response = await client.provider.list().catch((cause: unknown) => {
+					throw new AgentError({
+						message: 'Failed to fetch provider list',
+						hint: CommonHints.RUN_AUTH,
+						cause
+					});
+				});
+				if (!response?.data) {
+					throw new AgentError({
+						message: 'Failed to fetch provider list',
+						hint: CommonHints.RUN_AUTH
+					});
+				}
+				const data = response.data as {
+					all: { id: string; models: Record<string, unknown> }[];
+					connected: string[];
+				};
+				return { all: data.all, connected: data.connected };
+			} finally {
+				server.close();
+			}
+		};
+
+		return { askStream, ask, getOpencodeInstance: getOpencodeInstanceMethod, listProviders };
 	};
 }

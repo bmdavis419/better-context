@@ -24,6 +24,11 @@
 			"description": "The AI provider to use",
 			"default": "opencode"
 		},
+		"providerTimeoutMs": {
+			"type": "number",
+			"description": "Timeout in milliseconds for provider requests (optional)",
+			"default": 300000
+		},
 		"resources": {
 			"type": "array",
 			"description": "List of resources (documentation repositories or local directories) to use for context",
