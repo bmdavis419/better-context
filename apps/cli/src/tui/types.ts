@@ -18,6 +18,7 @@ export interface Repo {
 	specialNotes?: string | undefined;
 	searchPath?: string | undefined;
 	searchPaths?: string[] | undefined;
+	cloneStrategy?: 'git' | 'gitpick' | undefined;
 }
 
 export type InputState = (

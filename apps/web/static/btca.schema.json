@@ -83,6 +83,11 @@
 						"type": "string"
 					}
 				},
+				"cloneStrategy": {
+					"type": "string",
+					"description": "Clone strategy to use (git or gitpick)",
+					"enum": ["git", "gitpick"]
+				},
 				"specialNotes": {
 					"type": "string",
 					"description": "Additional context or notes about this resource for the AI"

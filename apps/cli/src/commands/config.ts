@@ -22,6 +22,7 @@ interface GitResource {
 	branch: string;
 	searchPath?: string;
 	searchPaths?: string[];
+	cloneStrategy?: 'git' | 'gitpick';
 	specialNotes?: string;
 }
 
@@ -174,6 +175,7 @@ const resourcesListCommand = new Command('list')
 						} else if (r.searchPath) {
 							console.log(`    Search Path: ${r.searchPath}`);
 						}
+						if (r.cloneStrategy) console.log(`    Clone Strategy: ${r.cloneStrategy}`);
 						if (r.specialNotes) console.log(`    Notes: ${r.specialNotes}`);
 					} else {
 						console.log(`  ${r.name} (local)`);
@@ -200,6 +202,7 @@ const resourcesAddCommand = new Command('add')
 	.option('-b, --branch <branch>', 'Git branch (default: main)')
 	.option('--path <path>', 'Local path (required for local type)')
 	.option('--search-path <searchPath...>', 'Subdirectory to focus on (repeatable)')
+	.option('--clone-strategy <strategy>', 'Clone strategy (git or gitpick)')
 	.option('--notes <notes>', 'Special notes for the AI')
 	.action(async (options, command) => {
 		const globalOpts = command.parent?.parent?.parent?.opts() as
@@ -236,6 +239,9 @@ const resourcesAddCommand = new Command('add')
 					branch: (options.branch as string) ?? 'main',
 					...(searchPaths.length === 1 && { searchPath: searchPaths[0] }),
 					...(searchPaths.length > 1 && { searchPaths }),
+					...(options.cloneStrategy && {
+						cloneStrategy: options.cloneStrategy as 'git' | 'gitpick'
+					}),
 					...(options.notes && { specialNotes: options.notes as string })
 				});
 				// Show normalized URL if it differs from input

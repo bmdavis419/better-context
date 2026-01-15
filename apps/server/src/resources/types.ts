@@ -20,6 +20,7 @@ export type BtcaGitResourceArgs = {
 	readonly resourcesDirectoryPath: string;
 	readonly specialAgentInstructions: string;
 	readonly quiet: boolean;
+	readonly cloneStrategy?: 'git' | 'gitpick';
 };
 
 export type BtcaLocalResourceArgs = {

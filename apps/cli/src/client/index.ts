@@ -186,6 +186,7 @@ export interface GitResourceInput {
 	branch?: string;
 	searchPath?: string;
 	searchPaths?: string[];
+	cloneStrategy?: 'git' | 'gitpick';
 	specialNotes?: string;
 }
 
