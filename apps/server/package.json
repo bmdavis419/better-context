@@ -1,6 +1,6 @@
 {
 	"name": "btca-server",
-	"version": "1.0.40",
+	"version": "1.0.43",
 	"description": "BTCA server for answering questions about your codebase using OpenCode AI",
 	"author": "Ben Davis",
 	"license": "MIT",
