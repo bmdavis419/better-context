@@ -231,6 +231,11 @@ Available resources: svelte, effect`;
 							<td class="py-2 pr-4">No</td>
 							<td class="py-2">Multiple subdirectories to search within the repo</td>
 						</tr>
+						<tr class="border-b border-[color:hsl(var(--bc-border))]">
+							<td class="py-2 pr-4"><code class="bc-inlineCode">cloneStrategy</code></td>
+							<td class="py-2 pr-4">No</td>
+							<td class="py-2">Clone strategy (git or gitpick)</td>
+						</tr>
 						<tr>
 							<td class="py-2 pr-4"><code class="bc-inlineCode">specialNotes</code></td>
 							<td class="py-2 pr-4">No</td>

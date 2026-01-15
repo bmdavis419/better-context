@@ -157,6 +157,9 @@ const SpecialNotesSchema = z
 	)
 	.optional();
 
+const CloneStrategySchema = z.enum(['git', 'gitpick']).optional();
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Resource Schemas
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +171,7 @@ export const GitResourceSchema = z.object({
 	branch: BranchNameSchema,
 	searchPath: OptionalSearchPathSchema,
 	searchPaths: SearchPathsSchema,
+	cloneStrategy: CloneStrategySchema,
 	specialNotes: SpecialNotesSchema
 });
 

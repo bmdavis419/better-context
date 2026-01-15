@@ -40,7 +40,8 @@ export namespace Resources {
 		repoSubPaths: normalizeSearchPaths(definition),
 		resourcesDirectoryPath: resourcesDirectory,
 		specialAgentInstructions: definition.specialNotes ?? '',
-		quiet
+		quiet,
+		cloneStrategy: definition.cloneStrategy
 	});
 
 	const definitionToLocalArgs = (definition: LocalResource): BtcaLocalResourceArgs => ({

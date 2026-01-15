@@ -114,6 +114,7 @@ const AddGitResourceRequestSchema = z.object({
 	branch: GitResourceSchema.shape.branch.optional().default('main'),
 	searchPath: GitResourceSchema.shape.searchPath,
 	searchPaths: GitResourceSchema.shape.searchPaths,
+	cloneStrategy: GitResourceSchema.shape.cloneStrategy,
 	specialNotes: GitResourceSchema.shape.specialNotes
 });
 
@@ -243,6 +244,7 @@ const createApp = (deps: {
 							branch: r.branch,
 							searchPath: r.searchPath ?? null,
 							searchPaths: r.searchPaths ?? null,
+							cloneStrategy: r.cloneStrategy ?? null,
 							specialNotes: r.specialNotes ?? null
 						};
 					} else {
@@ -401,6 +403,7 @@ const createApp = (deps: {
 					branch: decoded.branch ?? 'main',
 					...(decoded.searchPath && { searchPath: decoded.searchPath }),
 					...(decoded.searchPaths && { searchPaths: decoded.searchPaths }),
+					...(decoded.cloneStrategy && { cloneStrategy: decoded.cloneStrategy }),
 					...(decoded.specialNotes && { specialNotes: decoded.specialNotes })
 				};
 				const added = await config.addResource(resource);

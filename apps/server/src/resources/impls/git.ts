@@ -98,8 +98,13 @@ const detectGitErrorType = (stderr: string): GitErrorType | null => {
  */
 const getGitErrorDetails = (
 	errorType: GitErrorType | null,
-	context: { operation: string; branch?: string; url?: string }
+	context: { operation: string; branch?: string; url?: string; stderr?: string }
 ): { message: string; hint: string } => {
+	const stderrSummary = context.stderr
+		?.split('\n')
+		.map((line) => line.trim())
+		.find((line) => line.length > 0);
+
 	switch (errorType) {
 		case 'BRANCH_NOT_FOUND':
 			return {
@@ -135,13 +140,20 @@ const getGitErrorDetails = (
 
 		default:
 			return {
-				message: `git ${context.operation} failed`,
+				message: stderrSummary
+					? `git ${context.operation} failed: ${stderrSummary}`
+					: `git ${context.operation} failed`,
 				hint: `${CommonHints.CLEAR_CACHE} If the problem persists, verify your repository configuration.`
 			};
 	}
 };
 
 interface GitRunResult {
+	exitCode: number;
+	stderr: string;
+}
+
+interface GitpickRunResult {
 	exitCode: number;
 	stderr: string;
 }
@@ -181,6 +193,55 @@ const runGit = async (
 	const stderr = new TextDecoder().decode(combined);
 
 	// Log stderr to console if not quiet and there's content
+	if (!options.quiet && stderr.trim()) {
+		console.error(stderr);
+	}
+
+	return { exitCode, stderr };
+};
+
+const runGitpick = async (
+	args: string[],
+	options: { cwd?: string; quiet: boolean }
+): Promise<GitpickRunResult> => {
+	let proc: Bun.Subprocess;
+	try {
+		proc = Bun.spawn(['gitpick', ...args], {
+			cwd: options.cwd,
+			stdout: options.quiet ? 'ignore' : 'inherit',
+			stderr: 'pipe'
+		});
+	} catch (cause) {
+		throw new ResourceError({
+			message: 'gitpick is not installed',
+			hint: 'Install gitpick with "bun add -g gitpick" or remove cloneStrategy: "gitpick".',
+			cause
+		});
+	}
+
+	const stderrChunks: Uint8Array[] = [];
+	const reader = proc.stderr.getReader();
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (value) stderrChunks.push(value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+
+	const exitCode = await proc.exited;
+	const totalLength = stderrChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+	const combined = new Uint8Array(totalLength);
+	let offset = 0;
+	for (const chunk of stderrChunks) {
+		combined.set(chunk, offset);
+		offset += chunk.length;
+	}
+	const stderr = new TextDecoder().decode(combined);
+
 	if (!options.quiet && stderr.trim()) {
 		console.error(stderr);
 	}
@@ -243,7 +304,8 @@ const gitClone = async (args: {
 		const { message, hint } = getGitErrorDetails(errorType, {
 			operation: 'clone',
 			branch: args.repoBranch,
-			url: args.repoUrl
+			url: args.repoUrl,
+			stderr: result.stderr
 		});
 
 		throw new ResourceError({
@@ -286,11 +348,57 @@ const gitClone = async (args: {
 	}
 };
 
+const gitpickClone = async (args: {
+	repoUrl: string;
+	repoBranch: string;
+	repoSubPaths: readonly string[];
+	localAbsolutePath: string;
+	quiet: boolean;
+	overwrite: boolean;
+}) => {
+	if (!args.repoUrl.includes('github.com')) {
+		throw new ResourceError({
+			message: 'gitpick only supports GitHub repositories',
+			hint: 'Use cloneStrategy: "git" for non-GitHub URLs.',
+			cause: new Error('gitpick unsupported host')
+		});
+	}
+	if (args.repoSubPaths.length > 0) {
+		throw new ResourceError({
+			message: 'gitpick does not support search paths in btca yet',
+			hint: 'Remove searchPath/searchPaths or use cloneStrategy: "git".',
+			cause: new Error('gitpick search path unsupported')
+		});
+	}
+
+	const gitpickArgs = [
+		args.repoUrl,
+		args.localAbsolutePath,
+		'-b',
+		args.repoBranch,
+		...(args.overwrite ? ['-o'] : [])
+	];
+
+	const result = await runGitpick(gitpickArgs, { quiet: args.quiet });
+	if (result.exitCode !== 0) {
+		const stderrSummary = result.stderr
+			.split('\n')
+			.map((line) => line.trim())
+			.find((line) => line.length > 0);
+		throw new ResourceError({
+			message: stderrSummary ? `gitpick failed: ${stderrSummary}` : 'gitpick failed',
+			hint: 'Check that the repository URL and branch are correct.',
+			cause: new Error(`gitpick failed with exit code ${result.exitCode}: ${result.stderr}`)
+		});
+	}
+};
+
 const gitUpdate = async (args: {
 	localAbsolutePath: string;
 	branch: string;
 	repoSubPaths: readonly string[];
 	quiet: boolean;
+	repoUrl: string;
 }) => {
 	const fetchResult = await runGit(['fetch', '--depth', '1', 'origin', args.branch], {
 		cwd: args.localAbsolutePath,
@@ -301,7 +409,9 @@ const gitUpdate = async (args: {
 		const errorType = detectGitErrorType(fetchResult.stderr);
 		const { message, hint } = getGitErrorDetails(errorType, {
 			operation: 'fetch',
-			branch: args.branch
+			branch: args.branch,
+			url: args.repoUrl,
+			stderr: fetchResult.stderr
 		});
 
 		throw new ResourceError({
@@ -381,6 +491,7 @@ const ensureSearchPathsExist = async (
 const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> => {
 	const resourceKey = resourceNameToKey(config.name);
 	const localPath = path.join(config.resourcesDirectoryPath, resourceKey);
+	const cloneStrategy = config.cloneStrategy ?? 'git';
 
 	return Metrics.span(
 		'resource.git.ensure',
@@ -391,16 +502,29 @@ const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> =
 				Metrics.info('resource.git.update', {
 					name: config.name,
 					branch: config.branch,
-					repoSubPaths: config.repoSubPaths
-				});
-				await gitUpdate({
-					localAbsolutePath: localPath,
-					branch: config.branch,
 					repoSubPaths: config.repoSubPaths,
-					quiet: config.quiet
+					cloneStrategy
 				});
-				if (config.repoSubPaths.length > 0) {
-					await ensureSearchPathsExist(localPath, config.repoSubPaths);
+				if (cloneStrategy === 'gitpick') {
+					await gitpickClone({
+						repoUrl: config.url,
+						repoBranch: config.branch,
+						repoSubPaths: config.repoSubPaths,
+						localAbsolutePath: localPath,
+						quiet: config.quiet,
+						overwrite: true
+					});
+				} else {
+					await gitUpdate({
+						localAbsolutePath: localPath,
+						branch: config.branch,
+						repoSubPaths: config.repoSubPaths,
+						quiet: config.quiet,
+						repoUrl: config.url
+					});
+					if (config.repoSubPaths.length > 0) {
+						await ensureSearchPathsExist(localPath, config.repoSubPaths);
+					}
 				}
 				return localPath;
 			}
@@ -408,7 +532,8 @@ const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> =
 			Metrics.info('resource.git.clone', {
 				name: config.name,
 				branch: config.branch,
-				repoSubPaths: config.repoSubPaths
+				repoSubPaths: config.repoSubPaths,
+				cloneStrategy
 			});
 
 			try {
@@ -421,15 +546,26 @@ const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> =
 				});
 			}
 
-			await gitClone({
-				repoUrl: config.url,
-				repoBranch: config.branch,
-				repoSubPaths: config.repoSubPaths,
-				localAbsolutePath: localPath,
-				quiet: config.quiet
-			});
-			if (config.repoSubPaths.length > 0) {
-				await ensureSearchPathsExist(localPath, config.repoSubPaths);
+			if (cloneStrategy === 'gitpick') {
+				await gitpickClone({
+					repoUrl: config.url,
+					repoBranch: config.branch,
+					repoSubPaths: config.repoSubPaths,
+					localAbsolutePath: localPath,
+					quiet: config.quiet,
+					overwrite: false
+				});
+			} else {
+				await gitClone({
+					repoUrl: config.url,
+					repoBranch: config.branch,
+					repoSubPaths: config.repoSubPaths,
+					localAbsolutePath: localPath,
+					quiet: config.quiet
+				});
+				if (config.repoSubPaths.length > 0) {
+					await ensureSearchPathsExist(localPath, config.repoSubPaths);
+				}
 			}
 
 			return localPath;
