@@ -17,7 +17,9 @@ NC='\033[0m' # No Color
 
 # Function to get current status from status.md
 get_status() {
-    grep -oP '(?<=Current Status: `)[^`]+' "$STATUS_FILE" 2>/dev/null || echo "unknown"
+    # Extract status from "## Current Status: `running`" format
+    # Using sed for macOS compatibility (no -P flag needed)
+    grep "Current Status:" "$STATUS_FILE" 2>/dev/null | sed 's/.*`\([^`]*\)`.*/\1/' || echo "unknown"
 }
 
 # Function to print with timestamp
