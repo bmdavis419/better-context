@@ -12,7 +12,8 @@ let daytonaInstance: Daytona | null = null;
 const BTCA_SNAPSHOT_NAME = 'btca-sandbox';
 
 // Auto-stop interval in minutes (sandbox stops after this period of inactivity)
-const AUTO_STOP_INTERVAL = 5;
+export const SANDBOX_IDLE_MINUTES = 2;
+const AUTO_STOP_INTERVAL = SANDBOX_IDLE_MINUTES;
 
 // Server port for btca serve
 const BTCA_SERVER_PORT = 3000;
@@ -87,6 +88,29 @@ async function waitForBtcaServer(sandbox: Sandbox, maxRetries = 15): Promise<boo
 		}
 	}
 	return false;
+}
+
+const normalizeResourceNames = (names: string[]) =>
+	[...new Set(names)].sort((a, b) => a.localeCompare(b));
+
+async function fetchSandboxResourceNames(serverUrl: string): Promise<string[] | null> {
+	try {
+		const response = await fetch(`${serverUrl}/resources`);
+		if (!response.ok) return null;
+		const data = (await response.json()) as { resources?: { name: string }[] };
+		if (!data?.resources) return null;
+		return data.resources.map((resource) => resource.name);
+	} catch {
+		return null;
+	}
+}
+
+function resourcesMatch(expected: string[], actual: string[] | null): boolean {
+	if (!actual) return false;
+	const expectedNormalized = normalizeResourceNames(expected);
+	const actualNormalized = normalizeResourceNames(actual);
+	if (expectedNormalized.length !== actualNormalized.length) return false;
+	return expectedNormalized.every((name, index) => name === actualNormalized[index]);
 }
 
 /**
@@ -178,6 +202,7 @@ async function createSandbox(
  */
 async function startSandbox(
 	sandboxId: string,
+	resources: ResourceConfig[],
 	onStatus?: (status: SandboxStatus) => void
 ): Promise<string> {
 	const daytona = getDaytona();
@@ -186,6 +211,10 @@ async function startSandbox(
 
 	const sandbox = await daytona.get(sandboxId);
 	await sandbox.start(60); // 60 second timeout
+
+	// Re-upload config in case resources changed while stopped
+	const btcaConfig = generateBtcaConfig(resources);
+	await sandbox.fs.uploadFile(Buffer.from(btcaConfig), '/root/btca.config.jsonc');
 
 	// Re-start the btca server (it won't be running after stop)
 	const sandboxSessionId = 'btca-server-session';
@@ -272,6 +301,53 @@ export async function stopOtherSandboxes(
 }
 
 /**
+ * Ensure a sandbox is ready and optionally persist sandboxId when created.
+ */
+export async function ensureSandboxReadyForRecord(args: {
+	sandboxId: string | undefined;
+	resources: ResourceConfig[];
+	onStatus?: (status: SandboxStatus) => void;
+	onPersist: (sandboxId: string) => Promise<void>;
+}): Promise<string> {
+	const { sandboxId, resources, onStatus, onPersist } = args;
+
+	// No sandbox exists - create one
+	if (!sandboxId) {
+		const result = await createSandbox(resources, onStatus);
+		await onPersist(result.sandboxId);
+		return result.serverUrl;
+	}
+
+	// Sandbox exists - check its state from Daytona
+	const info = await getSandboxInfo(sandboxId);
+
+	if (info.state === 'started' && info.serverUrl) {
+		const desiredResourceNames = resources.map((resource) => resource.name);
+		const currentResources = await fetchSandboxResourceNames(info.serverUrl);
+		if (resourcesMatch(desiredResourceNames, currentResources)) {
+			onStatus?.('ready');
+			return info.serverUrl;
+		}
+
+		// Resources changed; rebuild sandbox to refresh config
+		await deleteSandbox(sandboxId);
+		const result = await createSandbox(resources, onStatus);
+		await onPersist(result.sandboxId);
+		return result.serverUrl;
+	}
+
+	if (info.state === 'stopped') {
+		// Start the stopped sandbox
+		return await startSandbox(sandboxId, resources, onStatus);
+	}
+
+	// Unknown state - sandbox may have been deleted, create a new one
+	const result = await createSandbox(resources, onStatus);
+	await onPersist(result.sandboxId);
+	return result.serverUrl;
+}
+
+/**
  * Ensure a sandbox is ready for a thread.
  * - If thread has no sandbox, create one
  * - If sandbox exists but is stopped, start it
@@ -287,40 +363,15 @@ export async function ensureSandboxReady(
 ): Promise<string> {
 	const convex = getConvexClient();
 
-	// No sandbox exists - create one
-	if (!sandboxId) {
-		const result = await createSandbox(resources, onStatus);
-
-		// Save sandbox ID to thread
-		await convex.mutation(api.threads.setSandboxId, {
-			threadId,
-			sandboxId: result.sandboxId
-		});
-
-		return result.serverUrl;
-	}
-
-	// Sandbox exists - check its state from Daytona
-	const info = await getSandboxInfo(sandboxId);
-
-	if (info.state === 'started' && info.serverUrl) {
-		onStatus?.('ready');
-		return info.serverUrl;
-	}
-
-	if (info.state === 'stopped') {
-		// Start the stopped sandbox
-		return await startSandbox(sandboxId, onStatus);
-	}
-
-	// Unknown state - sandbox may have been deleted, create a new one
-	const result = await createSandbox(resources, onStatus);
-
-	// Update sandbox ID in thread
-	await convex.mutation(api.threads.setSandboxId, {
-		threadId,
-		sandboxId: result.sandboxId
+	return ensureSandboxReadyForRecord({
+		sandboxId,
+		resources,
+		onStatus,
+		onPersist: async (newSandboxId) => {
+			await convex.mutation(api.threads.setSandboxId, {
+				threadId,
+				sandboxId: newSandboxId
+			});
+		}
 	});
-
-	return result.serverUrl;
 }

@@ -67,3 +67,48 @@ export const get = query({
 		return await ctx.db.get(args.id);
 	}
 });
+
+/**
+ * Update sandbox activity timestamp for usage tracking
+ */
+export const updateSandboxActivity = mutation({
+	args: {
+		userId: v.id('users'),
+		timestamp: v.number()
+	},
+	handler: async (ctx, args) => {
+		const user = await ctx.db.get(args.userId);
+		if (!user) throw new Error('User not found');
+		await ctx.db.patch(args.userId, { sandboxLastActiveAt: args.timestamp });
+	}
+});
+
+/**
+ * Store MCP sandbox id for a user
+ */
+export const setMcpSandboxId = mutation({
+	args: {
+		userId: v.id('users'),
+		sandboxId: v.string()
+	},
+	handler: async (ctx, args) => {
+		const user = await ctx.db.get(args.userId);
+		if (!user) throw new Error('User not found');
+		await ctx.db.patch(args.userId, { mcpSandboxId: args.sandboxId });
+	}
+});
+
+/**
+ * Touch MCP usage timestamp
+ */
+export const touchMcpUsage = mutation({
+	args: {
+		userId: v.id('users'),
+		timestamp: v.number()
+	},
+	handler: async (ctx, args) => {
+		const user = await ctx.db.get(args.userId);
+		if (!user) throw new Error('User not found');
+		await ctx.db.patch(args.userId, { mcpLastUsedAt: args.timestamp });
+	}
+});

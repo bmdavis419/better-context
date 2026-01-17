@@ -372,6 +372,7 @@
 				</div>
 			{/if}
 		</div>
+		<div class="h-24"></div>
 	</div>
 
 	<!-- Jump to bottom button -->

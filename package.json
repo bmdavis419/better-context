@@ -50,9 +50,9 @@
 		"clean": "find . -type d \\( -name node_modules -o -name .svelte-kit -o -name .turbo -o -name .vercel \\) -prune -exec rm -rf {} +"
 	},
 	"devDependencies": {
-		"@opentui/solid": "^0.1.72",
+		"@opentui/solid": "^0.1.74",
 		"@types/bun": "^1.3.6",
-		"@typescript/native-preview": "^7.0.0-dev.20260114.1",
+		"@typescript/native-preview": "^7.0.0-dev.20260116.1",
 		"turbo": "^2.7.4",
 		"typescript": "^5.9.3",
 		"prettier": "^3.8.0",

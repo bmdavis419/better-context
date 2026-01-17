@@ -100,7 +100,9 @@ Available resources: svelte, effect`;
 			btca. Set your model via CLI or edit the config file directly.
 		</p>
 		<p class="mt-2 max-w-2xl text-sm bc-prose">
-			Providers require credentials configured in OpenCode. Run <code class="bc-inlineCode">opencode auth</code>
+			Providers require credentials configured in OpenCode. Run <code class="bc-inlineCode"
+				>opencode auth</code
+			>
 			to connect a provider, or edit your OpenCode config directly.
 		</p>
 

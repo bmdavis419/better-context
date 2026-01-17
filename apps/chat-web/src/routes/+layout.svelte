@@ -1,11 +1,24 @@
 <script lang="ts">
 	import './layout.css';
-	import { Bot, Moon, Sun, Github, User, LogOut, Settings, Loader2 } from '@lucide/svelte';
+	import {
+		Bot,
+		Moon,
+		Sun,
+		Github,
+		User,
+		LogOut,
+		Settings,
+		Loader2,
+		BarChart3,
+		CreditCard,
+		Key
+	} from '@lucide/svelte';
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { onMount } from 'svelte';
 	import { initializeClerk } from '$lib/clerk';
 	import { convex } from '$lib/convex';
 	import { setupConvex } from 'convex-svelte';
+	import { untrack } from 'svelte';
 	import {
 		setAuthState,
 		getAuthState,
@@ -14,6 +27,7 @@
 		openSignIn,
 		openUserProfile
 	} from '$lib/stores/auth.svelte';
+	import { setBillingStore } from '$lib/stores/billing.svelte';
 	import { api } from '../convex/_generated/api';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
@@ -24,6 +38,7 @@
 
 	const themeStore = setThemeStore();
 	const auth = getAuthState();
+	const billingStore = setBillingStore();
 
 	let isInitializing = $state(true);
 	let showUserMenu = $state(false);
@@ -70,6 +85,11 @@
 		}
 	});
 
+	$effect(() => {
+		const userId = auth.convexUserId;
+		untrack(() => billingStore.setUserId(userId));
+	});
+
 	function handleSignOut() {
 		showUserMenu = false;
 		signOut();
@@ -106,6 +126,11 @@
 			</a>
 
 			<div class="flex items-center gap-2">
+				{#if billingStore.isSubscribed}
+					<a href="/settings/usage" class="bc-chip hidden sm:inline-flex"> Usage </a>
+				{:else}
+					<a href="/pricing" class="bc-chip hidden sm:inline-flex"> Pricing </a>
+				{/if}
 				<a
 					class="bc-chip"
 					href="https://github.com/bmdavis419/better-context"
@@ -177,6 +202,30 @@
 										<User size={16} />
 										Profile
 									</button>
+									<a
+										href="/settings/usage"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-[hsl(var(--bc-bg-muted))]"
+										onclick={() => (showUserMenu = false)}
+									>
+										<BarChart3 size={16} />
+										Usage
+									</a>
+									<a
+										href="/settings/billing"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-[hsl(var(--bc-bg-muted))]"
+										onclick={() => (showUserMenu = false)}
+									>
+										<CreditCard size={16} />
+										Billing
+									</a>
+									<a
+										href="/settings/api-keys"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-[hsl(var(--bc-bg-muted))]"
+										onclick={() => (showUserMenu = false)}
+									>
+										<Key size={16} />
+										MCP
+									</a>
 									<a
 										href="/settings/resources"
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-[hsl(var(--bc-bg-muted))]"

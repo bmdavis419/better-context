@@ -48,10 +48,7 @@ function mergeResources(cliResources: string[], mentionedResources: string[]): s
 
 type AvailableResource = { name: string };
 
-function resolveResourceName(
-	input: string,
-	available: AvailableResource[]
-): string | null {
+function resolveResourceName(input: string, available: AvailableResource[]): string | null {
 	const target = input.toLowerCase();
 	const direct = available.find((r) => r.name.toLowerCase() === target);
 	if (direct) return direct.name;
@@ -132,7 +129,7 @@ export const askCommand = new Command('ask')
 				if (normalized.invalid.length > 0) {
 					console.error(
 						`Error: Unknown resource(s): ${normalized.invalid.join(', ')}. ` +
-							'Configure resources in your btca config.'
+						'Configure resources in your btca config.'
 					);
 					process.exit(1);
 				}

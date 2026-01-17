@@ -1,4 +1,4 @@
-import { error, json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../../../convex/_generated/api';
@@ -12,6 +12,13 @@ import {
 	type ResourceConfig,
 	type SandboxStatus
 } from '$lib/server/sandbox-service';
+import { AutumnService } from '$lib/server/autumn';
+import {
+	estimateSandboxUsageHours,
+	estimateTokensFromChars,
+	estimateTokensFromText
+} from '$lib/server/usage';
+import { SUPPORT_URL } from '$lib/billing/plans';
 import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
 // Request body schema - simplified since server fetches thread state from Convex
@@ -70,8 +77,58 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	);
 	const questionWithHistory = formatConversationHistory(threadMessages, message);
 
+	const user = await convex.query(api.users.get, { id: userId as Id<'users'> });
+	if (!user) {
+		throw error(404, 'User not found');
+	}
+
+	const autumn = AutumnService.get();
+	const customer = await autumn.getOrCreateCustomer({
+		clerkId: user.clerkId,
+		email: user.email,
+		name: user.name ?? null
+	});
+	const activeProduct = autumn.getActiveProduct(customer.products);
+	if (!activeProduct) {
+		throw error(402, 'Subscription required to use btca Chat. Visit /pricing to subscribe.');
+	}
+
+	const now = Date.now();
+	const inputTokens = estimateTokensFromText(questionWithHistory);
+
+	const availableResources = await convex.query(api.resources.listAvailable, {
+		userId: userId as Id<'users'>
+	});
+	const allResources = [...availableResources.global, ...availableResources.custom];
+
 	// Merge resources
 	const updatedResources = [...new Set([...threadResources, ...resources])];
+
+	const sandboxUsageHours =
+		updatedResources.length > 0
+			? estimateSandboxUsageHours({
+					lastActiveAt: user.sandboxLastActiveAt,
+					now
+				})
+			: 0;
+
+	const usageCheck = await autumn.ensureUsageAvailable({
+		customerId: customer.id ?? user.clerkId,
+		requiredTokensIn: inputTokens > 0 ? inputTokens : undefined,
+		requiredTokensOut: 1,
+		requiredSandboxHours: sandboxUsageHours > 0 ? sandboxUsageHours : undefined
+	});
+
+	if (!usageCheck.ok) {
+		throw error(402, `Monthly usage limit reached. Contact ${SUPPORT_URL} to raise limits.`);
+	}
+
+	if (updatedResources.length > 0) {
+		await convex.mutation(api.users.updateSandboxActivity, {
+			userId: userId as Id<'users'>,
+			timestamp: now
+		});
+	}
 
 	// Add user message to Convex
 	await convex.mutation(api.messages.addUserMessage, {
@@ -88,17 +145,6 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			try {
 				// Stop other sandboxes (enforce 1 active rule)
 				await stopOtherSandboxes(userId as Id<'users'>, threadId);
-
-				// Get resource configs from Convex
-				const user = await convex.query(api.users.get, { id: userId as Id<'users'> });
-				if (!user) {
-					throw new Error('User not found');
-				}
-
-				const availableResources = await convex.query(api.resources.listAvailable, {
-					userId: userId as Id<'users'>
-				});
-				const allResources = [...availableResources.global, ...availableResources.custom];
 
 				// Build resource configs for the resources being used
 				const resourceConfigs: ResourceConfig[] = [];
@@ -163,6 +209,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				// Track chunks for the assistant message
 				const chunksById = new Map<string, BtcaChunk>();
 				const chunkOrder: string[] = [];
+				let outputCharCount = 0;
+				let reasoningCharCount = 0;
 
 				const reader = response.body.getReader();
 				const decoder = new TextDecoder();
@@ -186,6 +234,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 						} else if (line === '' && eventData) {
 							try {
 								const event = JSON.parse(eventData) as BtcaStreamEvent;
+								if (event.type === 'text.delta') {
+									outputCharCount += event.delta.length;
+								} else if (event.type === 'reasoning.delta') {
+									reasoningCharCount += event.delta.length;
+								}
 								const update = processStreamEvent(event, chunksById, chunkOrder);
 								if (update) {
 									controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`));
@@ -213,6 +266,18 @@ export const POST: RequestHandler = async ({ params, request }) => {
 					threadId,
 					content: assistantContent
 				});
+
+				const outputTokens = estimateTokensFromChars(outputCharCount + reasoningCharCount);
+				try {
+					await autumn.trackUsage({
+						customerId: customer.id ?? user.clerkId,
+						tokensIn: inputTokens,
+						tokensOut: outputTokens,
+						sandboxHours: sandboxUsageHours
+					});
+				} catch (trackError) {
+					console.error('Failed to track usage:', trackError);
+				}
 
 				// Send done event
 				controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));

@@ -8,12 +8,15 @@
 	import { api } from '../../../convex/_generated/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import type { Id } from '../../../convex/_generated/dataModel';
+	import { getBillingStore } from '$lib/stores/billing.svelte';
+	import { SUPPORT_URL } from '$lib/billing/plans';
 
 	// Get thread ID from route params - can be 'new' for a fresh thread
 	const routeId = $derived((page.params as { id: string }).id);
 	const isNewThread = $derived(routeId === 'new');
 	const threadId = $derived(isNewThread ? null : (routeId as Id<'threads'>));
 	const auth = getAuthState();
+	const billingStore = getBillingStore();
 	const client = useConvexClient();
 
 	// Convex queries - only query if we have a real thread ID
@@ -46,6 +49,7 @@
 		...(resourcesQuery?.data?.global ?? []),
 		...(resourcesQuery?.data?.custom ?? [])
 	]);
+	const canChat = $derived(billingStore.isSubscribed && !billingStore.isOverLimit);
 
 	// Redirect if not authenticated
 	$effect(() => {
@@ -83,6 +87,14 @@
 
 	async function sendMessage() {
 		if (!auth.convexUserId || isStreaming || !inputValue.trim()) return;
+		if (!canChat) {
+			alert(
+				billingStore.isSubscribed
+					? `Usage limits reached. Contact ${SUPPORT_URL}.`
+					: 'Subscription required. Visit /pricing to subscribe.'
+			);
+			return;
+		}
 
 		// For existing threads, we need the thread to exist
 		if (!isNewThread && !thread) return;
@@ -345,6 +357,11 @@
 	}
 
 	function getPlaceholder(): string {
+		if (!canChat) {
+			return billingStore.isSubscribed
+				? 'Usage limit reached. Contact support to continue.'
+				: 'Subscribe to start chatting';
+		}
 		if (isStreaming && cancelState === 'pending') return 'Press Escape again to cancel';
 		if (isStreaming) return 'Press Escape to cancel';
 		return '@resource question...';
@@ -463,7 +480,7 @@
 						onclick={handleInputChange}
 						onkeydown={handleKeydown}
 						onscroll={syncScroll}
-						disabled={isStreaming}
+						disabled={isStreaming || !canChat}
 						rows="2"
 						placeholder={getPlaceholder()}
 					></textarea>
@@ -473,7 +490,7 @@
 					type="button"
 					class="send-btn"
 					onclick={sendMessage}
-					disabled={isStreaming || !inputValue.trim()}
+					disabled={isStreaming || !inputValue.trim() || !canChat}
 				>
 					{#if isStreaming}
 						<Loader2 size={18} class="animate-spin" />
@@ -495,6 +512,21 @@
 					<button type="button" class="text-xs hover:underline" onclick={clearChat}>Clear</button>
 				{/if}
 			</div>
+
+			{#if !billingStore.isSubscribed}
+				<div
+					class="bc-card mt-3 border-[hsl(var(--bc-warning))] bg-[hsl(var(--bc-surface-2))] p-3 text-xs"
+				>
+					Subscription required to use chat. <a href="/pricing">See pricing</a>.
+				</div>
+			{:else if billingStore.isOverLimit}
+				<div
+					class="bc-card mt-3 border-[hsl(var(--bc-error))] bg-[hsl(var(--bc-surface-2))] p-3 text-xs"
+				>
+					You've hit your monthly usage limits. Contact
+					<a href={SUPPORT_URL} target="_blank" rel="noreferrer">{SUPPORT_URL}</a> to raise them.
+				</div>
+			{/if}
 
 			{#if availableResources.length > 0 && !inputValue.includes('@') && !threadResources.length}
 				<div class="bc-muted mt-1 text-xs">

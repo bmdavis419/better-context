@@ -4,18 +4,37 @@ const THEME_KEY = Symbol('theme');
 
 type Theme = 'light' | 'dark';
 
-export function createThemeStore() {
-	let theme = $state<Theme>('light');
+type ApplyThemeOptions = {
+	persist?: boolean;
+};
 
-	// Initialize from localStorage or system preference
-	if (typeof window !== 'undefined') {
-		const stored = localStorage.getItem('theme') as Theme | null;
-		const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-		theme = stored === 'light' || stored === 'dark' ? stored : prefersDark ? 'dark' : 'light';
-		updateDocument(theme);
+class ThemeStoreState {
+	private _theme = $state<Theme>('light');
+
+	constructor() {
+		if (typeof window !== 'undefined') {
+			const stored = localStorage.getItem('theme') as Theme | null;
+			const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+			const initialTheme =
+				stored === 'light' || stored === 'dark' ? stored : prefersDark ? 'dark' : 'light';
+			this.applyTheme(initialTheme, { persist: false });
+		}
 	}
 
-	function updateDocument(newTheme: Theme) {
+	get theme() {
+		return this._theme;
+	}
+
+	toggle() {
+		this.applyTheme(this._theme === 'dark' ? 'light' : 'dark');
+	}
+
+	set(newTheme: Theme) {
+		this.applyTheme(newTheme);
+	}
+
+	private applyTheme(newTheme: Theme, options: ApplyThemeOptions = {}) {
+		this._theme = newTheme;
 		if (typeof document !== 'undefined') {
 			if (newTheme === 'dark') {
 				document.documentElement.classList.add('dark');
@@ -23,31 +42,15 @@ export function createThemeStore() {
 				document.documentElement.classList.remove('dark');
 			}
 		}
-	}
 
-	function toggle() {
-		theme = theme === 'dark' ? 'light' : 'dark';
-		updateDocument(theme);
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem('theme', theme);
+		if (options.persist !== false && typeof localStorage !== 'undefined') {
+			localStorage.setItem('theme', newTheme);
 		}
 	}
+}
 
-	function set(newTheme: Theme) {
-		theme = newTheme;
-		updateDocument(theme);
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem('theme', theme);
-		}
-	}
-
-	return {
-		get theme() {
-			return theme;
-		},
-		toggle,
-		set
-	};
+export function createThemeStore() {
+	return new ThemeStoreState();
 }
 
 export type ThemeStore = ReturnType<typeof createThemeStore>;

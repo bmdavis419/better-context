@@ -42,8 +42,24 @@ export default defineSchema({
 		email: v.string(),
 		name: v.optional(v.string()),
 		imageUrl: v.optional(v.string()),
+		sandboxLastActiveAt: v.optional(v.number()),
+		mcpSandboxId: v.optional(v.string()),
+		mcpLastUsedAt: v.optional(v.number()),
 		createdAt: v.number()
 	}).index('by_clerk_id', ['clerkId']),
+
+	// API keys for MCP access
+	apiKeys: defineTable({
+		userId: v.id('users'),
+		name: v.string(),
+		keyHash: v.string(),
+		keyPrefix: v.string(),
+		createdAt: v.number(),
+		lastUsedAt: v.optional(v.number()),
+		revokedAt: v.optional(v.number())
+	})
+		.index('by_user', ['userId'])
+		.index('by_key_hash', ['keyHash']),
 
 	// Global resource catalog (admin-managed)
 	globalResources: defineTable({

@@ -16,6 +16,9 @@ This SvelteKit application provides a web-based chat interface for btca (the Bet
 - **Resource Mentions**: Use @mentions to specify which codebases to query (e.g., @svelte, @tailwind)
 - **Dark/Light Theme**: Toggle between themes
 - **Mobile Responsive**: Works on desktop and mobile devices
+- **Subscription Billing**: Autumn (Stripe wrapper) with monthly usage budgets
+- **Usage Dashboard**: Tokens + sandbox time shown as monthly percentages
+- **MCP API Access**: API keys and HTTP endpoint for external clients
 
 ## Prerequisites
 
@@ -23,6 +26,7 @@ This SvelteKit application provides a web-based chat interface for btca (the Bet
 2. **Daytona API Key**: Get your API key from the Daytona dashboard
 3. **OpenCode API Key**: Required for btca's AI provider
 4. **btca Snapshot**: The `btca-sandbox` snapshot must exist in Daytona (created using `apps/sandbox/src/snapshot.ts`)
+5. **Autumn Secret Key**: Required for billing and usage tracking
 
 ## Setup
 
@@ -43,6 +47,7 @@ This SvelteKit application provides a web-based chat interface for btca (the Bet
    ```
    DAYTONA_API_KEY=your_daytona_api_key
    OPENCODE_API_KEY=your_opencode_api_key
+   AUTUMN_SECRET_KEY=your_autumn_secret_key
    ```
 
 3. **Create the btca snapshot** (if not already created):
@@ -83,6 +88,49 @@ bun start
 4. **Switch Sessions**: Click on different sessions in the sidebar to switch between conversations.
 
 5. **Destroy Sessions**: Click the trash icon to destroy a session and its sandbox.
+
+## Billing & Usage
+
+- Pricing: `/pricing`
+- Billing: `/settings/billing`
+- Usage: `/settings/usage`
+- API Keys: `/settings/api-keys`
+
+Usage is tracked monthly across tokens in/out and sandbox hours. The UI only shows percentages remaining. If limits are reached, users are prompted to contact https://x.com/davis7.
+
+## MCP Server
+
+The MCP server lives at:
+
+```
+POST /api/mcp
+```
+
+Authentication:
+
+- `Authorization: Bearer <api-key>`
+
+Supported tools:
+
+- `question` (non-stream)
+- `question_stream` (SSE)
+
+## Example MCP Request
+
+```
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "tools/call",
+  "params": {
+    "name": "question",
+    "arguments": {
+      "question": "How do I create a reactive variable in Svelte?",
+      "resources": ["svelte"]
+    }
+  }
+}
+```
 
 ## Architecture
 

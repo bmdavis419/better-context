@@ -90,7 +90,10 @@ export namespace Agent {
 			model: { provider: string; model: string };
 		}>;
 
-		listProviders: () => Promise<{ all: { id: string; models: Record<string, unknown> }[]; connected: string[] }>;
+		listProviders: () => Promise<{
+			all: { id: string; models: Record<string, unknown> }[];
+			connected: string[];
+		}>;
 	};
 
 	const buildOpenCodeConfig = (args: {

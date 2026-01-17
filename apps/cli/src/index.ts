@@ -11,7 +11,7 @@ import packageJson from '../package.json';
 // The __VERSION__ global is replaced with the actual version string during compilation
 // Falls back to package.json for dev mode, or 0.0.0 if unavailable
 declare const __VERSION__: string;
-const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : packageJson.version ?? '0.0.0';
+const VERSION = typeof __VERSION__ !== 'undefined' ? __VERSION__ : (packageJson.version ?? '0.0.0');
 
 const program = new Command()
 	.name('btca')

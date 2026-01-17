@@ -3,6 +3,19 @@
   "resources": [
     {
       "type": "git",
+      "name": "runed",
+      "url": "https://github.com/svecosystem/runed",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "autumn",
+      "url": "https://github.com/useautumn/typescript",
+      "branch": "main",
+      "specialNotes": "this is the TS SDK and cli for autumn. the cli is in atmn/ and the important sdk stuff is in package/"
+    },
+    {
+      "type": "git",
       "name": "daytona",
       "url": "https://github.com/daytonaio/daytona",
       "branch": "main",

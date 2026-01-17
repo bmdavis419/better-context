@@ -280,9 +280,7 @@ export const validateSearchPath = (searchPath: string | undefined): ValidationRe
 	return ok();
 };
 
-export const validateSearchPaths = (
-	searchPaths: string[] | undefined
-): ValidationResult => {
+export const validateSearchPaths = (searchPaths: string[] | undefined): ValidationResult => {
 	if (!searchPaths) return ok();
 	if (searchPaths.length === 0) return fail('searchPaths must include at least one path');
 

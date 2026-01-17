@@ -73,10 +73,10 @@ const BtcaCollectionInfoSchema = z.object({
 
 const BtcaToolStateSchema = z.object({
 	status: z.enum(['pending', 'running', 'completed', 'error']),
-	input: z.record(z.unknown()).optional(),
+	input: z.record(z.string(), z.unknown()).optional(),
 	output: z.string().optional(),
 	title: z.string().optional(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 	error: z.string().optional(),
 	raw: z.string().optional(),
 	time: z
