@@ -11,6 +11,16 @@
 > 5. Update `status.md` with notes
 > 6. Exit to let the loop restart
 >
+> **⚠️ IMPORTANT: No data migration needed!**
+>
+> This app has NOT shipped yet. There is NO production data to preserve.
+> You can freely:
+>
+> - Delete and recreate tables
+> - Change schemas without migration scripts
+> - Wipe existing dev data
+> - Just make the new schema work, don't worry about backwards compatibility
+>
 > **Use btca liberally!** Available resources:
 >
 > - `btca ask -r convexDocs -q "..."` - Convex documentation
@@ -125,19 +135,21 @@ threads: defineTable({
   .index('by_instance', ['instanceId']),
 ```
 
-### 1.4 Keep existing tables
+### 1.4 Other tables
 
-- `messages` - no changes needed
-- `threadResources` - no changes needed
-- `globalResources` - no changes needed
-- `userResources` - rename to reference `instanceId`
-- `apiKeys` - rename `userId` to `instanceId`
+Just rewrite the entire schema from scratch. No need to preserve anything - DB is empty.
+
+- `messages` - keep as-is
+- `threadResources` - keep as-is
+- `globalResources` - keep as-is
+- `userResources` - change `userId` to `instanceId`
+- `apiKeys` - change `userId` to `instanceId`
 
 ### Tasks
 
-- [ ] Create new schema file with updated tables
-- [ ] Write migration script to transform existing data
-- [ ] Test migration on dev deployment
+- [ ] Rewrite `convex/schema.ts` with the new schema (just replace the whole file)
+- [ ] Delete old convex function files that reference old schema
+- [ ] Verify schema deploys cleanly
 
 ---
 
@@ -471,16 +483,11 @@ CLERK_WEBHOOK_SECRET=whsec_...
 
 ---
 
-## Phase 11: Testing & Migration
+## Phase 11: Testing
 
-### 11.1 Data Migration
+### 11.1 Testing Checklist
 
-1. Export existing users/threads/messages
-2. Transform to new schema
-3. Create instance records for existing users
-4. Import to new deployment
-
-### 11.2 Testing Checklist
+No data migration needed - DB is empty, app hasn't shipped.
 
 - [ ] New user signup → instance provisioned
 - [ ] Instance wake/stop/update
@@ -491,13 +498,12 @@ CLERK_WEBHOOK_SECRET=whsec_...
 - [ ] Error handling (instance errors, stream errors)
 - [ ] Multi-device sync
 
-### 11.3 Rollout Plan
+### 11.2 Rollout Plan
 
 1. Deploy to staging
 2. Test all flows
-3. Migrate production data
-4. Deploy to production
-5. Monitor for issues
+3. Deploy to production (no data to migrate)
+4. Monitor for issues
 
 ---
 
@@ -640,9 +646,9 @@ CLIENT_ORIGIN=https://your-app.com
 
 - **Mitigation**: Stream responses, don't buffer entire response
 
-### Risk: Data migration issues
+### Risk: Schema deployment issues
 
-- **Mitigation**: Test migration on staging first, keep backups
+- **Mitigation**: DB is empty, just redeploy if needed
 
 ### Risk: Billing accuracy during transition
 
