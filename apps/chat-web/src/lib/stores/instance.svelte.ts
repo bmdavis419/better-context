@@ -61,7 +61,7 @@ class InstanceStore {
 	}
 
 	get error() {
-		return this._error ?? (this._query.error?.message ?? null);
+		return this._error ?? this._query.error?.message ?? null;
 	}
 
 	get isLoading() {
