@@ -83,7 +83,6 @@
 		if (!confirm('Revoke this API key?')) return;
 		try {
 			await client.mutation(api.apiKeys.revoke, {
-				userId: auth.convexUserId,
 				keyId: keyId as any
 			});
 		} catch (err) {

@@ -65,29 +65,27 @@ async function resolveAuth(request: Request) {
 	await convex.mutation(api.apiKeys.touchLastUsed, {
 		keyId: validation.keyId as Id<'apiKeys'>
 	});
-	const user = await convex.query(api.users.get, { id: validation.userId });
-	if (!user) {
+	const instance = await convex.query(api.users.get, { id: validation.userId });
+	if (!instance) {
 		raise(404, 'User not found');
 	}
-	return { apiKey, user, userId: validation.userId };
+	return { apiKey, instance, userId: validation.userId };
 }
 
 async function ensurePaidAndUsage(args: {
-	user: {
+	instance: {
 		clerkId: string;
-		email: string;
-		name?: string | null;
-		sandboxLastActiveAt?: number | null;
+		lastActiveAt?: number | null;
 	};
-	convexUserId: Id<'users'>;
+	convexUserId: Id<'instances'>;
 	question: string;
 	hasResources: boolean;
 }) {
 	const autumn = AutumnService.get();
 	const customer = await autumn.getOrCreateCustomer({
-		clerkId: args.user.clerkId,
-		email: args.user.email,
-		name: args.user.name ?? null
+		clerkId: args.instance.clerkId,
+		email: null,
+		name: null
 	});
 	const activeProduct = autumn.getActiveProduct(customer.products);
 	if (!activeProduct) {
@@ -98,13 +96,13 @@ async function ensurePaidAndUsage(args: {
 	const inputTokens = estimateTokensFromText(args.question);
 	const sandboxUsageHours = args.hasResources
 		? estimateSandboxUsageHours({
-				lastActiveAt: args.user.sandboxLastActiveAt,
+				lastActiveAt: args.instance.lastActiveAt,
 				now
 			})
 		: 0;
 
 	const usageCheck = await autumn.ensureUsageAvailable({
-		customerId: customer.id ?? args.user.clerkId,
+		customerId: customer.id ?? args.instance.clerkId,
 		requiredTokensIn: inputTokens > 0 ? inputTokens : undefined,
 		requiredTokensOut: 1,
 		requiredSandboxHours: sandboxUsageHours > 0 ? sandboxUsageHours : undefined
@@ -118,24 +116,23 @@ async function ensurePaidAndUsage(args: {
 	if (args.hasResources) {
 		await convex.mutation(api.users.updateSandboxActivity, {
 			userId: args.convexUserId,
-			timestamp: now
+			sandboxId: ''
 		});
 	}
 	await convex.mutation(api.users.touchMcpUsage, {
-		userId: args.convexUserId,
-		timestamp: now
+		userId: args.convexUserId
 	});
 
 	return {
 		autumn,
-		customerId: customer.id ?? args.user.clerkId,
+		customerId: customer.id ?? args.instance.clerkId,
 		inputTokens,
 		sandboxUsageHours
 	};
 }
 
 async function buildResourceConfigs(args: {
-	userId: Id<'users'>;
+	userId: Id<'instances'>;
 	resourceNames: string[];
 }): Promise<{ resourceConfigs: ResourceConfig[]; resourceNames: string[] }> {
 	const convex = getConvexClient();
@@ -170,11 +167,11 @@ async function prepareQuestionContext(args: {
 	question: string;
 	resources: string[];
 }) {
-	const convexUserId = args.auth.userId as Id<'users'>;
+	const convexUserId = args.auth.userId as Id<'instances'>;
 
 	const convex = getConvexClient();
-	const userRecord = await convex.query(api.users.get, { id: convexUserId });
-	if (!userRecord) {
+	const instanceRecord = await convex.query(api.users.get, { id: convexUserId });
+	if (!instanceRecord) {
 		raise(404, 'User not found');
 	}
 
@@ -189,7 +186,7 @@ async function prepareQuestionContext(args: {
 	}
 
 	const usageContext = await ensurePaidAndUsage({
-		user: args.auth.user,
+		instance: args.auth.instance,
 		convexUserId,
 		question: args.question,
 		hasResources: resourceNames.length > 0
@@ -200,7 +197,7 @@ async function prepareQuestionContext(args: {
 	};
 
 	const serverUrl = await ensureSandboxReadyForRecord({
-		sandboxId: userRecord.mcpSandboxId,
+		sandboxId: instanceRecord.sandboxId,
 		resources: resourceConfigs,
 		onStatus: sendStatus,
 		onPersist: async (sandboxId) => {

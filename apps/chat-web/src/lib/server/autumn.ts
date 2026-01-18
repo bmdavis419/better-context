@@ -6,7 +6,7 @@ import { clampPercent } from './usage.ts';
 
 type ConvexUser = {
 	clerkId: string;
-	email: string;
+	email?: string | null;
 	name?: string | null;
 };
 
@@ -35,7 +35,7 @@ const createAutumnService = () => {
 	const getOrCreateCustomer = async (user: ConvexUser): Promise<AutumnCustomer> => {
 		const createResult = await autumn.customers.create({
 			id: user.clerkId,
-			email: user.email,
+			email: user.email ?? undefined,
 			name: user.name ?? undefined
 		});
 

@@ -55,23 +55,15 @@
 			// If user is signed in, ensure they exist in Convex
 			if (clerk.user) {
 				const userId = await convex.mutation(api.users.getOrCreate, {
-					clerkId: clerk.user.id,
-					email: clerk.user.primaryEmailAddress?.emailAddress ?? '',
-					name: clerk.user.fullName ?? undefined,
-					imageUrl: clerk.user.imageUrl ?? undefined
+					clerkId: clerk.user.id
 				});
-				// Store the convex user ID in auth state
 				setConvexUserId(userId);
 			}
 
-			// Listen for auth state changes
 			clerk.addListener(async (resources) => {
 				if (resources.user) {
 					const userId = await convex.mutation(api.users.getOrCreate, {
-						clerkId: resources.user.id,
-						email: resources.user.primaryEmailAddress?.emailAddress ?? '',
-						name: resources.user.fullName ?? undefined,
-						imageUrl: resources.user.imageUrl ?? undefined
+						clerkId: resources.user.id
 					});
 					setConvexUserId(userId);
 				} else {

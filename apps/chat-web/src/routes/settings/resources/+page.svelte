@@ -187,7 +187,6 @@
 
 		try {
 			await client.mutation(api.resources.removeCustomResource, {
-				userId: auth.convexUserId,
 				resourceId: resourceId as any
 			});
 		} catch (error) {

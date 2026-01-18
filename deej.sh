@@ -110,7 +110,7 @@ while true; do
     
     # Use opencode with the prompt
     # The agent will read files, make changes, and exit
-    opencode run -m openai/gpt-5.2-codex --variant xhigh "$AGENT_PROMPT" 
+    opencode run -m openai/gpt-5.2-codex --variant high "$AGENT_PROMPT" 
     
     # Small delay between iterations to avoid hammering
     log "Iteration $iteration complete. Waiting 2 seconds before next iteration..."

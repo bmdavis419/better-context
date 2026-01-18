@@ -39,7 +39,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		// Create the thread in Convex
 		const threadId = await convex.mutation(api.threads.create, {
-			userId: userId as Id<'users'>
+			userId: userId as Id<'instances'>
 		});
 
 		return json({ threadId });

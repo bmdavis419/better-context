@@ -7,7 +7,7 @@ let clerk = $state<Clerk | null>(null);
 let isLoaded = $state(false);
 let isSignedIn = $state(false);
 let user = $state<UserResource | null>(null);
-let convexUserId = $state<Id<'users'> | null>(null);
+let convexUserId = $state<Id<'instances'> | null>(null);
 
 /**
  * Set the Clerk instance (alias: setAuthState)
@@ -31,7 +31,7 @@ export const setAuthState = setClerk;
 /**
  * Set the Convex user ID
  */
-export function setConvexUserId(id: Id<'users'> | null) {
+export function setConvexUserId(id: Id<'instances'> | null) {
 	convexUserId = id;
 }
 
@@ -55,7 +55,7 @@ export function getAuthState() {
 		get convexUserId() {
 			return convexUserId;
 		},
-		set convexUserId(id: Id<'users'> | null) {
+		set convexUserId(id: Id<'instances'> | null) {
 			convexUserId = id;
 		}
 	};

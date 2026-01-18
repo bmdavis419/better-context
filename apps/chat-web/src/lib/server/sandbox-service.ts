@@ -281,7 +281,7 @@ async function deleteSandbox(sandboxId: string): Promise<void> {
  * Stop all other sandboxes for a user (enforce 1 active sandbox rule)
  */
 export async function stopOtherSandboxes(
-	userId: Id<'users'>,
+	userId: Id<'instances'>,
 	currentThreadId: Id<'threads'>
 ): Promise<void> {
 	const convex = getConvexClient();

@@ -77,16 +77,16 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	);
 	const questionWithHistory = formatConversationHistory(threadMessages, message);
 
-	const user = await convex.query(api.users.get, { id: userId as Id<'users'> });
-	if (!user) {
+	const instance = await convex.query(api.users.get, { id: userId as Id<'instances'> });
+	if (!instance) {
 		throw error(404, 'User not found');
 	}
 
 	const autumn = AutumnService.get();
 	const customer = await autumn.getOrCreateCustomer({
-		clerkId: user.clerkId,
-		email: user.email,
-		name: user.name ?? null
+		clerkId: instance.clerkId,
+		email: null,
+		name: null
 	});
 	const activeProduct = autumn.getActiveProduct(customer.products);
 	if (!activeProduct) {
@@ -97,7 +97,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const inputTokens = estimateTokensFromText(questionWithHistory);
 
 	const availableResources = await convex.query(api.resources.listAvailable, {
-		userId: userId as Id<'users'>
+		userId: userId as Id<'instances'>
 	});
 	const allResources = [...availableResources.global, ...availableResources.custom];
 
@@ -107,13 +107,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const sandboxUsageHours =
 		updatedResources.length > 0
 			? estimateSandboxUsageHours({
-					lastActiveAt: user.sandboxLastActiveAt,
+					lastActiveAt: instance.lastActiveAt,
 					now
 				})
 			: 0;
 
 	const usageCheck = await autumn.ensureUsageAvailable({
-		customerId: customer.id ?? user.clerkId,
+		customerId: customer.id ?? instance.clerkId,
 		requiredTokensIn: inputTokens > 0 ? inputTokens : undefined,
 		requiredTokensOut: 1,
 		requiredSandboxHours: sandboxUsageHours > 0 ? sandboxUsageHours : undefined
@@ -125,8 +125,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 	if (updatedResources.length > 0) {
 		await convex.mutation(api.users.updateSandboxActivity, {
-			userId: userId as Id<'users'>,
-			timestamp: now
+			userId: userId as Id<'instances'>,
+			sandboxId: sandboxId ?? ''
 		});
 	}
 
@@ -144,7 +144,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		async start(controller) {
 			try {
 				// Stop other sandboxes (enforce 1 active rule)
-				await stopOtherSandboxes(userId as Id<'users'>, threadId);
+				await stopOtherSandboxes(userId as Id<'instances'>, threadId);
 
 				// Build resource configs for the resources being used
 				const resourceConfigs: ResourceConfig[] = [];
@@ -171,7 +171,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 
 				const activeServerUrl = await ensureSandboxReady(
 					threadId,
-					sandboxId,
+					sandboxId ?? undefined,
 					resourceConfigs,
 					sendStatus
 				);
@@ -270,7 +270,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 				const outputTokens = estimateTokensFromChars(outputCharCount + reasoningCharCount);
 				try {
 					await autumn.trackUsage({
-						customerId: customer.id ?? user.clerkId,
+						customerId: customer.id ?? instance.clerkId,
 						tokensIn: inputTokens,
 						tokensOut: outputTokens,
 						sandboxHours: sandboxUsageHours

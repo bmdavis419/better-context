@@ -1,75 +1,59 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
-import { nanoid } from 'nanoid';
 
-function generateApiKey(): string {
-	return `btca_${nanoid(32)}`;
-}
+export const listByUser = query({
+	args: { userId: v.id('instances') },
+	handler: async (ctx, args) => {
+		const keys = await ctx.db
+			.query('apiKeys')
+			.withIndex('by_instance', (q) => q.eq('instanceId', args.userId))
+			.collect();
 
-async function hashApiKey(key: string): Promise<string> {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(key);
-	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-	const hashArray = Array.from(new Uint8Array(hashBuffer));
-	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
+		return keys.map((k) => ({
+			_id: k._id,
+			name: k.name,
+			keyPrefix: k.keyPrefix,
+			createdAt: k.createdAt,
+			lastUsedAt: k.lastUsedAt,
+			revokedAt: k.revokedAt
+		}));
+	}
+});
 
 export const create = mutation({
 	args: {
-		userId: v.id('users'),
+		userId: v.id('instances'),
 		name: v.string()
 	},
 	handler: async (ctx, args) => {
-		const user = await ctx.db.get(args.userId);
-		if (!user) throw new Error('User not found');
+		const key = generateApiKey();
+		const keyHash = await hashApiKey(key);
+		const keyPrefix = key.slice(0, 8);
 
-		const plainKey = generateApiKey();
-		const keyHash = await hashApiKey(plainKey);
-		const keyPrefix = `${plainKey.slice(0, 12)}...`;
-
-		const keyId = await ctx.db.insert('apiKeys', {
-			userId: args.userId,
+		const id = await ctx.db.insert('apiKeys', {
+			instanceId: args.userId,
 			name: args.name,
 			keyHash,
 			keyPrefix,
 			createdAt: Date.now()
 		});
 
-		return { key: plainKey, keyId, keyPrefix };
+		return { id, key };
 	}
 });
 
-export const listByUser = query({
-	args: {
-		userId: v.id('users')
-	},
-	handler: async (ctx, args) => {
-		const keys = await ctx.db
-			.query('apiKeys')
-			.withIndex('by_user', (q) => q.eq('userId', args.userId))
-			.collect();
-
-		return keys.map((key) => ({
-			_id: key._id,
-			name: key.name,
-			keyPrefix: key.keyPrefix,
-			createdAt: key.createdAt,
-			lastUsedAt: key.lastUsedAt,
-			revokedAt: key.revokedAt
-		}));
+function generateApiKey(): string {
+	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	let result = 'btca_';
+	for (let i = 0; i < 32; i++) {
+		result += chars.charAt(Math.floor(Math.random() * chars.length));
 	}
-});
+	return result;
+}
 
 export const revoke = mutation({
-	args: {
-		userId: v.id('users'),
-		keyId: v.id('apiKeys')
-	},
+	args: { keyId: v.id('apiKeys') },
 	handler: async (ctx, args) => {
-		const key = await ctx.db.get(args.keyId);
-		if (!key) throw new Error('API key not found');
-		if (key.userId !== args.userId) throw new Error('Unauthorized');
-
 		await ctx.db.patch(args.keyId, {
 			revokedAt: Date.now()
 		});
@@ -77,11 +61,10 @@ export const revoke = mutation({
 });
 
 export const validate = query({
-	args: {
-		apiKey: v.string()
-	},
+	args: { apiKey: v.string() },
 	handler: async (ctx, args) => {
 		const keyHash = await hashApiKey(args.apiKey);
+
 		const key = await ctx.db
 			.query('apiKeys')
 			.withIndex('by_key_hash', (q) => q.eq('keyHash', keyHash))
@@ -90,22 +73,38 @@ export const validate = query({
 		if (!key) {
 			return { valid: false as const, error: 'Invalid API key' };
 		}
+
 		if (key.revokedAt) {
-			return { valid: false as const, error: 'API key revoked' };
+			return { valid: false as const, error: 'API key has been revoked' };
 		}
+
+		const instance = await ctx.db.get(key.instanceId);
+		if (!instance) {
+			return { valid: false as const, error: 'User not found' };
+		}
+
 		return {
 			valid: true as const,
 			keyId: key._id,
-			userId: key.userId
+			userId: key.instanceId,
+			clerkId: instance.clerkId
 		};
 	}
 });
 
 export const touchLastUsed = mutation({
-	args: {
-		keyId: v.id('apiKeys')
-	},
+	args: { keyId: v.id('apiKeys') },
 	handler: async (ctx, args) => {
-		await ctx.db.patch(args.keyId, { lastUsedAt: Date.now() });
+		await ctx.db.patch(args.keyId, {
+			lastUsedAt: Date.now()
+		});
 	}
 });
+
+async function hashApiKey(apiKey: string): Promise<string> {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(apiKey);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}

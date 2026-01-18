@@ -17,7 +17,7 @@ function getConvexClient() {
 
 async function getUser(userId: string) {
 	const convex = getConvexClient();
-	const user = await convex.query(api.users.get, { id: userId as Id<'users'> });
+	const user = await convex.query(api.users.get, { id: userId as Id<'instances'> });
 	if (!user) {
 		throw error(404, 'User not found');
 	}
@@ -30,12 +30,12 @@ export const remoteGetBillingSummary = command('unchecked', async (input) => {
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
+	const instance = await getUser(parsed.data.userId);
 	const autumn = AutumnService.get();
 	return await autumn.getBillingSummary({
-		clerkId: user.clerkId,
-		email: user.email,
-		name: user.name ?? null
+		clerkId: instance.clerkId,
+		email: null,
+		name: null
 	});
 });
 
@@ -45,14 +45,14 @@ export const remoteCreateCheckoutSession = command('unchecked', async (input) =>
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
+	const instance = await getUser(parsed.data.userId);
 	const autumn = AutumnService.get();
 	const baseUrl = getRequestEvent().url.origin;
 	return await autumn.createCheckoutSession({
 		user: {
-			clerkId: user.clerkId,
-			email: user.email,
-			name: user.name ?? null
+			clerkId: instance.clerkId,
+			email: null,
+			name: null
 		},
 		baseUrl
 	});
@@ -64,14 +64,14 @@ export const remoteCreateBillingPortalSession = command('unchecked', async (inpu
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
+	const instance = await getUser(parsed.data.userId);
 	const autumn = AutumnService.get();
 	const baseUrl = getRequestEvent().url.origin;
 	return await autumn.createBillingPortalSession({
 		user: {
-			clerkId: user.clerkId,
-			email: user.email,
-			name: user.name ?? null
+			clerkId: instance.clerkId,
+			email: null,
+			name: null
 		},
 		baseUrl
 	});

@@ -36,21 +36,45 @@ const messageContentValidator = v.union(
 );
 
 export default defineSchema({
-	// Users (synced from Clerk)
-	users: defineTable({
+	instances: defineTable({
 		clerkId: v.string(),
-		email: v.string(),
-		name: v.optional(v.string()),
-		imageUrl: v.optional(v.string()),
-		sandboxLastActiveAt: v.optional(v.number()),
-		mcpSandboxId: v.optional(v.string()),
-		mcpLastUsedAt: v.optional(v.number()),
+		sandboxId: v.optional(v.string()),
+		state: v.union(
+			v.literal('unprovisioned'),
+			v.literal('provisioning'),
+			v.literal('stopped'),
+			v.literal('starting'),
+			v.literal('running'),
+			v.literal('stopping'),
+			v.literal('updating'),
+			v.literal('error')
+		),
+		serverUrl: v.optional(v.string()),
+		errorMessage: v.optional(v.string()),
+		btcaVersion: v.optional(v.string()),
+		opencodeVersion: v.optional(v.string()),
+		lastVersionCheck: v.optional(v.number()),
+		updateAvailable: v.optional(v.boolean()),
+		storageUsedBytes: v.optional(v.number()),
+		lastActiveAt: v.optional(v.number()),
+		provisionedAt: v.optional(v.number()),
 		createdAt: v.number()
-	}).index('by_clerk_id', ['clerkId']),
+	})
+		.index('by_clerk_id', ['clerkId'])
+		.index('by_sandbox_id', ['sandboxId']),
 
-	// API keys for MCP access
+	cachedResources: defineTable({
+		instanceId: v.id('instances'),
+		name: v.string(),
+		url: v.string(),
+		branch: v.string(),
+		sizeBytes: v.optional(v.number()),
+		cachedAt: v.number(),
+		lastUsedAt: v.number()
+	}).index('by_instance', ['instanceId']),
+
 	apiKeys: defineTable({
-		userId: v.id('users'),
+		instanceId: v.id('instances'),
 		name: v.string(),
 		keyHash: v.string(),
 		keyPrefix: v.string(),
@@ -58,10 +82,9 @@ export default defineSchema({
 		lastUsedAt: v.optional(v.number()),
 		revokedAt: v.optional(v.number())
 	})
-		.index('by_user', ['userId'])
+		.index('by_instance', ['instanceId'])
 		.index('by_key_hash', ['keyHash']),
 
-	// Global resource catalog (admin-managed)
 	globalResources: defineTable({
 		name: v.string(),
 		displayName: v.string(),
@@ -73,9 +96,8 @@ export default defineSchema({
 		isActive: v.boolean()
 	}).index('by_name', ['name']),
 
-	// User's personal resources (custom additions)
 	userResources: defineTable({
-		userId: v.id('users'),
+		instanceId: v.id('instances'),
 		name: v.string(),
 		type: v.literal('git'),
 		url: v.string(),
@@ -83,22 +105,15 @@ export default defineSchema({
 		searchPath: v.optional(v.string()),
 		specialNotes: v.optional(v.string()),
 		createdAt: v.number()
-	}).index('by_user', ['userId']),
+	}).index('by_instance', ['instanceId']),
 
-	// Chat threads - sandboxId is the only sandbox info stored
-	// Sandbox state is derived from Daytona on each request
 	threads: defineTable({
-		userId: v.id('users'),
+		instanceId: v.id('instances'),
 		title: v.optional(v.string()),
-		sandboxId: v.optional(v.string()),
 		createdAt: v.number(),
 		lastActivityAt: v.number()
-	})
-		.index('by_user', ['userId'])
-		.index('by_user_recent', ['userId', 'lastActivityAt'])
-		.index('by_sandbox_id', ['sandboxId']),
+	}).index('by_instance', ['instanceId']),
 
-	// Messages within threads
 	messages: defineTable({
 		threadId: v.id('threads'),
 		role: v.union(v.literal('user'), v.literal('assistant'), v.literal('system')),
@@ -108,7 +123,6 @@ export default defineSchema({
 		createdAt: v.number()
 	}).index('by_thread', ['threadId']),
 
-	// Active resources per thread (many-to-many)
 	threadResources: defineTable({
 		threadId: v.id('threads'),
 		resourceName: v.string()

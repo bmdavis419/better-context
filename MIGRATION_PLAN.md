@@ -16,7 +16,7 @@
 > This app has NOT shipped yet. There is NO production data to preserve.
 > You can freely:
 >
-> - Delete and recreate tables
+> - Delete and recreate tables have my fx30
 > - Change schemas without migration scripts
 > - Wipe existing dev data
 > - Just make the new schema work, don't worry about backwards compatibility
@@ -147,9 +147,9 @@ Just rewrite the entire schema from scratch. No need to preserve anything - DB i
 
 ### Tasks
 
-- [ ] Rewrite `convex/schema.ts` with the new schema (just replace the whole file)
-- [ ] Delete old convex function files that reference old schema
-- [ ] Verify schema deploys cleanly
+- [x] Rewrite `convex/schema.ts` with the new schema (just replace the whole file)
+- [x] Delete old convex function files that reference old schema
+- [x] Verify schema deploys cleanly
 
 ---
 
