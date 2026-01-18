@@ -200,14 +200,35 @@
 			</div>
 		</div>
 
-		{#if instanceStore.isLoading}
+		{#if instanceStore.isLoading || instanceStore.isBootstrapping}
 			<div class="flex items-center gap-2 text-sm">
 				<Loader2 size={16} class="animate-spin" />
-				Loading instance data...
+				{instanceStore.isBootstrapping ? 'Setting up your instance...' : 'Loading instance data...'}
 			</div>
 		{:else if !hasInstance}
-			<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4 text-sm">
-				Instance record not found yet. Try refreshing or contact support.
+			<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
+				<div class="flex items-start gap-3">
+					<div class="bc-logoMark shrink-0">
+						<Server size={16} />
+					</div>
+					<div class="min-w-0 flex-1">
+						<h3 class="text-sm font-semibold">Instance not found</h3>
+						<p class="bc-muted mt-1 text-xs">
+							Your instance hasn't been set up yet. This usually happens automatically.
+						</p>
+						<button
+							type="button"
+							class="bc-btn mt-3 text-xs"
+							onclick={() => instanceStore.ensureExists()}
+						>
+							<Loader2 size={12} class={instanceStore.isBootstrapping ? 'animate-spin' : 'hidden'} />
+							Set up instance
+						</button>
+						{#if instanceStore.error}
+							<p class="mt-2 text-xs text-red-500">{instanceStore.error}</p>
+						{/if}
+					</div>
+				</div>
 			</div>
 		{:else}
 			<div class="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">

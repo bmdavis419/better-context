@@ -1,7 +1,7 @@
 import { createContext } from 'svelte';
 import { useQuery, useConvexClient } from 'convex-svelte';
 import { instances } from '../../convex/apiHelpers';
-import type { Doc } from '../../convex/_generated/dataModel';
+import type { Doc, Id } from '../../convex/_generated/dataModel';
 
 type InstanceStatus = {
 	instance: Doc<'instances'>;
@@ -16,10 +16,17 @@ type InstanceActionResponse = {
 	error?: string;
 };
 
+type EnsureInstanceResult = {
+	instanceId: Id<'instances'>;
+	status: 'created' | 'exists' | 'provisioning';
+};
+
 class InstanceStore {
 	private _query = useQuery(instances.queries.getStatus, {});
 	private _client = useConvexClient();
 	private _error = $state<string | null>(null);
+	private _isBootstrapping = $state(false);
+	private _hasBootstrapped = $state(false);
 
 	get status(): InstanceStatus {
 		return this._query.data ?? null;
@@ -59,6 +66,38 @@ class InstanceStore {
 
 	get isLoading() {
 		return this._query.isLoading;
+	}
+
+	get isBootstrapping() {
+		return this._isBootstrapping;
+	}
+
+	get hasBootstrapped() {
+		return this._hasBootstrapped;
+	}
+
+	get needsBootstrap() {
+		return !this._query.isLoading && !this.instance && !this._hasBootstrapped;
+	}
+
+	async ensureExists(): Promise<EnsureInstanceResult | null> {
+		if (this._isBootstrapping || this._hasBootstrapped) {
+			return null;
+		}
+
+		this._isBootstrapping = true;
+		this._error = null;
+
+		try {
+			const result = await this._client.action(instances.actions.ensureInstanceExists, {});
+			this._hasBootstrapped = true;
+			return result as EnsureInstanceResult;
+		} catch (error) {
+			this._error = error instanceof Error ? error.message : 'Failed to create instance';
+			return null;
+		} finally {
+			this._isBootstrapping = false;
+		}
 	}
 
 	async wake(): Promise<InstanceActionResponse> {

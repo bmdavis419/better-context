@@ -11,15 +11,20 @@
 
 	const instanceStore = getInstanceStore();
 
+	const isBootstrapping = $derived(instanceStore.isBootstrapping);
+	const hasInstance = $derived(Boolean(instanceStore.instance));
+	const instanceState = $derived(instanceStore.state ?? '');
+
 	const isVisible = $derived.by(() => {
 		if (instanceStore.isLoading) return false;
-		if (!instanceStore.instance) return false;
-		const state = instanceStore.state ?? '';
-		return state === 'unprovisioned' || state === 'provisioning';
+		if (isBootstrapping) return true;
+		if (!hasInstance) return false;
+		return instanceState === 'unprovisioned' || instanceState === 'provisioning';
 	});
 
 	const statusLabel = $derived.by(() => {
-		switch (instanceStore.state) {
+		if (isBootstrapping) return 'Setting up';
+		switch (instanceState) {
 			case 'unprovisioned':
 				return 'Queued';
 			case 'provisioning':
@@ -29,17 +34,21 @@
 		}
 	});
 
-	const hasSandbox = $derived.by(() => Boolean(instanceStore.instance?.sandboxId));
-	const hasProvisionedAt = $derived.by(() => Boolean(instanceStore.instance?.provisionedAt));
-	const hasPackages = $derived.by(() =>
-		Boolean(instanceStore.btcaVersion || instanceStore.opencodeVersion)
-	);
-	const hasServer = $derived.by(() => Boolean(instanceStore.instance?.serverUrl));
+	const hasInstanceRecord = $derived(hasInstance);
+	const hasSandbox = $derived(Boolean(instanceStore.instance?.sandboxId));
+	const hasProvisionedAt = $derived(Boolean(instanceStore.instance?.provisionedAt));
+	const hasPackages = $derived(Boolean(instanceStore.btcaVersion || instanceStore.opencodeVersion));
+	const hasServer = $derived(Boolean(instanceStore.instance?.serverUrl));
 
 	const steps = $derived.by(() => {
 		const items = [
 			{
-				title: 'Creating instance',
+				title: 'Setting up account',
+				description: 'Creating your instance record.',
+				isComplete: hasInstanceRecord
+			},
+			{
+				title: 'Creating sandbox',
 				description: 'Reserving a dedicated runtime for your account.',
 				isComplete: hasSandbox
 			},
@@ -52,11 +61,6 @@
 				title: 'Finalizing setup',
 				description: 'Locking in versions and preparing the instance.',
 				isComplete: hasProvisionedAt
-			},
-			{
-				title: 'Configuring server',
-				description: 'Warming caches and applying preferences.',
-				isComplete: hasServer
 			}
 		];
 		const activeIndex = items.findIndex((item) => !item.isComplete);
@@ -66,7 +70,7 @@
 		}));
 	}) as Step[];
 
-	const completedSteps = $derived.by(() => steps.filter((step) => step.isComplete).length);
+	const completedSteps = $derived(steps.filter((step) => step.isComplete).length);
 	const progressPercent = $derived.by(() => {
 		if (!steps.length) return 0;
 		const raw = (completedSteps / steps.length) * 100;
@@ -74,6 +78,7 @@
 	});
 
 	const progressCopy = $derived.by(() => {
+		if (isBootstrapping) return 'Setting up your account...';
 		if (completedSteps === 0) return 'Starting provisioning...';
 		if (completedSteps < steps.length) return 'Provisioning in progress...';
 		return 'Finalizing setup...';

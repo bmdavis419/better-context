@@ -502,10 +502,8 @@ const clerkWebhook = httpAction(async (ctx, request) => {
 
 	if (parsedPayload.data.type === 'user.created') {
 		const clerkId = parsedPayload.data.data.id;
-		const instanceId = await ctx.runMutation(instanceMutations.create, { clerkId });
-
 		if (ctx.runAction) {
-			await ctx.runAction(instanceActions.provision, { instanceId });
+			await ctx.runAction(instanceActions.ensureInstanceExists, { clerkId });
 		}
 	}
 

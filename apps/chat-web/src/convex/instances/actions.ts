@@ -469,6 +469,46 @@ export const wakeMyInstance = action({
 	}
 });
 
+type EnsureInstanceResult = {
+	instanceId: Id<'instances'>;
+	status: 'created' | 'exists' | 'provisioning';
+};
+
+export const ensureInstanceExists = action({
+	args: { clerkId: v.optional(v.string()) },
+	handler: async (ctx, args): Promise<EnsureInstanceResult> => {
+		let clerkId = args.clerkId;
+
+		if (!clerkId) {
+			const identity = await ctx.auth.getUserIdentity();
+			if (!identity) {
+				throw new Error('Unauthorized: No clerkId provided and user is not authenticated');
+			}
+			clerkId = identity.subject;
+		}
+
+		const existing = await ctx.runQuery(instanceQueries.getByClerkId, {});
+
+		if (existing) {
+			const isProvisioning =
+				existing.state === 'unprovisioned' || existing.state === 'provisioning';
+			return {
+				instanceId: existing._id,
+				status: isProvisioning ? 'provisioning' : 'exists'
+			};
+		}
+
+		const instanceId = await ctx.runMutation(instanceMutations.create, { clerkId });
+
+		void ctx.runAction(instances.actions.provision, { instanceId });
+
+		return {
+			instanceId,
+			status: 'created'
+		};
+	}
+});
+
 export const stopMyInstance = action({
 	args: {},
 	handler: async (ctx): Promise<{ stopped: boolean }> => {

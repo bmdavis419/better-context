@@ -15,8 +15,8 @@
 	} from '@lucide/svelte';
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { onMount } from 'svelte';
-	import { initializeClerk } from '$lib/clerk';
-	import { setupConvex } from 'convex-svelte';
+	import { initializeClerk, getClerk } from '$lib/clerk';
+	import { setupConvex, useConvexClient } from 'convex-svelte';
 	import { untrack } from 'svelte';
 	import {
 		setAuthState,
@@ -34,6 +34,21 @@
 
 	setupConvex(PUBLIC_CONVEX_URL);
 
+	const client = useConvexClient();
+
+	let clerkInitPromise: Promise<void> | null = null;
+
+	const getClerkAuthToken = async () => {
+		if (clerkInitPromise) {
+			await clerkInitPromise;
+		}
+		const clerk = getClerk();
+		if (!clerk?.loaded || !clerk.session) return null;
+		return clerk.session.getToken({ template: 'convex' });
+	};
+
+	client.setAuth(getClerkAuthToken);
+
 	const themeStore = setThemeStore();
 	const auth = getAuthState();
 	const billingStore = setBillingStore();
@@ -47,20 +62,24 @@
 	};
 
 	onMount(async () => {
-		try {
-			const clerk = await initializeClerk();
-			setAuthState(clerk);
+		clerkInitPromise = (async () => {
+			try {
+				const clerk = await initializeClerk();
+				setAuthState(clerk);
 
-			clerk.addListener((resources) => {
-				if (!resources.user) {
-					setInstanceId(null);
-				}
-			});
-		} catch (error) {
-			console.error('Failed to initialize auth:', error);
-		} finally {
-			isInitializing = false;
-		}
+				clerk.addListener((resources) => {
+					if (!resources.user) {
+						setInstanceId(null);
+					}
+				});
+			} catch (error) {
+				console.error('Failed to initialize auth:', error);
+			} finally {
+				isInitializing = false;
+			}
+		})();
+
+		await clerkInitPromise;
 	});
 
 	$effect(() => {
@@ -71,6 +90,18 @@
 	$effect(() => {
 		const userId = auth.instanceId;
 		untrack(() => billingStore.setUserId(userId));
+	});
+
+	$effect(() => {
+		const isSignedIn = auth.isSignedIn;
+		const needsBootstrap = instanceStore.needsBootstrap;
+		const isBootstrapping = instanceStore.isBootstrapping;
+
+		if (isSignedIn && needsBootstrap && !isBootstrapping) {
+			untrack(() => {
+				void instanceStore.ensureExists();
+			});
+		}
 	});
 
 	function handleSignOut() {
