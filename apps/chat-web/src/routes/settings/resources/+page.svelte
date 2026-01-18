@@ -4,6 +4,7 @@
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { api } from '../../../convex/_generated/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
+	import InstanceCard from '$lib/components/InstanceCard.svelte';
 
 	const auth = getAuthState();
 	const client = useConvexClient();
@@ -11,8 +12,8 @@
 	// Convex queries
 	const globalResourcesQuery = $derived(useQuery(api.resources.listGlobal, {}));
 	const userResourcesQuery = $derived(
-		auth.convexUserId
-			? useQuery(api.resources.listUserResources, { userId: auth.convexUserId })
+		auth.instanceId
+			? useQuery(api.resources.listUserResources, { instanceId: auth.instanceId })
 			: null
 	);
 
@@ -140,7 +141,7 @@
 	});
 
 	async function handleAddResource() {
-		if (!auth.convexUserId) return;
+		if (!auth.instanceId) return;
 		if (!formName.trim() || !formUrl.trim()) {
 			formError = 'Name and URL are required';
 			return;
@@ -159,8 +160,9 @@
 
 		try {
 			await client.mutation(api.resources.addCustomResource, {
-				userId: auth.convexUserId,
+				instanceId: auth.instanceId,
 				name: formName.trim(),
+
 				url: formUrl.trim(),
 				branch: formBranch.trim() || 'main',
 				searchPath: formSearchPath.trim() || undefined,
@@ -182,12 +184,11 @@
 	}
 
 	async function handleRemoveResource(resourceId: string) {
-		if (!auth.convexUserId) return;
+		if (!auth.instanceId) return;
 		if (!confirm('Are you sure you want to remove this resource?')) return;
 
 		try {
 			await client.mutation(api.resources.removeCustomResource, {
-				userId: auth.convexUserId,
 				resourceId: resourceId as any
 			});
 		} catch (error) {
@@ -198,6 +199,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<div class="mx-auto flex w-full max-w-3xl flex-col gap-8 overflow-y-auto p-8">
+		<InstanceCard />
 		<!-- Header -->
 		<div>
 			<h1 class="text-2xl font-semibold">Resources</h1>

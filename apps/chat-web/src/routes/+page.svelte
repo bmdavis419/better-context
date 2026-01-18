@@ -4,13 +4,15 @@
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { api } from '../convex/_generated/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
+	import InstanceCard from '$lib/components/InstanceCard.svelte';
+	import ProvisioningModal from '$lib/components/ProvisioningModal.svelte';
 
 	const auth = getAuthState();
 	const client = useConvexClient();
 
 	// Convex queries - only run when user is authenticated
 	const threadsQuery = $derived(
-		auth.convexUserId ? useQuery(api.threads.list, { userId: auth.convexUserId }) : null
+		auth.instanceId ? useQuery(api.threads.list, { instanceId: auth.instanceId }) : null
 	);
 
 	function createNewThread() {
@@ -54,9 +56,11 @@
 		</button>
 	</div>
 {:else}
+	<ProvisioningModal />
 	<!-- Thread list for authenticated users -->
 	<div class="flex flex-1 overflow-hidden">
 		<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
+			<InstanceCard />
 			<!-- Header -->
 			<div class="flex items-center justify-between">
 				<div>
@@ -105,9 +109,6 @@
 									<span class="font-medium">
 										{thread.title ?? `Thread ${thread._id.slice(0, 8)}...`}
 									</span>
-									{#if thread.sandboxId}
-										<span class="bc-badge bc-badge-success">Has Sandbox</span>
-									{/if}
 								</div>
 								<div class="bc-muted mt-1 text-xs">
 									{formatDate(thread.lastActivityAt)}

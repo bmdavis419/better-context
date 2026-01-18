@@ -6,8 +6,9 @@
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
+	import InstanceCard from '$lib/components/InstanceCard.svelte';
 
-	const MCP_URL = 'https://chat.bettercontext.ai/api/mcp';
+	const MCP_URL = 'https://chat.bettercontext.ai/api/convex/mcp';
 
 	let instructionsCopied = $state(false);
 
@@ -16,8 +17,8 @@
 	const client = useConvexClient();
 
 	const keysQuery = $derived(
-		auth.convexUserId && billingStore.isSubscribed
-			? useQuery(api.apiKeys.listByUser, { userId: auth.convexUserId })
+		auth.instanceId && billingStore.isSubscribed
+			? useQuery(api.apiKeys.listByUser, { userId: auth.instanceId })
 			: null
 	);
 
@@ -56,7 +57,7 @@
 	});
 
 	async function createKey() {
-		if (!auth.convexUserId || !billingStore.isSubscribed) return;
+		if (!auth.instanceId || !billingStore.isSubscribed) return;
 		if (!newKeyName.trim()) {
 			errorMessage = 'Name is required';
 			return;
@@ -65,7 +66,7 @@
 		errorMessage = null;
 		try {
 			const result = await client.mutation(api.apiKeys.create, {
-				userId: auth.convexUserId,
+				userId: auth.instanceId,
 				name: newKeyName.trim()
 			});
 			createdKey = result.key;
@@ -79,11 +80,10 @@
 	}
 
 	async function revokeKey(keyId: string) {
-		if (!auth.convexUserId) return;
+		if (!auth.instanceId) return;
 		if (!confirm('Revoke this API key?')) return;
 		try {
 			await client.mutation(api.apiKeys.revoke, {
-				userId: auth.convexUserId,
 				keyId: keyId as any
 			});
 		} catch (err) {
@@ -152,6 +152,7 @@ If resources is omitted, all available resources will be searched.`;
 
 <div class="flex flex-1 overflow-y-auto">
 	<div class="mx-auto flex w-full max-w-3xl flex-col gap-8 p-8 pb-16">
+		<InstanceCard />
 		<div>
 			<h1 class="text-2xl font-semibold">MCP Server</h1>
 			<p class="bc-muted mt-1 text-sm">

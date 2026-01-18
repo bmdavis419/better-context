@@ -15,30 +15,44 @@
 	} from '@lucide/svelte';
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { onMount } from 'svelte';
-	import { initializeClerk } from '$lib/clerk';
-	import { convex } from '$lib/convex';
-	import { setupConvex } from 'convex-svelte';
+	import { initializeClerk, getClerk } from '$lib/clerk';
+	import { setupConvex, useConvexClient } from 'convex-svelte';
 	import { untrack } from 'svelte';
 	import {
 		setAuthState,
 		getAuthState,
-		setConvexUserId,
+		setInstanceId,
 		signOut,
 		openSignIn,
 		openUserProfile
 	} from '$lib/stores/auth.svelte';
 	import { setBillingStore } from '$lib/stores/billing.svelte';
-	import { api } from '../convex/_generated/api';
+	import { setInstanceStore, getInstanceStore } from '$lib/stores/instance.svelte';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
 	let { children } = $props();
 
-	// Initialize convex-svelte
 	setupConvex(PUBLIC_CONVEX_URL);
+
+	const client = useConvexClient();
+
+	let clerkInitPromise: Promise<void> | null = null;
+
+	const getClerkAuthToken = async () => {
+		if (clerkInitPromise) {
+			await clerkInitPromise;
+		}
+		const clerk = getClerk();
+		if (!clerk?.loaded || !clerk.session) return null;
+		return clerk.session.getToken({ template: 'convex' });
+	};
+
+	client.setAuth(getClerkAuthToken);
 
 	const themeStore = setThemeStore();
 	const auth = getAuthState();
 	const billingStore = setBillingStore();
+	const instanceStore = setInstanceStore();
 
 	let isInitializing = $state(true);
 	let showUserMenu = $state(false);
@@ -48,46 +62,46 @@
 	};
 
 	onMount(async () => {
-		try {
-			const clerk = await initializeClerk();
-			setAuthState(clerk);
+		clerkInitPromise = (async () => {
+			try {
+				const clerk = await initializeClerk();
+				setAuthState(clerk);
 
-			// If user is signed in, ensure they exist in Convex
-			if (clerk.user) {
-				const userId = await convex.mutation(api.users.getOrCreate, {
-					clerkId: clerk.user.id,
-					email: clerk.user.primaryEmailAddress?.emailAddress ?? '',
-					name: clerk.user.fullName ?? undefined,
-					imageUrl: clerk.user.imageUrl ?? undefined
+				clerk.addListener((resources) => {
+					if (!resources.user) {
+						setInstanceId(null);
+					}
 				});
-				// Store the convex user ID in auth state
-				setConvexUserId(userId);
+			} catch (error) {
+				console.error('Failed to initialize auth:', error);
+			} finally {
+				isInitializing = false;
 			}
+		})();
 
-			// Listen for auth state changes
-			clerk.addListener(async (resources) => {
-				if (resources.user) {
-					const userId = await convex.mutation(api.users.getOrCreate, {
-						clerkId: resources.user.id,
-						email: resources.user.primaryEmailAddress?.emailAddress ?? '',
-						name: resources.user.fullName ?? undefined,
-						imageUrl: resources.user.imageUrl ?? undefined
-					});
-					setConvexUserId(userId);
-				} else {
-					setConvexUserId(null);
-				}
-			});
-		} catch (error) {
-			console.error('Failed to initialize auth:', error);
-		} finally {
-			isInitializing = false;
-		}
+		await clerkInitPromise;
 	});
 
 	$effect(() => {
-		const userId = auth.convexUserId;
+		const instance = instanceStore.instance;
+		untrack(() => setInstanceId(instance?._id ?? null));
+	});
+
+	$effect(() => {
+		const userId = auth.instanceId;
 		untrack(() => billingStore.setUserId(userId));
+	});
+
+	$effect(() => {
+		const isSignedIn = auth.isSignedIn;
+		const needsBootstrap = instanceStore.needsBootstrap;
+		const isBootstrapping = instanceStore.isBootstrapping;
+
+		if (isSignedIn && needsBootstrap && !isBootstrapping) {
+			untrack(() => {
+				void instanceStore.ensureExists();
+			});
+		}
 	});
 
 	function handleSignOut() {

@@ -1,13 +1,15 @@
 import { createContext } from 'svelte';
-import { isHttpError } from '@sveltejs/kit';
-import { remoteGetBillingSummary } from '$lib/remote/billing.remote';
+import { useConvexClient } from 'convex-svelte';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import type { BillingSummary } from '$lib/billing/types';
 
 class BillingStore {
+	private _client = useConvexClient();
 	private _summary = $state<BillingSummary | null>(null);
 	private _isLoading = $state(false);
 	private _error = $state<string | null>(null);
-	private userId = $state<string | null>(null);
+	private instanceId = $state<Id<'instances'> | null>(null);
 
 	get summary() {
 		return this._summary;
@@ -41,9 +43,9 @@ class BillingStore {
 		return !!this._summary;
 	}
 
-	setUserId(userId: string | null) {
-		this.userId = userId;
-		if (!userId) {
+	setUserId(instanceId: Id<'instances'> | null) {
+		this.instanceId = instanceId;
+		if (!instanceId) {
 			this._summary = null;
 			this._error = null;
 			this._isLoading = false;
@@ -53,19 +55,15 @@ class BillingStore {
 	}
 
 	async fetch() {
-		if (!this.userId) return;
+		if (!this.instanceId) return;
 		this._isLoading = true;
 		this._error = null;
 		try {
-			this._summary = await remoteGetBillingSummary({ userId: this.userId });
+			this._summary = (await this._client.action(api.usage.getBillingSummary, {
+				instanceId: this.instanceId
+			})) as BillingSummary;
 		} catch (err) {
-			if (isHttpError(err)) {
-				this._error = err.body?.message ?? 'Failed to load billing';
-			} else if (err instanceof Error) {
-				this._error = err.message;
-			} else {
-				this._error = 'Failed to load billing';
-			}
+			this._error = err instanceof Error ? err.message : 'Failed to load billing';
 		} finally {
 			this._isLoading = false;
 		}

@@ -21,13 +21,13 @@
 
 	async function handleCheckout() {
 		errorMessage = null;
-		if (!auth.isSignedIn || !auth.convexUserId) {
+		if (!auth.isSignedIn || !auth.instanceId) {
 			openSignIn('/pricing');
 			return;
 		}
 		isRedirecting = true;
 		try {
-			const result = await remoteCreateCheckoutSession({ userId: auth.convexUserId });
+			const result = await remoteCreateCheckoutSession({ userId: auth.instanceId });
 			window.location.href = result.url;
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : 'Failed to start checkout';

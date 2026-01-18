@@ -7,7 +7,7 @@ let clerk = $state<Clerk | null>(null);
 let isLoaded = $state(false);
 let isSignedIn = $state(false);
 let user = $state<UserResource | null>(null);
-let convexUserId = $state<Id<'users'> | null>(null);
+let instanceId = $state<Id<'instances'> | null>(null);
 
 /**
  * Set the Clerk instance (alias: setAuthState)
@@ -29,10 +29,10 @@ export function setClerk(instance: Clerk) {
 export const setAuthState = setClerk;
 
 /**
- * Set the Convex user ID
+ * Set the instance ID
  */
-export function setConvexUserId(id: Id<'users'> | null) {
-	convexUserId = id;
+export function setInstanceId(id: Id<'instances'> | null) {
+	instanceId = id;
 }
 
 /**
@@ -52,12 +52,23 @@ export function getAuthState() {
 		get user() {
 			return user;
 		},
-		get convexUserId() {
-			return convexUserId;
+		get instanceId() {
+			return instanceId;
 		},
-		set convexUserId(id: Id<'users'> | null) {
-			convexUserId = id;
+		set instanceId(id: Id<'instances'> | null) {
+			instanceId = id;
+		},
+		async getToken(options?: { template?: string }) {
+			if (!clerk?.session) return null;
+			return clerk.session.getToken(options);
 		}
+	} as {
+		readonly clerk: Clerk | null;
+		readonly isLoaded: boolean;
+		readonly isSignedIn: boolean;
+		readonly user: UserResource | null;
+		instanceId: Id<'instances'> | null;
+		getToken: (options?: { template?: string }) => Promise<string | null>;
 	};
 }
 
@@ -67,7 +78,7 @@ export function getAuthState() {
 export async function signOut() {
 	if (clerk) {
 		await clerk.signOut();
-		convexUserId = null;
+		instanceId = null;
 	}
 }
 

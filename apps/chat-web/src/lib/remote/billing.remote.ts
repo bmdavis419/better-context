@@ -1,27 +1,37 @@
+import type { FunctionReference } from 'convex/server';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { z } from 'zod';
 import { ConvexHttpClient } from 'convex/browser';
+import { z } from 'zod';
+import { PUBLIC_CONVEX_URL } from '$env/static/public';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { PUBLIC_CONVEX_URL } from '$env/static/public';
-import { AutumnService } from '$lib/server/autumn';
 
 const UserSchema = z.object({
 	userId: z.string()
 });
 
+type QueryRef = FunctionReference<'query', 'public'>;
+type NestedApi = typeof api & {
+	'instances/queries': Record<string, QueryRef>;
+};
+
+const instanceQueries = (api as NestedApi)['instances/queries'];
+const usageActions = api.usage;
+
 function getConvexClient() {
 	return new ConvexHttpClient(PUBLIC_CONVEX_URL);
 }
 
-async function getUser(userId: string) {
+async function getInstance(userId: string) {
 	const convex = getConvexClient();
-	const user = await convex.query(api.users.get, { id: userId as Id<'users'> });
-	if (!user) {
+	const instance = await convex.query(instanceQueries.get, {
+		id: userId as Id<'instances'>
+	});
+	if (!instance) {
 		throw error(404, 'User not found');
 	}
-	return user;
+	return instance;
 }
 
 export const remoteGetBillingSummary = command('unchecked', async (input) => {
@@ -30,12 +40,10 @@ export const remoteGetBillingSummary = command('unchecked', async (input) => {
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
-	const autumn = AutumnService.get();
-	return await autumn.getBillingSummary({
-		clerkId: user.clerkId,
-		email: user.email,
-		name: user.name ?? null
+	const instance = await getInstance(parsed.data.userId);
+	const convex = getConvexClient();
+	return await convex.action(usageActions.getBillingSummary, {
+		instanceId: instance._id
 	});
 });
 
@@ -45,15 +53,11 @@ export const remoteCreateCheckoutSession = command('unchecked', async (input) =>
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
-	const autumn = AutumnService.get();
+	const instance = await getInstance(parsed.data.userId);
+	const convex = getConvexClient();
 	const baseUrl = getRequestEvent().url.origin;
-	return await autumn.createCheckoutSession({
-		user: {
-			clerkId: user.clerkId,
-			email: user.email,
-			name: user.name ?? null
-		},
+	return await convex.action(usageActions.createCheckoutSession, {
+		instanceId: instance._id,
 		baseUrl
 	});
 });
@@ -64,15 +68,11 @@ export const remoteCreateBillingPortalSession = command('unchecked', async (inpu
 		throw error(400, 'Invalid user');
 	}
 
-	const user = await getUser(parsed.data.userId);
-	const autumn = AutumnService.get();
+	const instance = await getInstance(parsed.data.userId);
+	const convex = getConvexClient();
 	const baseUrl = getRequestEvent().url.origin;
-	return await autumn.createBillingPortalSession({
-		user: {
-			clerkId: user.clerkId,
-			email: user.email,
-			name: user.name ?? null
-		},
+	return await convex.action(usageActions.createBillingPortalSession, {
+		instanceId: instance._id,
 		baseUrl
 	});
 });
