@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Server, GitBranch, Zap, Copy, Check, ArrowDown } from '@lucide/svelte';
+	import { ArrowDown, Check, CheckCircle2, Copy, Loader2 } from '@lucide/svelte';
 	import type { Message, BtcaChunk, AssistantContent } from '$lib/types';
 	import { nanoid } from 'nanoid';
 	import { marked } from 'marked';
@@ -38,11 +38,46 @@
 	interface Props {
 		messages: Message[];
 		isStreaming: boolean;
-		sandboxStatus: string | null;
+		streamStatus: string | null;
 		currentChunks: BtcaChunk[];
 	}
 
-	let { messages, isStreaming, sandboxStatus, currentChunks }: Props = $props();
+	let { messages, isStreaming, streamStatus, currentChunks }: Props = $props();
+
+	const streamStatusMeta: Record<
+		string,
+		{ label: string; detail: string; icon: typeof Loader2; tone: string; progress: string }
+	> = {
+		starting: {
+			label: 'Warming instance',
+			detail: 'Starting your btca runtime...',
+			icon: Loader2,
+			tone: 'text-[hsl(var(--bc-warning))]',
+			progress: '35%'
+		},
+		ready: {
+			label: 'Instance ready',
+			detail: 'Streaming response from btca',
+			icon: CheckCircle2,
+			tone: 'text-[hsl(var(--bc-success))]',
+			progress: '85%'
+		}
+	};
+
+	const streamStatusInfo = $derived.by(() => {
+		if (!streamStatus) return null;
+		return (
+			streamStatusMeta[streamStatus] ?? {
+				label: 'Connecting',
+				detail: 'Contacting your instance...',
+				icon: Loader2,
+				tone: 'text-[hsl(var(--bc-accent))]',
+				progress: '20%'
+			}
+		);
+	});
+
+	const StreamStatusIcon = $derived.by(() => streamStatusInfo?.icon ?? Loader2);
 
 	// Scroll state
 	let scrollContainer = $state<HTMLDivElement | null>(null);
@@ -289,45 +324,23 @@
 				{/if}
 			{/each}
 
-			<!-- Sandbox status -->
-			{#if isStreaming && sandboxStatus}
+			<!-- Streaming status -->
+			{#if isStreaming && streamStatusInfo}
 				<div class="chat-message chat-message-system">
 					<div class="flex items-center gap-3">
 						<div class="sandbox-status-indicator">
-							{#if sandboxStatus === 'pending' || sandboxStatus === 'creating'}
-								<Server size={16} class="text-[hsl(var(--bc-warning))]" />
-							{:else if sandboxStatus === 'cloning'}
-								<GitBranch size={16} class="text-[hsl(var(--bc-accent))]" />
-							{:else if sandboxStatus === 'starting'}
-								<Zap size={16} class="text-[hsl(var(--bc-success))]" />
-							{:else}
-								<Loader2 size={16} class="animate-spin" />
-							{/if}
+							<StreamStatusIcon
+								size={16}
+								class={`${streamStatusInfo.tone} ${streamStatusInfo.icon === Loader2 ? 'animate-spin' : ''}`}
+							/>
 						</div>
 						<div>
-							<div class="text-sm font-medium">
-								{#if sandboxStatus === 'pending' || sandboxStatus === 'creating'}
-									Creating sandbox...
-								{:else if sandboxStatus === 'cloning'}
-									Cloning repositories...
-								{:else if sandboxStatus === 'starting'}
-									Starting server...
-								{:else}
-									Initializing...
-								{/if}
-							</div>
+							<div class="text-sm font-medium">{streamStatusInfo.label}</div>
+							<div class="bc-muted text-xs">{streamStatusInfo.detail}</div>
 							<div class="sandbox-progress-bar">
 								<div
 									class="sandbox-progress-fill"
-									style="width: {sandboxStatus === 'pending'
-										? '10%'
-										: sandboxStatus === 'creating'
-											? '30%'
-											: sandboxStatus === 'cloning'
-												? '60%'
-												: sandboxStatus === 'starting'
-													? '85%'
-													: '95%'}"
+									style={`width: ${streamStatusInfo.progress}`}
 								></div>
 							</div>
 						</div>

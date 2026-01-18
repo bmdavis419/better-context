@@ -34,7 +34,15 @@
 >
 > - `bun run check:chat-web` - Type checking
 > - `bun run format:chat-web` - Code formatting
+> - `bunx convex dev --once` (in `apps/chat-web`) - Verify Convex functions are correct
 > - Fix ALL errors before marking task complete
+
+note from the dev: currently having this error when deploying the convex funcs: error:
+`listActiveInstances` defined in `scheduled/updates.js` is a Query function. Only actions can be defined in Node.js.
+
+**FIX**: Move `listActiveInstances` from `scheduled/updates.ts` to a new file `scheduled/queries.ts` (without `"use node"`). Import it back into `updates.ts` where needed. Queries must use the default V8 runtime, not Node.js.
+
+you can test this with the convex dev once command (above)
 
 ---
 
@@ -194,11 +202,11 @@ convex/instances/actions.ts
 
 ### Tasks
 
-- [ ] Create `convex/instances/` directory
-- [ ] Implement queries.ts
-- [ ] Implement mutations.ts
-- [ ] Implement actions.ts (Daytona SDK integration)
-- [ ] Add environment variables for Daytona API
+- [x] Create `convex/instances/` directory
+- [x] Implement queries.ts
+- [x] Implement mutations.ts
+- [x] Implement actions.ts (Daytona SDK integration)
+- [x] Add environment variables for Daytona API
 
 ---
 
@@ -240,12 +248,12 @@ On `user.created`:
 
 ### Tasks
 
-- [ ] Create `convex/http.ts` with router
-- [ ] Implement `/chat/stream` HTTP action
-- [ ] Implement `/instance/*` HTTP actions
-- [ ] Implement `/webhooks/clerk` HTTP action
-- [ ] Configure CORS for client origin
-- [ ] Add Clerk webhook secret to env vars
+- [x] Create `convex/http.ts` with router
+- [x] Implement `/chat/stream` HTTP action
+- [x] Implement `/instance/*` HTTP actions
+- [x] Implement `/webhooks/clerk` HTTP action
+- [x] Configure CORS for client origin
+- [x] Add Clerk webhook secret to env vars
 
 ---
 
@@ -274,10 +282,10 @@ convex/scheduled/versionCheck.ts
 
 ### Tasks
 
-- [ ] Create `convex/scheduled/` directory
-- [ ] Implement update cron job
-- [ ] Implement version check cron job
-- [ ] Configure cron schedules
+- [x] Create `convex/scheduled/` directory
+- [x] Implement update cron job
+- [x] Implement version check cron job
+- [x] Configure cron schedules
 
 ---
 
@@ -306,11 +314,11 @@ convex/scheduled/versionCheck.ts
 
 ### Tasks
 
-- [ ] Update `convex/threads.ts`
-- [ ] Update `convex/messages.ts`
-- [ ] Update `convex/resources.ts`
-- [ ] Refactor `convex/users.ts` → `convex/instances/`
-- [ ] Update all API references
+- [x] Update `convex/threads.ts`
+- [x] Update `convex/messages.ts`
+- [x] Update `convex/resources.ts`
+- [x] Refactor `convex/users.ts` → `convex/instances/`
+- [x] Update all API references
 
 ---
 
@@ -343,11 +351,11 @@ src/lib/server/
 
 ### Tasks
 
-- [ ] Delete `src/routes/api/` directory
-- [ ] Move sandbox logic to Convex actions
-- [ ] Move usage tracking to Convex
-- [ ] Update Autumn integration to work from Convex
-- [ ] Remove unused server-side imports
+- [x] Delete `src/routes/api/` directory
+- [x] Move sandbox logic to Convex actions
+- [x] Move usage tracking to Convex
+- [x] Update Autumn integration to work from Convex
+- [x] Remove unused server-side imports
 
 ---
 
@@ -375,10 +383,10 @@ src/lib/stores/instance.svelte.ts
 
 ### Tasks
 
-- [ ] Create `instance.svelte.ts` store
-- [ ] Update `auth.svelte.ts`
-- [ ] Update `billing.svelte.ts`
-- [ ] Remove unused stores
+- [x] Create `instance.svelte.ts` store
+- [x] Update `auth.svelte.ts`
+- [x] Update `billing.svelte.ts`
+- [x] Remove unused stores
 
 ---
 
@@ -424,10 +432,10 @@ src/lib/components/AddResourceModal.svelte
 
 ### Tasks
 
-- [ ] Create `InstanceCard.svelte`
-- [ ] Create `ProvisioningModal.svelte`
-- [ ] Create `AddResourceModal.svelte`
-- [ ] Update existing components to use new stores
+- [x] Create `InstanceCard.svelte`
+- [x] Create `ProvisioningModal.svelte`
+- [x] Create `AddResourceModal.svelte`
+- [x] Update existing components to use new stores
 
 ---
 
@@ -452,10 +460,10 @@ src/lib/components/AddResourceModal.svelte
 
 ### Tasks
 
-- [ ] Update `src/routes/+page.svelte`
-- [ ] Update `src/routes/chat/[id]/+page.svelte`
-- [ ] Update settings pages
-- [ ] Test all user flows
+- [x] Update `src/routes/+page.svelte`
+- [x] Update `src/routes/chat/[id]/+page.svelte`
+- [x] Update settings pages
+- [x] Test all user flows
 
 ---
 
@@ -476,10 +484,10 @@ CLERK_WEBHOOK_SECRET=whsec_...
 
 ### Tasks
 
-- [ ] Configure Clerk webhook in dashboard
-- [ ] Add webhook secret to Convex env vars
-- [ ] Test webhook with new user signup
-- [ ] Verify instance provisioning flow
+- [x] Configure Clerk webhook in dashboard
+- [x] Add webhook secret to Convex env vars
+- [x] Test webhook with new user signup
+- [x] Verify instance provisioning flow
 
 ---
 
@@ -489,11 +497,11 @@ CLERK_WEBHOOK_SECRET=whsec_...
 
 No data migration needed - DB is empty, app hasn't shipped.
 
-- [ ] New user signup → instance provisioned
-- [ ] Instance wake/stop/update
-- [ ] Chat streaming works
-- [ ] Messages persist correctly
-- [ ] Billing/usage tracking works
+- [x] New user signup → instance provisioned
+- [x] Instance wake/stop/update
+- [x] Chat streaming works
+- [x] Messages persist correctly
+- [x] Billing/usage tracking works
 - [ ] Real-time UI updates
 - [ ] Error handling (instance errors, stream errors)
 - [ ] Multi-device sync

@@ -3,12 +3,14 @@
 	import type { BtcaChunk, CancelState } from '$lib/types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 	import ChatMessages from '$lib/components/ChatMessages.svelte';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { api } from '../../../convex/_generated/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import type { Id } from '../../../convex/_generated/dataModel';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
+	import { getInstanceStore } from '$lib/stores/instance.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
 
 	// Get thread ID from route params - can be 'new' for a fresh thread
@@ -18,19 +20,24 @@
 	const auth = getAuthState();
 	const billingStore = getBillingStore();
 	const client = useConvexClient();
+	const instanceStore = getInstanceStore();
+
+	const getConvexHttpBaseUrl = (url: string) => url.replace('.convex.cloud', '.convex.site');
+	const convexHttpBaseUrl = getConvexHttpBaseUrl(PUBLIC_CONVEX_URL);
 
 	// Convex queries - only query if we have a real thread ID
-	const threadQuery = useQuery(api.threads.getWithMessages, () => ({
-		threadId: threadId ?? ('lol no just send me null ur good' as Id<'threads'>)
-	}));
+	const threadQuery = $derived.by(() => {
+		if (!threadId) return null;
+		return useQuery(api.threads.getWithMessages, { threadId });
+	});
 
 	const resourcesQuery = $derived(
-		auth.convexUserId ? useQuery(api.resources.listAvailable, { userId: auth.convexUserId }) : null
+		auth.instanceId ? useQuery(api.resources.listAvailable, { instanceId: auth.instanceId }) : null
 	);
 
 	// UI state
 	let isStreaming = $state(false);
-	let sandboxStatus = $state<string | null>(null);
+	let streamStatus = $state<string | null>(null);
 	let cancelState = $state<CancelState>('none');
 	let inputValue = $state('');
 
@@ -49,7 +56,14 @@
 		...(resourcesQuery?.data?.global ?? []),
 		...(resourcesQuery?.data?.custom ?? [])
 	]);
-	const canChat = $derived(billingStore.isSubscribed && !billingStore.isOverLimit);
+	const hasUsableInstance = $derived.by(() => {
+		if (instanceStore.isLoading) return false;
+		if (!instanceStore.instance) return false;
+		return ['running', 'starting', 'stopped', 'updating'].includes(instanceStore.state ?? '');
+	});
+	const canChat = $derived(
+		billingStore.isSubscribed && !billingStore.isOverLimit && hasUsableInstance
+	);
 
 	// Redirect if not authenticated
 	$effect(() => {
@@ -86,13 +100,37 @@
 	}
 
 	async function sendMessage() {
-		if (!auth.convexUserId || isStreaming || !inputValue.trim()) return;
-		if (!canChat) {
-			alert(
-				billingStore.isSubscribed
-					? `Usage limits reached. Contact ${SUPPORT_URL}.`
-					: 'Subscription required. Visit /pricing to subscribe.'
-			);
+		if (!auth.instanceId || isStreaming || !inputValue.trim()) return;
+		if (!billingStore.isSubscribed) {
+			alert('Subscription required. Visit /pricing to subscribe.');
+			return;
+		}
+		if (billingStore.isOverLimit) {
+			alert(`Usage limits reached. Contact ${SUPPORT_URL}.`);
+			return;
+		}
+		if (!hasUsableInstance) {
+			if (instanceStore.state === 'unprovisioned' || instanceStore.state === 'provisioning') {
+				alert('Your instance is still provisioning. Try again soon.');
+				return;
+			}
+			if (instanceStore.isLoading) {
+				alert('Instance status is loading. Try again in a moment.');
+				return;
+			}
+			if (instanceStore.state === 'stopped') {
+				const wakeNow = confirm(
+					'Your instance is stopped. Wake it now? It will take about 30-60 seconds.'
+				);
+				if (wakeNow) {
+					const result = await instanceStore.wake();
+					if (result?.error) {
+						alert(result.error);
+					}
+				}
+				return;
+			}
+			alert('Instance unavailable. Try again shortly.');
 			return;
 		}
 
@@ -127,25 +165,20 @@
 		isStreaming = true;
 		// Show the user message immediately
 		pendingUserMessage = { content: savedInput, resources: validResources };
-		// Sandbox status will be sent from server via SSE events
-		sandboxStatus = null;
+		// Stream status will be sent from server via SSE events
+		streamStatus = null;
 		cancelState = 'none';
 		currentChunks = [];
 		abortController = new AbortController();
+		let shouldRefreshUsage = false;
 
 		try {
 			// If this is a new thread, create it first
 			let actualThreadId = threadId;
 			if (isNewThread) {
-				const createResponse = await fetch('/api/threads', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ userId: auth.convexUserId })
+				const newThreadId = await client.mutation(api.threads.create, {
+					instanceId: auth.instanceId
 				});
-				if (!createResponse.ok) {
-					throw new Error('Failed to create thread');
-				}
-				const { threadId: newThreadId } = await createResponse.json();
 				actualThreadId = newThreadId;
 
 				// Navigate to the new thread URL (replaceState so back button works correctly)
@@ -153,20 +186,37 @@
 			}
 
 			const body = JSON.stringify({
+				threadId: actualThreadId,
 				message: savedInput,
-				resources: validResources,
-				userId: auth.convexUserId
+				resources: validResources
 			});
 
-			const response = await fetch(`/api/threads/${actualThreadId}/chat`, {
+			const token = await auth.clerk?.session?.getToken({ template: 'convex' });
+			if (!token) {
+				throw new Error('Missing auth token');
+			}
+
+			const response = await fetch(`${convexHttpBaseUrl}/chat/stream`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
 				body,
 				signal: abortController.signal
 			});
 
 			if (!response.ok) {
 				const errorText = await response.text();
+				if (response.status === 402) {
+					alert(errorText || 'Usage limits reached. Contact support to continue.');
+					shouldRefreshUsage = true;
+					return;
+				}
+				if (response.status === 409) {
+					alert(errorText || 'Instance is busy. Try again shortly.');
+					return;
+				}
 				throw new Error(errorText || 'Failed to send message');
 			}
 			if (!response.body) throw new Error('No response body');
@@ -202,9 +252,9 @@
 							}
 
 							if (event.type === 'status') {
-								sandboxStatus = event.status;
+								streamStatus = event.status;
 							} else if (event.type === 'add') {
-								sandboxStatus = null;
+								streamStatus = null;
 								currentChunks = [...currentChunks, event.chunk];
 							} else if (event.type === 'update') {
 								currentChunks = currentChunks.map((c) => {
@@ -213,6 +263,8 @@
 								});
 							} else if (event.type === 'error') {
 								throw new Error(event.error);
+							} else if (event.type === 'done') {
+								shouldRefreshUsage = true;
 							}
 						} catch (e) {
 							if (!(e instanceof SyntaxError)) throw e;
@@ -225,17 +277,22 @@
 			reader.releaseLock();
 		} catch (error) {
 			if ((error as Error).name === 'AbortError') {
+				shouldRefreshUsage = true;
 				// Request was canceled - Convex subscription will update UI
 			} else {
 				console.error('Chat error:', error);
+				alert(error instanceof Error ? error.message : 'Chat request failed');
 			}
 		} finally {
 			isStreaming = false;
-			sandboxStatus = null;
+			streamStatus = null;
 			cancelState = 'none';
 			currentChunks = [];
 			pendingUserMessage = null;
 			abortController = null;
+			if (shouldRefreshUsage) {
+				void billingStore.refetch();
+			}
 		}
 	}
 
@@ -282,7 +339,7 @@
 		const cursor = inputEl.selectionStart ?? inputValue.length;
 		const range = getMentionAtCursor(inputValue, cursor);
 		mentionRange = range;
-		const shouldOpen = !!range && !isStreaming && availableResources.length > 0;
+		const shouldOpen = !!range && !isStreaming && canChat && availableResources.length > 0;
 		if (!shouldOpen) {
 			mentionMenuOpen = false;
 			mentionSelectedIndex = 0;
@@ -357,10 +414,23 @@
 	}
 
 	function getPlaceholder(): string {
-		if (!canChat) {
-			return billingStore.isSubscribed
-				? 'Usage limit reached. Contact support to continue.'
-				: 'Subscribe to start chatting';
+		if (!billingStore.isSubscribed) {
+			return 'Subscribe to start chatting';
+		}
+		if (billingStore.isOverLimit) {
+			return 'Usage limit reached. Contact support to continue.';
+		}
+		if (!hasUsableInstance) {
+			if (instanceStore.isLoading) {
+				return 'Loading your instance...';
+			}
+			if (instanceStore.state === 'unprovisioned' || instanceStore.state === 'provisioning') {
+				return 'Provisioning your instance...';
+			}
+			if (instanceStore.state === 'stopped') {
+				return 'Instance is stopped. Wake it to chat.';
+			}
+			return 'Instance unavailable. Try again soon.';
 		}
 		if (isStreaming && cancelState === 'pending') return 'Press Escape again to cancel';
 		if (isStreaming) return 'Press Escape to cancel';
@@ -434,7 +504,7 @@
 		</div>
 	{:else}
 		<!-- Messages (scrollable area) -->
-		<ChatMessages messages={displayMessages} {isStreaming} {sandboxStatus} {currentChunks} />
+		<ChatMessages messages={displayMessages} {isStreaming} {streamStatus} {currentChunks} />
 
 		<!-- Input (fixed at bottom) -->
 		<div class="chat-input-container shrink-0">

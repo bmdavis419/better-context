@@ -10,22 +10,22 @@ export const listGlobal = query({
 });
 
 export const listUserResources = query({
-	args: { userId: v.id('instances') },
+	args: { instanceId: v.id('instances') },
 	handler: async (ctx, args) => {
 		return await ctx.db
 			.query('userResources')
-			.withIndex('by_instance', (q) => q.eq('instanceId', args.userId))
+			.withIndex('by_instance', (q) => q.eq('instanceId', args.instanceId))
 			.collect();
 	}
 });
 
 export const listAvailable = query({
-	args: { userId: v.id('instances') },
+	args: { instanceId: v.id('instances') },
 	handler: async (ctx, args) => {
 		const globalResources = await ctx.db.query('globalResources').collect();
 		const userResources = await ctx.db
 			.query('userResources')
-			.withIndex('by_instance', (q) => q.eq('instanceId', args.userId))
+			.withIndex('by_instance', (q) => q.eq('instanceId', args.instanceId))
 			.collect();
 
 		const global = globalResources
@@ -58,7 +58,7 @@ export const listAvailable = query({
 
 export const addCustomResource = mutation({
 	args: {
-		userId: v.id('instances'),
+		instanceId: v.id('instances'),
 		name: v.string(),
 		url: v.string(),
 		branch: v.string(),
@@ -67,7 +67,7 @@ export const addCustomResource = mutation({
 	},
 	handler: async (ctx, args) => {
 		return await ctx.db.insert('userResources', {
-			instanceId: args.userId,
+			instanceId: args.instanceId,
 			name: args.name,
 			type: 'git',
 			url: args.url,

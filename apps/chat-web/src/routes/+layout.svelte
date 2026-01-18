@@ -16,29 +16,28 @@
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { onMount } from 'svelte';
 	import { initializeClerk } from '$lib/clerk';
-	import { convex } from '$lib/convex';
 	import { setupConvex } from 'convex-svelte';
 	import { untrack } from 'svelte';
 	import {
 		setAuthState,
 		getAuthState,
-		setConvexUserId,
+		setInstanceId,
 		signOut,
 		openSignIn,
 		openUserProfile
 	} from '$lib/stores/auth.svelte';
 	import { setBillingStore } from '$lib/stores/billing.svelte';
-	import { api } from '../convex/_generated/api';
+	import { setInstanceStore, getInstanceStore } from '$lib/stores/instance.svelte';
 	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 
 	let { children } = $props();
 
-	// Initialize convex-svelte
 	setupConvex(PUBLIC_CONVEX_URL);
 
 	const themeStore = setThemeStore();
 	const auth = getAuthState();
 	const billingStore = setBillingStore();
+	const instanceStore = setInstanceStore();
 
 	let isInitializing = $state(true);
 	let showUserMenu = $state(false);
@@ -52,22 +51,9 @@
 			const clerk = await initializeClerk();
 			setAuthState(clerk);
 
-			// If user is signed in, ensure they exist in Convex
-			if (clerk.user) {
-				const userId = await convex.mutation(api.users.getOrCreate, {
-					clerkId: clerk.user.id
-				});
-				setConvexUserId(userId);
-			}
-
-			clerk.addListener(async (resources) => {
-				if (resources.user) {
-					const userId = await convex.mutation(api.users.getOrCreate, {
-						clerkId: resources.user.id
-					});
-					setConvexUserId(userId);
-				} else {
-					setConvexUserId(null);
+			clerk.addListener((resources) => {
+				if (!resources.user) {
+					setInstanceId(null);
 				}
 			});
 		} catch (error) {
@@ -78,7 +64,12 @@
 	});
 
 	$effect(() => {
-		const userId = auth.convexUserId;
+		const instance = instanceStore.instance;
+		untrack(() => setInstanceId(instance?._id ?? null));
+	});
+
+	$effect(() => {
+		const userId = auth.instanceId;
 		untrack(() => billingStore.setUserId(userId));
 	});
 

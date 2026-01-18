@@ -8,6 +8,7 @@
 		remoteCreateCheckoutSession
 	} from '$lib/remote/billing.remote';
 	import { BILLING_PLAN } from '$lib/billing/plans';
+	import InstanceCard from '$lib/components/InstanceCard.svelte';
 
 	const auth = getAuthState();
 	const billingStore = getBillingStore();
@@ -32,11 +33,11 @@
 	});
 
 	async function handleCheckout() {
-		if (!auth.convexUserId) return;
+		if (!auth.instanceId) return;
 		errorMessage = null;
 		isRedirecting = true;
 		try {
-			const result = await remoteCreateCheckoutSession({ userId: auth.convexUserId });
+			const result = await remoteCreateCheckoutSession({ userId: auth.instanceId });
 			window.location.href = result.url;
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : 'Failed to start checkout';
@@ -46,11 +47,11 @@
 	}
 
 	async function handleManage() {
-		if (!auth.convexUserId) return;
+		if (!auth.instanceId) return;
 		errorMessage = null;
 		isRedirecting = true;
 		try {
-			const result = await remoteCreateBillingPortalSession({ userId: auth.convexUserId });
+			const result = await remoteCreateBillingPortalSession({ userId: auth.instanceId });
 			window.location.href = result.url;
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : 'Failed to open billing portal';
@@ -62,6 +63,7 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<div class="mx-auto flex w-full max-w-3xl flex-col gap-8 overflow-y-auto p-8">
+		<InstanceCard />
 		<div>
 			<h1 class="text-2xl font-semibold">Billing</h1>
 			<p class="bc-muted mt-1 text-sm">Manage your subscription and payment details.</p>

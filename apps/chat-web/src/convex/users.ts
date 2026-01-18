@@ -1,32 +1,12 @@
-import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
-export const get = query({
-	args: { id: v.id('instances') },
-	handler: async (ctx, args) => {
-		return await ctx.db.get(args.id);
-	}
-});
+import { mutation } from './_generated/server';
+import { create as createInstance } from './instances/mutations';
+import { get as getInstance } from './instances/queries';
 
-export const getOrCreate = mutation({
-	args: { clerkId: v.string() },
-	handler: async (ctx, args) => {
-		const existing = await ctx.db
-			.query('instances')
-			.withIndex('by_clerk_id', (q) => q.eq('clerkId', args.clerkId))
-			.first();
+export const get = getInstance;
 
-		if (existing) {
-			return existing._id;
-		}
-
-		return await ctx.db.insert('instances', {
-			clerkId: args.clerkId,
-			state: 'unprovisioned',
-			createdAt: Date.now()
-		});
-	}
-});
+export const getOrCreate = createInstance;
 
 export const updateSandboxActivity = mutation({
 	args: {
@@ -34,8 +14,8 @@ export const updateSandboxActivity = mutation({
 		sandboxId: v.string()
 	},
 	handler: async (ctx, args) => {
+		void args.sandboxId;
 		await ctx.db.patch(args.userId, {
-			sandboxId: args.sandboxId,
 			lastActiveAt: Date.now()
 		});
 	}
