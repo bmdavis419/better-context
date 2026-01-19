@@ -107,9 +107,7 @@ const modelCommand = new Command('model')
 			try {
 				const client = createClient(server.url);
 				const providers = await getProviders(client);
-				const provider = providers.all.find(
-					(p: { id: string }) => p.id === result.provider
-				);
+				const provider = providers.all.find((p: { id: string }) => p.id === result.provider);
 				if (!provider) {
 					console.warn(
 						`Warning: Provider "${result.provider}" is not available. ` +
@@ -136,6 +134,7 @@ const modelCommand = new Command('model')
 			}
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
