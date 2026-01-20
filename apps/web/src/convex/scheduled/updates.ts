@@ -1,8 +1,8 @@
 'use node';
 
-import type { Doc } from '../_generated/dataModel';
+import type { Doc } from '../_generated/dataModel.js';
 import { internalAction, type ActionCtx } from '../_generated/server.js';
-import { instances as instancesApi, scheduled } from '../apiHelpers';
+import { instances as instancesApi, scheduled } from '../apiHelpers.js';
 
 const instanceActions = instancesApi.actions;
 

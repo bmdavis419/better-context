@@ -4,10 +4,10 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { api, internal } from './_generated/api.js';
-import type { Id } from './_generated/dataModel';
+import type { Id } from './_generated/dataModel.js';
 import { httpAction, type ActionCtx } from './_generated/server.js';
-import { AnalyticsEvents } from './analyticsEvents';
-import { instances } from './apiHelpers';
+import { AnalyticsEvents } from './analyticsEvents.js';
+import { instances } from './apiHelpers.js';
 
 const usageActions = api.usage;
 const instanceActions = instances.actions;

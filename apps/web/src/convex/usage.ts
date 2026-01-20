@@ -3,7 +3,7 @@ import { v } from 'convex/values';
 
 import { internal } from './_generated/api.js';
 import { action } from './_generated/server.js';
-import { AnalyticsEvents } from './analyticsEvents';
+import { AnalyticsEvents } from './analyticsEvents.js';
 import { instances } from './apiHelpers.js';
 
 type FeatureMetrics = {

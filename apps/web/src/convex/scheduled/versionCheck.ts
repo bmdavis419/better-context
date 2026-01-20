@@ -1,9 +1,9 @@
 'use node';
 
 import { internal } from '../_generated/api.js';
-import type { Doc } from '../_generated/dataModel';
+import type { Doc } from '../_generated/dataModel.js';
 import { internalAction, type ActionCtx } from '../_generated/server.js';
-import { instances, scheduled } from '../apiHelpers';
+import { instances, scheduled } from '../apiHelpers.js';
 
 const instanceMutations = instances.mutations;
 
