@@ -10,6 +10,7 @@ Ask your AI agent questions about libraries and frameworks by searching the actu
 
 ```bash
 bun add -g btca opencode-ai
+btca auth
 btca config model --provider opencode --model claude-haiku-4-5
 ```
 
@@ -21,6 +22,9 @@ btca ask --resource svelte --question "How does the $state rune work?"
 
 # Launch the TUI
 btca
+
+# Connect a provider (recommended)
+btca auth
 ```
 
 ## Project Setup
