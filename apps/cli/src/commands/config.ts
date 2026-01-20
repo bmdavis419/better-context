@@ -118,7 +118,7 @@ const modelCommand = new Command('model')
 				} else if (!providers.connected.includes(result.provider)) {
 					console.warn(
 						`Warning: Provider "${result.provider}" is not connected. ` +
-							'Run "opencode auth" to configure credentials.'
+							'Run "btca auth" or "opencode auth" to configure credentials.'
 					);
 				} else {
 					const modelIds = Object.keys(provider.models ?? {});

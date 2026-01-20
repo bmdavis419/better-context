@@ -1,18 +1,17 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 1,
   "workspaces": {
     "": {
       "name": "@btca/repo",
       "devDependencies": {
-        "@opentui/solid": "latest",
-        "@types/bun": "latest",
-        "@typescript/native-preview": "latest",
-        "prettier": "latest",
-        "prettier-plugin-svelte": "latest",
-        "prettier-plugin-tailwindcss": "latest",
-        "turbo": "latest",
-        "typescript": "latest",
+        "@opentui/solid": "^0.1.72",
+        "@types/bun": "^1.3.6",
+        "@typescript/native-preview": "^7.0.0-dev.20260114.1",
+        "prettier": "^3.8.0",
+        "prettier-plugin-svelte": "^3.4.1",
+        "prettier-plugin-tailwindcss": "^0.7.2",
+        "turbo": "^2.7.4",
+        "typescript": "^5.9.3",
       },
     },
     "apps/chat-web": {
@@ -51,7 +50,7 @@
     },
     "apps/cli": {
       "name": "btca",
-      "version": "1.0.41",
+      "version": "1.0.44",
       "bin": {
         "btca": "bin.js",
       },
@@ -86,10 +85,10 @@
     },
     "apps/server": {
       "name": "btca-server",
-      "version": "1.0.40",
+      "version": "1.0.43",
       "dependencies": {
         "@btca/shared": "workspace:*",
-        "@opencode-ai/sdk": "^1.0.208",
+        "@opencode-ai/sdk": "^1.1.26",
         "hono": "^4.7.11",
         "zod": "^3.25.76",
       },
@@ -561,7 +560,7 @@
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.21", "", {}, "sha512-4M6lBjRPlPz99Rb5rS5ZqKrb0UDDxOT9VTG06JpNxvA7ynTd8C50ckc2NGzWtvjarmxfaAk1VeuBYN/cq2pIKQ=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.26", "", {}, "sha512-5s+yxNJy7DpWwDq0L//F2sqKERz4640DmDLyrRlFXmckx5prnzFl3liEOOTySOL2WaxgVwjYw8OBiT15v2mAgA=="],
 
     "@opentui/core": ["@opentui/core@0.1.72", "", { "dependencies": { "bun-ffi-structs": "0.1.2", "diff": "8.0.2", "jimp": "1.6.0", "yoga-layout": "3.2.1" }, "optionalDependencies": { "@dimforge/rapier2d-simd-compat": "^0.17.3", "@opentui/core-darwin-arm64": "0.1.72", "@opentui/core-darwin-x64": "0.1.72", "@opentui/core-linux-arm64": "0.1.72", "@opentui/core-linux-x64": "0.1.72", "@opentui/core-win32-arm64": "0.1.72", "@opentui/core-win32-x64": "0.1.72", "bun-webgpu": "0.1.4", "planck": "^1.4.2", "three": "0.177.0" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-l4WQzubBJ80Q0n77Lxuodjwwm8qj/sOa7IXxEAzzDDXY/7bsIhdSpVhRTt+KevBRlok5J+w/KMKYr8UzkA4/hA=="],
 
