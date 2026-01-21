@@ -118,7 +118,7 @@ const modelCommand = new Command('model')
 				} else if (!providers.connected.includes(result.provider)) {
 					console.warn(
 						`Warning: Provider "${result.provider}" is not connected. ` +
-							'Run "opencode auth" to configure credentials.'
+							'Run "btca auth" or "opencode auth" to configure credentials.'
 					);
 				} else {
 					const modelIds = Object.keys(provider.models ?? {});
@@ -136,6 +136,7 @@ const modelCommand = new Command('model')
 			}
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
@@ -185,6 +186,7 @@ const resourcesListCommand = new Command('list')
 			}
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
@@ -267,6 +269,7 @@ const resourcesAddCommand = new Command('add')
 			}
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
@@ -295,7 +298,7 @@ const resourcesRemoveCommand = new Command('remove')
 			if (resources.length === 0) {
 				console.log('No resources configured.');
 				server.stop();
-				return;
+				process.exit(0);
 			}
 
 			const names = resources.map((r) => r.name);
@@ -318,6 +321,7 @@ const resourcesRemoveCommand = new Command('remove')
 			console.log(`Removed resource: ${resourceName}`);
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
