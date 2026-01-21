@@ -10,6 +10,7 @@ import { CommandPalette } from './command-palette.tsx';
 import { RepoMentionPalette } from './repo-mention-palette.tsx';
 import { BlessedModelSelect } from './blessed-model-select.tsx';
 import { AddResourceWizard } from './add-resource-wizard.tsx';
+import { ConnectProviderWizard } from './connect-provider-wizard.tsx';
 
 export const InputSection: Component = () => {
 	const messages = useMessagesContext();
@@ -117,6 +118,11 @@ export const InputSection: Component = () => {
 		setCurrentWizardStep(null);
 	};
 
+	const openModelWizard = () => {
+		setActiveWizard('blessed-model');
+		setCurrentWizardStep(null);
+	};
+
 	const handleCommandExecute = (command: { mode: string }) => {
 		setInputState([]);
 		switch (command.mode) {
@@ -126,6 +132,9 @@ export const InputSection: Component = () => {
 			case 'add-repo':
 				setActiveWizard('add-repo');
 				setCurrentWizardStep('type');
+				break;
+			case 'connect-provider':
+				setActiveWizard('connect-provider');
 				break;
 			case 'clear':
 				messages.clearMessages();
@@ -208,6 +217,9 @@ export const InputSection: Component = () => {
 			</Show>
 			<Show when={activeWizard() === 'add-repo'}>
 				<AddResourceWizard onClose={closeWizard} onStepChange={setCurrentWizardStep} />
+			</Show>
+			<Show when={activeWizard() === 'connect-provider'}>
+				<ConnectProviderWizard onClose={closeWizard} onShowModels={openModelWizard} />
 			</Show>
 
 			<StatusBar

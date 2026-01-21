@@ -50,7 +50,7 @@
 	},
 	"dependencies": {
 		"@btca/shared": "workspace:*",
-		"@opencode-ai/sdk": "^1.0.208",
+		"@opencode-ai/sdk": "^1.1.26",
 		"hono": "^4.7.11",
 		"zod": "^3.25.76"
 	}

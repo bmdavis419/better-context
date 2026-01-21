@@ -1,9 +1,10 @@
-import { For, createSignal, createMemo, type Component } from 'solid-js';
+import { createEffect, createMemo, createResource, createSignal, For, type Component } from 'solid-js';
 import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
 import { useConfigContext } from '../context/config-context.tsx';
 import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
+import { getAuth } from '../../opencode/auth-store.ts';
 
 // Blessed models
 const BLESSED_MODELS = [
@@ -34,6 +35,29 @@ const BLESSED_MODELS = [
 	}
 ];
 
+const OPENAI_CODEX_MODELS = [
+	{
+		provider: 'openai',
+		model: 'gpt-5.1-codex-mini',
+		description: 'GPT-5.1 Codex Mini (ChatGPT Pro/Plus) (recommended)'
+	},
+	{
+		provider: 'openai',
+		model: 'gpt-5.2-codex',
+		description: 'GPT-5.2 Codex (ChatGPT Pro/Plus)'
+	},
+	{
+		provider: 'openai',
+		model: 'gpt-5.2',
+		description: 'GPT-5.2 (ChatGPT Pro/Plus)'
+	},
+	{
+		provider: 'openai',
+		model: 'gpt-5.1-codex-max',
+		description: 'GPT-5.1 Codex Max (ChatGPT Pro/Plus)'
+	}
+];
+
 interface BlessedModelSelectProps {
 	onClose: () => void;
 }
@@ -43,16 +67,37 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 	const messages = useMessagesContext();
 
 	const [selectedIndex, setSelectedIndex] = createSignal(0);
+	const [openaiAuth] = createResource(() => getAuth('openai'));
+
+	const modelOptions = createMemo(() => {
+		const openaiConnected = Boolean(openaiAuth());
+		return openaiConnected ? [...OPENAI_CODEX_MODELS, ...BLESSED_MODELS] : BLESSED_MODELS;
+	});
+
+	createEffect(() => {
+		const provider = config.selectedProvider();
+		const model = config.selectedModel();
+		const index = modelOptions().findIndex((m) => m.provider === provider && m.model === model);
+		if (index >= 0) {
+			setSelectedIndex(index);
+			return;
+		}
+		if (Boolean(openaiAuth())) {
+			setSelectedIndex(0);
+		} else {
+			setSelectedIndex(0);
+		}
+	});
 
 	// Find if current model matches a blessed model
 	const currentModelIndex = createMemo(() => {
 		const provider = config.selectedProvider();
 		const model = config.selectedModel();
-		return BLESSED_MODELS.findIndex((m) => m.provider === provider && m.model === model);
+		return modelOptions().findIndex((m) => m.provider === provider && m.model === model);
 	});
 
 	const handleSelect = async () => {
-		const selectedModel = BLESSED_MODELS[selectedIndex()];
+		const selectedModel = modelOptions()[selectedIndex()];
 		if (!selectedModel) return;
 
 		try {
@@ -76,11 +121,11 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 				if (selectedIndex() > 0) {
 					setSelectedIndex(selectedIndex() - 1);
 				} else {
-					setSelectedIndex(BLESSED_MODELS.length - 1);
+					setSelectedIndex(modelOptions().length - 1);
 				}
 				break;
 			case 'down':
-				if (selectedIndex() < BLESSED_MODELS.length - 1) {
+				if (selectedIndex() < modelOptions().length - 1) {
 					setSelectedIndex(selectedIndex() + 1);
 				} else {
 					setSelectedIndex(0);
@@ -113,7 +158,7 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 				content=" Use arrow keys to navigate, Enter to select, Esc to cancel"
 			/>
 			<text content="" style={{ height: 1 }} />
-			<For each={BLESSED_MODELS}>
+			<For each={modelOptions()}>
 				{(model, i) => {
 					const isSelected = () => i() === selectedIndex();
 					const isCurrent = () => i() === currentModelIndex();

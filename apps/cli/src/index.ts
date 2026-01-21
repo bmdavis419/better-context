@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { askCommand } from './commands/ask.ts';
+import { authCommand } from './commands/auth.ts';
 import { chatCommand } from './commands/chat.ts';
 import { configCommand } from './commands/config.ts';
 import { clearCommand } from './commands/clear.ts';
@@ -22,6 +23,7 @@ const program = new Command()
 	.option('--port <port>', 'Port for auto-started server (default: random)', parseInt);
 
 program.addCommand(askCommand);
+program.addCommand(authCommand);
 program.addCommand(chatCommand);
 program.addCommand(configCommand);
 program.addCommand(clearCommand);

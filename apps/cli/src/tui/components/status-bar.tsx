@@ -31,6 +31,10 @@ export const StatusBar: Component<StatusBarProps> = (props) => {
 			return ' [Up/Down] Navigate  [Enter] Select  [Esc] Cancel';
 		}
 
+		if (props.activeWizard === 'connect-provider') {
+			return ' [Up/Down] Navigate  [Enter] Connect  [Esc] Cancel';
+		}
+
 		if (props.activeWizard === 'add-repo') {
 			if (props.wizardStep === 'confirm') {
 				return ' [Enter] Get config snippet  [Esc] Cancel';
