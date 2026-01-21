@@ -12,6 +12,8 @@ const targets = [
 	'bun-windows-x64'
 ] as const;
 
+type Target = (typeof targets)[number];
+
 const outputNames: Record<(typeof targets)[number], string> = {
 	'bun-darwin-arm64': 'btca-darwin-arm64',
 	'bun-darwin-x64': 'btca-darwin-x64',
@@ -20,22 +22,32 @@ const outputNames: Record<(typeof targets)[number], string> = {
 	'bun-windows-x64': 'btca-windows-x64.exe'
 };
 
+const buildAllTargets = process.env.BTCA_BUILD_ALL === '1';
+const targetList: Target[] = buildAllTargets
+	? [...targets]
+	: process.platform === 'win32'
+		? ['bun-windows-x64']
+		: [...targets];
+
 async function main() {
-	// Install opentui for all platforms
 	const opentuiCoreVersion = packageJson.devDependencies['@opentui/core'];
 	const opentuiSolidVersion = packageJson.devDependencies['@opentui/solid'];
 
-	console.log('Installing opentui for all platforms...');
-	await $`bun install --os="*" --cpu="*" @opentui/core@${opentuiCoreVersion}`;
-	await $`bun install --os="*" --cpu="*" @opentui/solid@${opentuiSolidVersion}`;
-	console.log('Done installing opentui for all platforms');
+	if (buildAllTargets || process.platform !== 'win32') {
+		console.log('Installing opentui for all platforms...');
+		await $`bun install --os="*" --cpu="*" @opentui/core@${opentuiCoreVersion}`;
+		await $`bun install --os="*" --cpu="*" @opentui/solid@${opentuiSolidVersion}`;
+		console.log('Done installing opentui for all platforms');
+	} else {
+		console.log('Skipping cross-platform opentui install (Windows-only build).');
+	}
 
 	await Bun.file('dist')
 		.exists()
 		.catch(() => false);
 	await $`mkdir -p dist`;
 
-	for (const target of targets) {
+	for (const target of targetList) {
 		const outfile = `dist/${outputNames[target]}`;
 		console.log(`Building ${target} -> ${outfile} (v${VERSION})`);
 		const result = await Bun.build({
