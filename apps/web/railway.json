@@ -2,7 +2,7 @@
 	"$schema": "https://railway.com/railway.schema.json",
 	"build": {
 		"watchPatterns": ["apps/web/**", "packages/shared/**"],
-		"buildCommand": "cd apps/web && bunx convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'cd ../.. && bun run build:web'"
+		"buildCommand": "bun run build:web && cd apps/web && bunx convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'echo Convex deployed'"
 	},
 	"deploy": {
 		"startCommand": "cd apps/web && PORT=8080 bun ./build",
