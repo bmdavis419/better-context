@@ -361,17 +361,44 @@ const gitUpdate = async (args: {
 	}
 };
 
+/**
+ * Detect common mistakes in searchPath and provide helpful hints.
+ */
+const getSearchPathHint = (searchPath: string, repoPath: string): string => {
+	// Pattern: GitHub URL structure like "tree/main/path" or "blob/dev/path"
+	const gitHubTreeMatch = searchPath.match(/^(tree|blob)\/([^/]+)\/(.+)$/);
+	if (gitHubTreeMatch) {
+		const [, , branch, actualPath] = gitHubTreeMatch;
+		return `It looks like you included the GitHub URL structure. Remove '${gitHubTreeMatch[1]}/${branch}/' prefix and use: "${actualPath}"`;
+	}
+
+	// Pattern: full URL included
+	if (searchPath.startsWith('http://') || searchPath.startsWith('https://')) {
+		return 'searchPath should be a relative path within the repo, not a URL. Extract just the directory path after the branch name.';
+	}
+
+	// Pattern: starts with domain
+	if (searchPath.includes('github.com') || searchPath.includes('gitlab.com')) {
+		return "searchPath should be a relative path within the repo, not a URL. Use just the directory path, e.g., 'src/docs'";
+	}
+
+	// Default hint with helpful command
+	return `Verify the path exists in the repository. To see available directories, run:\n  ls ${repoPath}`;
+};
+
 const ensureSearchPathsExist = async (
 	localPath: string,
-	repoSubPaths: readonly string[]
+	repoSubPaths: readonly string[],
+	resourceName: string
 ): Promise<void> => {
 	for (const repoSubPath of repoSubPaths) {
 		const subPath = path.join(localPath, repoSubPath);
 		const exists = await directoryExists(subPath);
 		if (!exists) {
+			const hint = getSearchPathHint(repoSubPath, localPath);
 			throw new ResourceError({
-				message: `Search path does not exist: "${repoSubPath}"`,
-				hint: 'Check the repository structure and update the search path in your btca config.',
+				message: `Invalid searchPath for resource "${resourceName}"\n\nPath not found: "${repoSubPath}"\nRepository: ${localPath}`,
+				hint,
 				cause: new Error(`Missing search path: ${repoSubPath}`)
 			});
 		}
@@ -400,7 +427,7 @@ const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> =
 					quiet: config.quiet
 				});
 				if (config.repoSubPaths.length > 0) {
-					await ensureSearchPathsExist(localPath, config.repoSubPaths);
+					await ensureSearchPathsExist(localPath, config.repoSubPaths, config.name);
 				}
 				return localPath;
 			}
@@ -429,7 +456,7 @@ const ensureGitResource = async (config: BtcaGitResourceArgs): Promise<string> =
 				quiet: config.quiet
 			});
 			if (config.repoSubPaths.length > 0) {
-				await ensureSearchPathsExist(localPath, config.repoSubPaths);
+				await ensureSearchPathsExist(localPath, config.repoSubPaths, config.name);
 			}
 
 			return localPath;

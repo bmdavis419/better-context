@@ -442,12 +442,12 @@ Should have been:
 
 #### Acceptance Criteria
 
-- [ ] Invalid searchPath throws clear error before querying
-- [ ] Error message includes the invalid path and resource name
-- [ ] Helpful hints detect common mistakes (GitHub URL patterns, etc.)
-- [ ] Suggested fix is actionable (shows correct path format)
-- [ ] Valid searchPaths continue to work as before
-- [ ] Collection creation fails fast with invalid paths
+- [x] Invalid searchPath throws clear error before querying
+- [x] Error message includes the invalid path and resource name
+- [x] Helpful hints detect common mistakes (GitHub URL patterns, etc.)
+- [x] Suggested fix is actionable (shows correct path format)
+- [x] Valid searchPaths continue to work as before
+- [x] Collection creation fails fast with invalid paths
 
 ---
 
@@ -1045,7 +1045,7 @@ Local file paths don't work correctly on Windows (e.g., `E:\GitHub\...`).
 | Issue                   | Effort | Impact | Priority Score | Status   |
 | ----------------------- | ------ | ------ | -------------- | -------- |
 | #99 (cleanup)           | Medium | High   | **High**       | DONE     |
-| #76 (searchPath)        | Medium | High   | **High**       | PLANNED  |
+| #76 (searchPath)        | Medium | High   | **High**       | DONE     |
 | #81 (.btca folder)      | Medium | Medium | **Medium**     | PLANNED  |
 | #96 (CSS scroll)        | Small  | Low    | **Low**        | PLANNED  |
 | #109 (gateway)          | Small  | High   | High           | DEFERRED |
