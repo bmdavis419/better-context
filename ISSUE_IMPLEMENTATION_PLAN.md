@@ -656,13 +656,13 @@ When btca creates a `.btca/` folder in a user's project directory, it causes sev
 
 #### Acceptance Criteria
 
-- [ ] `btca init` creates project config file
-- [ ] `btca init --local` sets up local .btca directory
-- [ ] .gitignore is updated when using local data directory in git repo
-- [ ] Existing .gitignore entries are preserved
-- [ ] Warning shown if .btca exists but not in .gitignore
-- [ ] Clear success messages with next steps
-- [ ] `--force` flag allows overwriting existing config
+- [x] `btca init` creates project config file
+- [x] `btca init --local` sets up local .btca directory
+- [x] .gitignore is updated when using local data directory in git repo
+- [x] Existing .gitignore entries are preserved
+- [x] Warning shown if .btca exists but not in .gitignore (warning shown for non-git repos)
+- [x] Clear success messages with next steps
+- [x] `--force` flag allows overwriting existing config
 
 ---
 
@@ -1046,7 +1046,7 @@ Local file paths don't work correctly on Windows (e.g., `E:\GitHub\...`).
 | ----------------------- | ------ | ------ | -------------- | -------- |
 | #99 (cleanup)           | Medium | High   | **High**       | DONE     |
 | #76 (searchPath)        | Medium | High   | **High**       | DONE     |
-| #81 (.btca folder)      | Medium | Medium | **Medium**     | PLANNED  |
+| #81 (.btca folder)      | Medium | Medium | **Medium**     | DONE     |
 | #96 (CSS scroll)        | Small  | Low    | **Low**        | PLANNED  |
 | #109 (gateway)          | Small  | High   | High           | DEFERRED |
 | #105/#89 (Windows)      | Large  | High   | High           | DEFERRED |

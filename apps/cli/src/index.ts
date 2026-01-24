@@ -3,6 +3,7 @@ import { askCommand } from './commands/ask.ts';
 import { chatCommand } from './commands/chat.ts';
 import { configCommand } from './commands/config.ts';
 import { clearCommand } from './commands/clear.ts';
+import { initCommand } from './commands/init.ts';
 import { serveCommand } from './commands/serve.ts';
 import { launchTui } from './commands/tui.ts';
 import packageJson from '../package.json';
@@ -25,6 +26,7 @@ program.addCommand(askCommand);
 program.addCommand(chatCommand);
 program.addCommand(configCommand);
 program.addCommand(clearCommand);
+program.addCommand(initCommand);
 program.addCommand(serveCommand);
 
 // Default action (no subcommand) → launch TUI
