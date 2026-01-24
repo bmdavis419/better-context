@@ -9,6 +9,13 @@
 		},
 		{
 			"type": "git",
+			"name": "raycast",
+			"url": "https://github.com/raycast/extensions",
+			"branch": "main",
+			"searchPaths": ["docs", "examples"]
+		},
+		{
+			"type": "git",
 			"name": "autumn",
 			"url": "https://github.com/useautumn/typescript",
 			"branch": "main",
