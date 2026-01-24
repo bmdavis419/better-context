@@ -178,7 +178,7 @@
 					</div>
 				</div>
 
-				<div class="flex flex-wrap items-start gap-2 sm:justify-end">
+				<div class="flex items-center gap-2 sm:justify-end">
 					<a class="bc-chip" href="/cli">CLI</a>
 					<a class="bc-chip" href="/web">Web</a>
 					<a class="bc-chip" href="/pricing">Pricing</a>

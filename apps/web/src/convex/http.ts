@@ -8,6 +8,7 @@ import type { Id } from './_generated/dataModel.js';
 import { httpAction, type ActionCtx } from './_generated/server.js';
 import { AnalyticsEvents } from './analyticsEvents.js';
 import { instances } from './apiHelpers.js';
+import { authenticateRaycastRequest, isAuthError } from './raycastAuth.js';
 
 const usageActions = api.usage;
 const instanceActions = instances.actions;
@@ -700,6 +701,285 @@ http.route({
 	path: '/webhooks/daytona',
 	method: 'POST',
 	handler: daytonaWebhook
+});
+
+// ============================================================================
+// RayCast Extension Endpoints
+// ============================================================================
+
+const raycastAskRequestSchema = z.object({
+	question: z.string().min(1)
+});
+
+// Helper to extract @resource mentions from question
+function extractResources(question: string): { cleanQuestion: string; resources: string[] } {
+	const resourcePattern = /@(\w+)/g;
+	const resources: string[] = [];
+	let match;
+
+	while ((match = resourcePattern.exec(question)) !== null) {
+		resources.push(match[1]);
+	}
+
+	// Keep original question - resources are contextual
+	const cleanQuestion = question;
+
+	return { cleanQuestion, resources: [...new Set(resources)] };
+}
+
+const raycastResources = httpAction(async (ctx, request) => {
+	// Authenticate
+	const authResult = await authenticateRaycastRequest(ctx, request);
+
+	if (isAuthError(authResult)) {
+		return new Response(JSON.stringify({ error: authResult.message }), {
+			status: authResult.status,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	const { instance } = authResult;
+
+	// Fetch resources
+	const resources = await ctx.runQuery(api.resources.listAvailable, {
+		instanceId: instance._id
+	});
+
+	// Flatten and format for RayCast
+	const allResources = [
+		...resources.global.map((r) => ({
+			name: r.name,
+			displayName: r.displayName,
+			isGlobal: true
+		})),
+		...resources.custom.map((r) => ({
+			name: r.name,
+			displayName: r.displayName,
+			isGlobal: false
+		}))
+	];
+
+	return new Response(JSON.stringify({ resources: allResources }), {
+		status: 200,
+		headers: { 'Content-Type': 'application/json' }
+	});
+});
+
+const raycastAsk = httpAction(async (ctx, request) => {
+	// Authenticate
+	const authResult = await authenticateRaycastRequest(ctx, request);
+
+	if (isAuthError(authResult)) {
+		return new Response(JSON.stringify({ error: authResult.message }), {
+			status: authResult.status,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	const { instance } = authResult;
+
+	// Parse request body
+	let rawBody: unknown;
+	try {
+		rawBody = await request.json();
+	} catch {
+		return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	const parseResult = raycastAskRequestSchema.safeParse(rawBody);
+	if (!parseResult.success) {
+		return new Response(JSON.stringify({ error: 'Invalid request: question is required' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	const { question } = parseResult.data;
+	const { resources } = extractResources(question);
+
+	// Check usage/subscription using internal Raycast-specific action (no JWT auth)
+	const usageCheck = await ctx.runAction(internal.raycastUsage.ensureUsageAvailableForRaycast, {
+		instanceId: instance._id,
+		question,
+		resources
+	});
+
+	if (!usageCheck?.ok) {
+		const reason = (usageCheck as { reason?: string }).reason;
+		if (reason === 'subscription_required') {
+			return new Response(
+				JSON.stringify({
+					error: 'Subscription required',
+					upgradeUrl: 'https://btca.dev/pricing'
+				}),
+				{ status: 402, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		if (reason === 'free_limit_reached') {
+			return new Response(
+				JSON.stringify({
+					error: 'Free message limit reached. Upgrade to continue.',
+					upgradeUrl: 'https://btca.dev/pricing'
+				}),
+				{ status: 402, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+		return new Response(JSON.stringify({ error: 'Usage limit reached' }), {
+			status: 402,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	// Ensure instance is running
+	let serverUrl = instance.serverUrl;
+	if (instance.state !== 'running' || !serverUrl) {
+		if (!instance.sandboxId) {
+			return new Response(
+				JSON.stringify({ error: 'Instance not provisioned. Please visit btca.dev to set up.' }),
+				{ status: 503, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+
+		// Wake the instance
+		try {
+			const wakeResult = await ctx.runAction(instanceActions.wake, {
+				instanceId: instance._id
+			});
+			if (!wakeResult.serverUrl) {
+				throw new Error('No server URL returned');
+			}
+			serverUrl = wakeResult.serverUrl;
+		} catch {
+			return new Response(JSON.stringify({ error: 'Failed to start instance. Try again.' }), {
+				status: 503,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+	}
+
+	// Create SSE stream
+	const encoder = new TextEncoder();
+
+	const stream = new ReadableStream({
+		async start(controller) {
+			const sendEvent = (data: unknown) => {
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+			};
+
+			try {
+				// Call btca server
+				const response = await fetch(`${serverUrl}/question/stream`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						question,
+						resources,
+						quiet: true
+					})
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(errorText || `Server error: ${response.status}`);
+				}
+
+				if (!response.body) {
+					throw new Error('No response body');
+				}
+
+				// Stream through the response
+				const reader = response.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = '';
+
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
+					buffer = lines.pop() ?? '';
+
+					let eventData = '';
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							eventData = line.slice(6);
+						} else if (line === '' && eventData) {
+							try {
+								const event = JSON.parse(eventData) as BtcaStreamEvent;
+
+								// Forward relevant events to RayCast
+								if (event.type === 'text.delta') {
+									sendEvent({ type: 'text', delta: event.delta });
+								} else if (event.type === 'done') {
+									sendEvent({ type: 'done', text: event.text });
+								} else if (event.type === 'error') {
+									sendEvent({ type: 'error', message: event.message });
+								}
+								// Skip meta, reasoning, tool events for simplicity
+							} catch {
+								// Ignore parse errors
+							}
+							eventData = '';
+						}
+					}
+				}
+
+				reader.releaseLock();
+
+				// Finalize usage using internal Raycast-specific action (no JWT auth)
+				await ctx.runAction(internal.raycastUsage.finalizeUsageForRaycast, {
+					instanceId: instance._id,
+					questionTokens: 0, // Simplified for RayCast
+					outputChars: 0,
+					reasoningChars: 0,
+					resources,
+					sandboxUsageHours: 0
+				});
+
+				controller.close();
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Unknown error';
+				sendEvent({ type: 'error', message });
+				controller.close();
+			}
+		}
+	});
+
+	return new Response(stream, {
+		headers: {
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache',
+			Connection: 'keep-alive'
+		}
+	});
+});
+
+http.route({
+	path: '/raycast/resources',
+	method: 'GET',
+	handler: raycastResources
+});
+
+http.route({
+	path: '/raycast/resources',
+	method: 'OPTIONS',
+	handler: corsPreflight
+});
+
+http.route({
+	path: '/raycast/ask',
+	method: 'POST',
+	handler: raycastAsk
+});
+
+http.route({
+	path: '/raycast/ask',
+	method: 'OPTIONS',
+	handler: corsPreflight
 });
 
 export default http;

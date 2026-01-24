@@ -19,6 +19,8 @@ import type * as instances_mutations from "../instances/mutations.js";
 import type * as instances_queries from "../instances/queries.js";
 import type * as mcp from "../mcp.js";
 import type * as messages from "../messages.js";
+import type * as raycastAuth from "../raycastAuth.js";
+import type * as raycastUsage from "../raycastUsage.js";
 import type * as resources from "../resources.js";
 import type * as scheduled_queries from "../scheduled/queries.js";
 import type * as scheduled_updates from "../scheduled/updates.js";
@@ -48,6 +50,8 @@ declare const fullApi: ApiFromModules<{
   "instances/queries": typeof instances_queries;
   mcp: typeof mcp;
   messages: typeof messages;
+  raycastAuth: typeof raycastAuth;
+  raycastUsage: typeof raycastUsage;
   resources: typeof resources;
   "scheduled/queries": typeof scheduled_queries;
   "scheduled/updates": typeof scheduled_updates;
