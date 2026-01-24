@@ -207,6 +207,13 @@ export namespace Agent {
 		};
 	};
 
+	// Gateway providers route to other providers' models, so model validation
+	// should be skipped for these. The gateway itself handles model resolution.
+	const GATEWAY_PROVIDERS = ['opencode'] as const;
+
+	const isGatewayProvider = (providerId: string): boolean =>
+		GATEWAY_PROVIDERS.includes(providerId as (typeof GATEWAY_PROVIDERS)[number]);
+
 	const validateProviderAndModel = async (
 		client: OpencodeClient,
 		providerId: string,
@@ -224,6 +231,12 @@ export namespace Agent {
 			throw new InvalidProviderError({ providerId, availableProviders: all.map((p) => p.id) });
 		if (!connected.includes(providerId)) {
 			throw new ProviderNotConnectedError({ providerId, connectedProviders: connected });
+		}
+
+		// Skip model validation for gateway providers - they route to other providers' models
+		if (isGatewayProvider(providerId)) {
+			Metrics.info('agent.validation.gateway_skip', { providerId, modelId });
+			return;
 		}
 
 		const modelIds = Object.keys(provider.models);
