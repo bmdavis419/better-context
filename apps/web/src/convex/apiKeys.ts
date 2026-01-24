@@ -151,6 +151,29 @@ export const touchLastUsed = mutation({
 	}
 });
 
+export const getByKey = query({
+	args: { key: v.string() },
+	handler: async (ctx, args) => {
+		const keyHash = await hashApiKey(args.key);
+
+		const apiKey = await ctx.db
+			.query('apiKeys')
+			.withIndex('by_key_hash', (q) => q.eq('keyHash', keyHash))
+			.first();
+
+		if (!apiKey || apiKey.revokedAt) {
+			return null;
+		}
+
+		return {
+			_id: apiKey._id,
+			instanceId: apiKey.instanceId,
+			name: apiKey.name,
+			status: apiKey.revokedAt ? ('revoked' as const) : ('active' as const)
+		};
+	}
+});
+
 async function hashApiKey(apiKey: string): Promise<string> {
 	const encoder = new TextEncoder();
 	const data = encoder.encode(apiKey);
