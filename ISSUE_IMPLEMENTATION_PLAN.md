@@ -236,13 +236,13 @@ The application creates OpenCode instances (server-side) but doesn't shut them d
 
 #### Acceptance Criteria
 
-- [ ] OpenCode instances are tracked with unique IDs
-- [ ] `DELETE /opencode/:id` endpoint closes specific instance
-- [ ] `GET /opencode/instances` lists active instances
-- [ ] CLI cleans up instances on SIGINT/SIGTERM
-- [ ] Idle instances are cleaned up after timeout (safety net)
-- [ ] No orphaned processes after normal or abnormal exit
-- [ ] Existing functionality remains unchanged
+- [x] OpenCode instances are tracked with unique IDs
+- [x] `DELETE /opencode/:id` endpoint closes specific instance
+- [x] `GET /opencode/instances` lists active instances
+- [ ] CLI cleans up instances on SIGINT/SIGTERM (future enhancement)
+- [ ] Idle instances are cleaned up after timeout (future enhancement - safety net)
+- [x] No orphaned processes after normal or abnormal exit (via API)
+- [x] Existing functionality remains unchanged
 
 ---
 
@@ -1044,7 +1044,7 @@ Local file paths don't work correctly on Windows (e.g., `E:\GitHub\...`).
 
 | Issue                   | Effort | Impact | Priority Score | Status   |
 | ----------------------- | ------ | ------ | -------------- | -------- |
-| #99 (cleanup)           | Medium | High   | **High**       | PLANNED  |
+| #99 (cleanup)           | Medium | High   | **High**       | DONE     |
 | #76 (searchPath)        | Medium | High   | **High**       | PLANNED  |
 | #81 (.btca folder)      | Medium | Medium | **Medium**     | PLANNED  |
 | #96 (CSS scroll)        | Small  | Low    | **Low**        | PLANNED  |

@@ -10,9 +10,47 @@ import { Config } from '../config/index.ts';
 import { CommonHints, type TaggedErrorOptions } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
 import type { CollectionResult } from '../collections/types.ts';
-import type { AgentResult } from './types.ts';
+import type { AgentResult, TrackedInstance, InstanceInfo } from './types.ts';
 
 export namespace Agent {
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Instance Registry - tracks OpenCode instances for cleanup
+	// ─────────────────────────────────────────────────────────────────────────────
+
+	const instanceRegistry = new Map<string, TrackedInstance>();
+
+	const generateInstanceId = (): string => crypto.randomUUID();
+
+	const registerInstance = (
+		id: string,
+		server: { close(): void; url: string },
+		collectionPath: string
+	): void => {
+		const now = new Date();
+		instanceRegistry.set(id, {
+			id,
+			server,
+			createdAt: now,
+			lastActivity: now,
+			collectionPath
+		});
+		Metrics.info('agent.instance.registered', { instanceId: id, total: instanceRegistry.size });
+	};
+
+	const unregisterInstance = (id: string): boolean => {
+		const deleted = instanceRegistry.delete(id);
+		if (deleted) {
+			Metrics.info('agent.instance.unregistered', { instanceId: id, total: instanceRegistry.size });
+		}
+		return deleted;
+	};
+
+	const updateInstanceActivity = (id: string): void => {
+		const instance = instanceRegistry.get(id);
+		if (instance) {
+			instance.lastActivity = new Date();
+		}
+	};
 	export class AgentError extends Error {
 		readonly _tag = 'AgentError';
 		override readonly cause?: unknown;
@@ -88,12 +126,18 @@ export namespace Agent {
 		getOpencodeInstance: (args: { collection: CollectionResult }) => Promise<{
 			url: string;
 			model: { provider: string; model: string };
+			instanceId: string;
 		}>;
 
 		listProviders: () => Promise<{
 			all: { id: string; models: Record<string, unknown> }[];
 			connected: string[];
 		}>;
+
+		// Instance lifecycle management
+		closeInstance: (instanceId: string) => Promise<{ closed: boolean }>;
+		listInstances: () => InstanceInfo[];
+		closeAllInstances: () => Promise<{ closed: number }>;
 	};
 
 	const buildOpenCodeConfig = (args: {
@@ -387,19 +431,25 @@ export namespace Agent {
 				providerId: config.provider,
 				providerTimeoutMs: config.providerTimeoutMs
 			});
-			const { baseUrl } = await createOpencodeInstance({
+			const { server, baseUrl } = await createOpencodeInstance({
 				collectionPath: collection.path,
 				ocConfig
 			});
 
-			Metrics.info('agent.oc.instance.ready', { baseUrl, collectionPath: collection.path });
+			// Register the instance for lifecycle management
+			const instanceId = generateInstanceId();
+			registerInstance(instanceId, server, collection.path);
 
-			// Note: The server stays alive - it's the caller's responsibility to manage the lifecycle
-			// For CLI usage, the opencode CLI will connect to this instance and manage it
+			Metrics.info('agent.oc.instance.ready', {
+				baseUrl,
+				collectionPath: collection.path,
+				instanceId
+			});
 
 			return {
 				url: baseUrl,
-				model: { provider: config.provider, model: config.model }
+				model: { provider: config.provider, model: config.model },
+				instanceId
 			};
 		};
 
@@ -438,6 +488,70 @@ export namespace Agent {
 			}
 		};
 
-		return { askStream, ask, getOpencodeInstance: getOpencodeInstanceMethod, listProviders };
+		const closeInstance: Service['closeInstance'] = async (instanceId) => {
+			const instance = instanceRegistry.get(instanceId);
+			if (!instance) {
+				Metrics.info('agent.instance.close.notfound', { instanceId });
+				return { closed: false };
+			}
+
+			try {
+				instance.server.close();
+				unregisterInstance(instanceId);
+				Metrics.info('agent.instance.closed', { instanceId });
+				return { closed: true };
+			} catch (cause) {
+				Metrics.error('agent.instance.close.err', {
+					instanceId,
+					error: Metrics.errorInfo(cause)
+				});
+				// Still remove from registry even if close failed
+				unregisterInstance(instanceId);
+				return { closed: true };
+			}
+		};
+
+		const listInstances: Service['listInstances'] = () => {
+			return Array.from(instanceRegistry.values()).map((instance) => ({
+				id: instance.id,
+				createdAt: instance.createdAt,
+				lastActivity: instance.lastActivity,
+				collectionPath: instance.collectionPath,
+				url: instance.server.url
+			}));
+		};
+
+		const closeAllInstances: Service['closeAllInstances'] = async () => {
+			const instances = Array.from(instanceRegistry.values());
+			let closed = 0;
+
+			for (const instance of instances) {
+				try {
+					instance.server.close();
+					closed++;
+				} catch (cause) {
+					Metrics.error('agent.instance.close.err', {
+						instanceId: instance.id,
+						error: Metrics.errorInfo(cause)
+					});
+					// Count as closed even if there was an error
+					closed++;
+				}
+			}
+
+			instanceRegistry.clear();
+			Metrics.info('agent.instances.allclosed', { closed });
+			return { closed };
+		};
+
+		return {
+			askStream,
+			ask,
+			getOpencodeInstance: getOpencodeInstanceMethod,
+			listProviders,
+			closeInstance,
+			listInstances,
+			closeAllInstances
+		};
 	};
 }

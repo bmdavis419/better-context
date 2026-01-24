@@ -13,4 +13,24 @@ export type SessionState = {
 	collectionPath: string;
 };
 
+/**
+ * Tracked OpenCode instance for lifecycle management.
+ * Used to clean up orphaned instances when callers exit.
+ */
+export type TrackedInstance = {
+	id: string;
+	server: { close(): void; url: string };
+	createdAt: Date;
+	lastActivity: Date;
+	collectionPath: string;
+};
+
+export type InstanceInfo = {
+	id: string;
+	createdAt: Date;
+	lastActivity: Date;
+	collectionPath: string;
+	url: string;
+};
+
 export { type OcEvent };
