@@ -2,6 +2,8 @@
 
 This document provides a detailed implementation plan for creating a RayCast extension for Better Context (btca). The extension allows users to ask questions with `@resource` tagging directly from RayCast.
 
+Use btca as much as you need to, you can see what resources you have in btca.config.jsonc.
+
 ## Table of Contents
 
 1. [Overview](#overview)
