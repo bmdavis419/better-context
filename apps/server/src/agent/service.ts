@@ -266,7 +266,7 @@ export namespace Agent {
 			});
 
 			if (created) {
-				const baseUrl = `http://localhost:${port}`;
+				const baseUrl = created.server?.url ?? `http://localhost:${port}`;
 				return {
 					client: createOpencodeClient({ baseUrl, directory: args.collectionPath }),
 					server: created.server,
