@@ -4,6 +4,8 @@ export const AnalyticsEvents = {
 
 	CHECKOUT_STARTED: 'checkout_started',
 	SUBSCRIPTION_CREATED: 'subscription_created',
+	SUBSCRIPTION_UPDATED: 'subscription_updated',
+	SUBSCRIPTION_CANCELED: 'subscription_canceled',
 	BILLING_PORTAL_OPENED: 'billing_portal_opened',
 	USAGE_LIMIT_REACHED: 'usage_limit_reached',
 

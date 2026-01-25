@@ -1,9 +1,11 @@
 import { Autumn } from 'autumn-js';
 import { v } from 'convex/values';
 
+import type { Doc } from './_generated/dataModel.js';
 import { internal } from './_generated/api.js';
-import { action } from './_generated/server.js';
+import { action, type ActionCtx } from './_generated/server.js';
 import { AnalyticsEvents } from './analyticsEvents.js';
+import { instances } from './apiHelpers.js';
 import { requireInstanceOwnershipAction } from './authHelpers.js';
 
 type FeatureMetrics = {
@@ -59,6 +61,16 @@ type BillingSummaryResult = {
 };
 
 type SessionResult = { url: string };
+
+type SubscriptionPlan = 'pro' | 'free' | 'none';
+type SubscriptionStatus = 'active' | 'trialing' | 'canceled' | 'none';
+type SubscriptionSnapshot = {
+	plan: SubscriptionPlan;
+	status: SubscriptionStatus;
+	productId?: string;
+	currentPeriodEnd?: number | null;
+	canceledAt?: number | null;
+};
 
 const SANDBOX_IDLE_MINUTES = 2;
 const CHARS_PER_TOKEN = 4;
@@ -209,6 +221,83 @@ function getActiveProduct(
 	return null;
 }
 
+function getSubscriptionSnapshot(
+	activeProduct:
+		| {
+				id: string;
+				status?: string;
+				current_period_end?: number | null;
+				canceled_at?: number | null;
+		  }
+		| null
+): SubscriptionSnapshot {
+	if (!activeProduct) {
+		return { plan: 'none', status: 'none' };
+	}
+
+	const plan: SubscriptionPlan =
+		activeProduct.id === 'btca_pro' ? 'pro' : activeProduct.id === 'free_plan' ? 'free' : 'none';
+	const status: SubscriptionStatus = activeProduct.status
+		? (activeProduct.status as SubscriptionStatus)
+		: 'none';
+
+	return {
+		plan,
+		status,
+		productId: activeProduct.id,
+		currentPeriodEnd: activeProduct.current_period_end ?? undefined,
+		canceledAt: activeProduct.canceled_at ?? undefined
+	};
+}
+
+async function syncSubscriptionState(
+	ctx: ActionCtx,
+	instance: Doc<'instances'>,
+	snapshot: SubscriptionSnapshot
+): Promise<void> {
+	const previousPlan: SubscriptionPlan = instance.subscriptionPlan ?? 'none';
+	const previousStatus: SubscriptionStatus = instance.subscriptionStatus ?? 'none';
+
+	if (previousPlan === snapshot.plan && previousStatus === snapshot.status) {
+		return;
+	}
+
+	await ctx.runMutation(instances.mutations.setSubscriptionState, {
+		instanceId: instance._id,
+		plan: snapshot.plan,
+		status: snapshot.status,
+		productId: snapshot.productId,
+		currentPeriodEnd: snapshot.currentPeriodEnd ?? undefined,
+		canceledAt: snapshot.canceledAt ?? undefined
+	});
+
+	const properties = {
+		instanceId: instance._id,
+		plan: snapshot.plan,
+		status: snapshot.status,
+		previousPlan,
+		previousStatus,
+		productId: snapshot.productId ?? null,
+		currentPeriodEnd: snapshot.currentPeriodEnd ?? null,
+		canceledAt: snapshot.canceledAt ?? null
+	};
+
+	const event =
+		previousPlan !== 'pro' &&
+		snapshot.plan === 'pro' &&
+		(snapshot.status === 'active' || snapshot.status === 'trialing')
+			? AnalyticsEvents.SUBSCRIPTION_CREATED
+			: previousPlan === 'pro' && snapshot.plan !== 'pro'
+				? AnalyticsEvents.SUBSCRIPTION_CANCELED
+				: AnalyticsEvents.SUBSCRIPTION_UPDATED;
+
+	await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
+		distinctId: instance.clerkId,
+		event,
+		properties
+	});
+}
+
 async function checkFeature(args: {
 	customerId: string;
 	featureId: string;
@@ -275,6 +364,7 @@ export const ensureUsageAvailable = action({
 					: undefined)
 		});
 		const activeProduct = getActiveProduct(autumnCustomer.products);
+		await syncSubscriptionState(ctx, instance, getSubscriptionSnapshot(activeProduct));
 		if (!activeProduct) {
 			return {
 				ok: false,
@@ -508,6 +598,14 @@ export const getBillingSummary = action({
 			? (activeProduct.status as 'active' | 'trialing' | 'canceled')
 			: 'none';
 
+		await syncSubscriptionState(ctx, instance, {
+			plan,
+			status,
+			productId: activeProduct?.id ?? undefined,
+			currentPeriodEnd: activeProduct?.current_period_end ?? undefined,
+			canceledAt: activeProduct?.canceled_at ?? undefined
+		});
+
 		const [tokensIn, tokensOut, sandboxHours, chatMessages] = await Promise.all([
 			checkFeature({
 				customerId: autumnCustomer.id ?? instance.clerkId,
@@ -607,15 +705,6 @@ export const createCheckoutSession = action({
 			throw new Error(payload.error.message ?? 'Failed to create checkout session');
 		}
 		if (payload.data?.url) {
-			await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
-				distinctId: instance.clerkId,
-				event: AnalyticsEvents.SUBSCRIPTION_CREATED,
-				properties: {
-					instanceId: args.instanceId,
-					plan: 'btca_pro',
-					wasExistingCustomer: true
-				}
-			});
 			return { url: payload.data.url };
 		}
 

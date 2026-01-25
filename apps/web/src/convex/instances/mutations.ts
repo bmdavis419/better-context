@@ -194,6 +194,32 @@ export const updateStorageUsed = mutation({
 	}
 });
 
+export const setSubscriptionState = mutation({
+	args: {
+		instanceId: v.id('instances'),
+		plan: v.union(v.literal('pro'), v.literal('free'), v.literal('none')),
+		status: v.union(
+			v.literal('active'),
+			v.literal('trialing'),
+			v.literal('canceled'),
+			v.literal('none')
+		),
+		productId: v.optional(v.string()),
+		currentPeriodEnd: v.optional(v.number()),
+		canceledAt: v.optional(v.number())
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.instanceId, {
+			subscriptionPlan: args.plan,
+			subscriptionStatus: args.status,
+			subscriptionProductId: args.productId,
+			subscriptionCurrentPeriodEnd: args.currentPeriodEnd,
+			subscriptionCanceledAt: args.canceledAt,
+			subscriptionUpdatedAt: Date.now()
+		});
+	}
+});
+
 export const upsertCachedResources = mutation({
 	args: {
 		instanceId: v.id('instances'),

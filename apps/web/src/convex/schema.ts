@@ -56,6 +56,19 @@ export default defineSchema({
 		latestBtcaVersion: v.optional(v.string()),
 		latestOpencodeVersion: v.optional(v.string()),
 		lastVersionCheck: v.optional(v.number()),
+		subscriptionPlan: v.optional(v.union(v.literal('pro'), v.literal('free'), v.literal('none'))),
+		subscriptionStatus: v.optional(
+			v.union(
+				v.literal('active'),
+				v.literal('trialing'),
+				v.literal('canceled'),
+				v.literal('none')
+			)
+		),
+		subscriptionProductId: v.optional(v.string()),
+		subscriptionCurrentPeriodEnd: v.optional(v.number()),
+		subscriptionCanceledAt: v.optional(v.number()),
+		subscriptionUpdatedAt: v.optional(v.number()),
 		storageUsedBytes: v.optional(v.number()),
 		lastActiveAt: v.optional(v.number()),
 		provisionedAt: v.optional(v.number()),
