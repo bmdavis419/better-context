@@ -14,6 +14,8 @@
 
 ### Package-Specific Commands
 
+When installing a new package, use "bun add <package>". DO NOT just add it to the package.json file, actually install it.
+
 After making changes in a specific package, run its check script:
 
 | Package              | Check Command                 | Format Command                 |
@@ -32,3 +34,13 @@ After making changes in a specific package, run its check script:
 - **Imports**: External packages first, then local. Use `.ts` extensions for local imports.
 - **Bun APIs**: Prefer `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` over Node equivalents.
 - **Testing**: Use `bun:test` with `import { test, expect } from "bun:test"`.
+
+## btca
+
+When the user says "use btca", use the cli to search the source codebase(s) for the answer.
+
+Run:
+
+- btca ask -r <resource> -q "<question>"
+
+See btca.config.jsonc for available resources.
