@@ -58,12 +58,7 @@ export default defineSchema({
 		lastVersionCheck: v.optional(v.number()),
 		subscriptionPlan: v.optional(v.union(v.literal('pro'), v.literal('free'), v.literal('none'))),
 		subscriptionStatus: v.optional(
-			v.union(
-				v.literal('active'),
-				v.literal('trialing'),
-				v.literal('canceled'),
-				v.literal('none')
-			)
+			v.union(v.literal('active'), v.literal('trialing'), v.literal('canceled'), v.literal('none'))
 		),
 		subscriptionProductId: v.optional(v.string()),
 		subscriptionCurrentPeriodEnd: v.optional(v.number()),

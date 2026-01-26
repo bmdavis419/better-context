@@ -1,17 +1,16 @@
 <script lang="ts">
 	import { Loader2, CreditCard, ExternalLink } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { useConvexClient } from 'convex-svelte';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
-	import {
-		remoteCreateBillingPortalSession,
-		remoteCreateCheckoutSession
-	} from '$lib/remote/billing.remote';
 	import { BILLING_PLAN } from '$lib/billing/plans';
 	import PricingPlans from '$lib/components/pricing/PricingPlans.svelte';
+	import { api } from '../../../../convex/_generated/api';
 
 	const auth = getAuthState();
 	const billingStore = getBillingStore();
+	const client = useConvexClient();
 
 	let isRedirecting = $state(false);
 	let errorMessage = $state<string | null>(null);
@@ -47,7 +46,10 @@
 		errorMessage = null;
 		isRedirecting = true;
 		try {
-			const result = await remoteCreateCheckoutSession({ userId: auth.instanceId });
+			const result = await client.action(api.usage.createCheckoutSession, {
+				instanceId: auth.instanceId,
+				baseUrl: window.location.origin
+			});
 			window.location.href = result.url;
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : 'Failed to start checkout';
@@ -61,7 +63,10 @@
 		errorMessage = null;
 		isRedirecting = true;
 		try {
-			const result = await remoteCreateBillingPortalSession({ userId: auth.instanceId });
+			const result = await client.action(api.usage.createBillingPortalSession, {
+				instanceId: auth.instanceId,
+				baseUrl: window.location.origin
+			});
 			window.location.href = result.url;
 		} catch (err) {
 			errorMessage = err instanceof Error ? err.message : 'Failed to open billing portal';

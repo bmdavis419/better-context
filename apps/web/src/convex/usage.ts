@@ -222,14 +222,12 @@ function getActiveProduct(
 }
 
 function getSubscriptionSnapshot(
-	activeProduct:
-		| {
-				id: string;
-				status?: string;
-				current_period_end?: number | null;
-				canceled_at?: number | null;
-		  }
-		| null
+	activeProduct: {
+		id: string;
+		status?: string;
+		current_period_end?: number | null;
+		canceled_at?: number | null;
+	} | null
 ): SubscriptionSnapshot {
 	if (!activeProduct) {
 		return { plan: 'none', status: 'none' };
