@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { addCommand } from './commands/add.ts';
 import { askCommand } from './commands/ask.ts';
 import { chatCommand } from './commands/chat.ts';
 import { configCommand } from './commands/config.ts';
@@ -27,6 +28,7 @@ const program = new Command()
 		'Use simple REPL mode instead of TUI (useful for Windows or minimal terminals)'
 	);
 
+program.addCommand(addCommand);
 program.addCommand(askCommand);
 program.addCommand(chatCommand);
 program.addCommand(configCommand);

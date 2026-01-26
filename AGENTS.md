@@ -33,14 +33,21 @@ After making changes in a specific package, run its check script:
 - **Bun APIs**: Prefer `Bun.file`, `Bun.serve`, `bun:sqlite`, `Bun.$` over Node equivalents.
 - **Testing**: Use `bun:test` with `import { test, expect } from "bun:test"`.
 
-## btca
+## Better Context MCP
 
-When the user says "use btca" for codebase/docs questions.
+Use Better Context MCP for documentation/resource questions when you need source-first answers.
 
-**Available resources**: svelte, svelteKit, tailwind, hono, zod, solidJs, commander, vite, clerk, convexJs, convexWorkpools, daytona
+**Required workflow**
+1. Call `listResources` first to see available resources.
+2. Call `ask` with your question and the exact resource `name` values from step 1.
 
-### Usage
+**Rules**
+- Always call `listResources` before `ask`.
+- `ask` requires at least one resource in the `resources` array.
+- Use only resource names returned by `listResources`.
+- Include only resources relevant to the question.
 
-```bash
-btca ask -r <resource> -q "<question>"
-```
+**Common errors**
+- "Invalid resources" → re-run `listResources` and use exact names.
+- "Instance is provisioning / error state" → wait or retry after a minute.
+- "Missing or invalid Authorization header" → MCP auth is invalid; fix it in `https://btca.dev/app/settings/mcp/`.

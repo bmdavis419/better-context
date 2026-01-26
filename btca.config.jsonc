@@ -1,5 +1,6 @@
 {
 	"$schema": "https://btca.dev/btca.schema.json",
+	"dataDirectory": ".btca",
 	"resources": [
 		{
 			"type": "git",
@@ -119,6 +120,5 @@
 		}
 	],
 	"model": "claude-haiku-4-5",
-	"provider": "opencode",
-	"dataDirectory": ".btca"
+	"provider": "opencode"
 }
