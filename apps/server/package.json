@@ -51,6 +51,7 @@
 		"prettier": "^3.7.4"
 	},
 	"dependencies": {
+		"effect": "^3.10.0",
 		"@ai-sdk/amazon-bedrock": "^4.0.30",
 		"@ai-sdk/anthropic": "^3.0.23",
 		"@ai-sdk/azure": "^3.0.18",

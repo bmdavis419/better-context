@@ -41,6 +41,7 @@
 	"devDependencies": {
 		"@btca/shared": "workspace:*",
 		"btca-server": "workspace:*",
+		"effect": "^3.10.0",
 		"@opentui/core": "0.1.65",
 		"@opentui/solid": "0.1.65",
 		"@shikijs/langs": "^3.20.0",

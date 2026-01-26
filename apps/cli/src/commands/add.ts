@@ -1,9 +1,12 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
 import path from 'node:path';
-import { ensureServer } from '../server/manager.ts';
+import { Effect } from 'effect';
 import { addResource, BtcaError } from '../client/index.ts';
 import { dim } from '../lib/utils/colors.ts';
+import { exitWith } from '../effect/cli-exit.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 interface GitHubUrlParts {
 	owner: string;
@@ -151,13 +154,13 @@ async function promptSelect<T extends string>(
 async function addGitResourceWizard(
 	url: string,
 	options: { global?: boolean },
-	globalOpts: { server?: string; port?: number } | undefined
+	serverUrl: string
 ): Promise<void> {
 	const urlParts = parseGitHubUrl(url);
 	if (!urlParts) {
 		console.error('Error: Invalid GitHub URL.');
 		console.error('Expected format: https://github.com/owner/repo');
-		process.exit(1);
+		exitWith(1, true);
 	}
 
 	const normalizedUrl = normalizeGitHubUrl(url);
@@ -212,17 +215,11 @@ async function addGitResourceWizard(
 
 		if (!confirmed) {
 			console.log('\nCancelled.');
-			process.exit(0);
+			exitWith(0, true);
 		}
 
 		// Add the resource via server
-		const server = await ensureServer({
-			serverUrl: globalOpts?.server,
-			port: globalOpts?.port,
-			quiet: true
-		});
-
-		const resource = await addResource(server.url, {
+		const resource = await addResource(serverUrl, {
 			type: 'git',
 			name,
 			url: finalUrl,
@@ -231,8 +228,6 @@ async function addGitResourceWizard(
 			...(searchPaths.length > 1 && { searchPaths }),
 			...(notes && { specialNotes: notes })
 		});
-
-		server.stop();
 
 		console.log(`\nAdded resource: ${name}`);
 		if (resource.type === 'git' && resource.url !== finalUrl) {
@@ -252,7 +247,7 @@ async function addGitResourceWizard(
 async function addLocalResourceWizard(
 	localPath: string,
 	options: { global?: boolean },
-	globalOpts: { server?: string; port?: number } | undefined
+	serverUrl: string
 ): Promise<void> {
 	// Resolve the path
 	const resolvedPath = path.isAbsolute(localPath)
@@ -295,24 +290,16 @@ async function addLocalResourceWizard(
 
 		if (!confirmed) {
 			console.log('\nCancelled.');
-			process.exit(0);
+			exitWith(0, true);
 		}
 
 		// Add the resource via server
-		const server = await ensureServer({
-			serverUrl: globalOpts?.server,
-			port: globalOpts?.port,
-			quiet: true
-		});
-
-		await addResource(server.url, {
+		await addResource(serverUrl, {
 			type: 'local',
 			name,
 			path: finalPath,
 			...(notes && { specialNotes: notes })
 		});
-
-		server.stop();
 
 		console.log(`\nAdded resource: ${name}`);
 		console.log('\nYou can now use this resource:');
@@ -333,7 +320,7 @@ export const addCommand = new Command('add')
 	.option('--notes <notes>', 'Special notes for the agent')
 	.option('-t, --type <type>', 'Resource type: git or local (auto-detected if not specified)')
 	.action(
-		async (
+		(
 			urlOrPath: string | undefined,
 			options: {
 				global?: boolean;
@@ -347,123 +334,123 @@ export const addCommand = new Command('add')
 		) => {
 			const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-			try {
-				// If no argument provided, start interactive wizard
-				if (!urlOrPath) {
-					const resourceType = await promptSelect<'git' | 'local'>(
-						'What type of resource do you want to add?',
-						[
-							{ label: 'Git repository', value: 'git' },
-							{ label: 'Local directory', value: 'local' }
-						]
-					);
-
-					const rl = createRl();
-					if (resourceType === 'git') {
-						const url = await promptInput(rl, 'GitHub URL');
-						rl.close();
-						if (!url) {
-							console.error('Error: URL is required.');
-							process.exit(1);
-						}
-						await addGitResourceWizard(url, options, globalOpts);
-					} else {
-						const localPath = await promptInput(rl, 'Local path');
-						rl.close();
-						if (!localPath) {
-							console.error('Error: Path is required.');
-							process.exit(1);
-						}
-						await addLocalResourceWizard(localPath, options, globalOpts);
-					}
-					return;
-				}
-
-				// Determine type from argument or explicit flag
-				let resourceType: 'git' | 'local' = 'git';
-
-				if (options.type) {
-					if (options.type !== 'git' && options.type !== 'local') {
-						console.error('Error: --type must be "git" or "local"');
-						process.exit(1);
-					}
-					resourceType = options.type as 'git' | 'local';
-				} else {
-					// Auto-detect: if it looks like a URL, it's git; otherwise local
-					const isUrl =
-						urlOrPath.startsWith('http://') ||
-						urlOrPath.startsWith('https://') ||
-						urlOrPath.startsWith('github.com/') ||
-						urlOrPath.includes('github.com/');
-					resourceType = isUrl ? 'git' : 'local';
-				}
-
-				// If all required options provided via flags, skip wizard
-				if (options.name && resourceType === 'git' && parseGitHubUrl(urlOrPath)) {
-					// Non-interactive git add
-					const normalizedUrl = normalizeGitHubUrl(urlOrPath);
-					const server = await ensureServer({
+			const program = Effect.scoped(
+				Effect.gen(function* () {
+					const server = yield* withServer({
 						serverUrl: globalOpts?.server,
 						port: globalOpts?.port,
 						quiet: true
 					});
 
-					const searchPaths = options.searchPath ?? [];
-					const resource = await addResource(server.url, {
-						type: 'git',
-						name: options.name,
-						url: normalizedUrl,
-						branch: options.branch ?? 'main',
-						...(searchPaths.length === 1 && { searchPath: searchPaths[0] }),
-						...(searchPaths.length > 1 && { searchPaths }),
-						...(options.notes && { specialNotes: options.notes })
+					yield* Effect.tryPromise(async () => {
+						// If no argument provided, start interactive wizard
+						if (!urlOrPath) {
+							const resourceType = await promptSelect<'git' | 'local'>(
+								'What type of resource do you want to add?',
+								[
+									{ label: 'Git repository', value: 'git' },
+									{ label: 'Local directory', value: 'local' }
+								]
+							);
+
+							const rl = createRl();
+							if (resourceType === 'git') {
+								const url = await promptInput(rl, 'GitHub URL');
+								rl.close();
+								if (!url) {
+									console.error('Error: URL is required.');
+									exitWith(1, true);
+								}
+								await addGitResourceWizard(url, options, server.url);
+							} else {
+								const localPath = await promptInput(rl, 'Local path');
+								rl.close();
+								if (!localPath) {
+									console.error('Error: Path is required.');
+									exitWith(1, true);
+								}
+								await addLocalResourceWizard(localPath, options, server.url);
+							}
+							return;
+						}
+
+						// Determine type from argument or explicit flag
+						let resourceType: 'git' | 'local' = 'git';
+
+						if (options.type) {
+							if (options.type !== 'git' && options.type !== 'local') {
+								console.error('Error: --type must be \"git\" or \"local\"');
+								exitWith(1, true);
+							}
+							resourceType = options.type as 'git' | 'local';
+						} else {
+							// Auto-detect: if it looks like a URL, it's git; otherwise local
+							const isUrl =
+								urlOrPath.startsWith('http://') ||
+								urlOrPath.startsWith('https://') ||
+								urlOrPath.startsWith('github.com/') ||
+								urlOrPath.includes('github.com/');
+							resourceType = isUrl ? 'git' : 'local';
+						}
+
+						// If all required options provided via flags, skip wizard
+						if (options.name && resourceType === 'git' && parseGitHubUrl(urlOrPath)) {
+							// Non-interactive git add
+							const normalizedUrl = normalizeGitHubUrl(urlOrPath);
+
+							const searchPaths = options.searchPath ?? [];
+							const resource = await addResource(server.url, {
+								type: 'git',
+								name: options.name,
+								url: normalizedUrl,
+								branch: options.branch ?? 'main',
+								...(searchPaths.length === 1 && { searchPath: searchPaths[0] }),
+								...(searchPaths.length > 1 && { searchPaths }),
+								...(options.notes && { specialNotes: options.notes })
+							});
+
+							console.log(`Added git resource: ${options.name}`);
+							if (resource.type === 'git' && resource.url !== normalizedUrl) {
+								console.log(`  URL normalized: ${resource.url}`);
+							}
+							return;
+						}
+
+						if (options.name && resourceType === 'local') {
+							// Non-interactive local add
+							const resolvedPath = path.isAbsolute(urlOrPath)
+								? urlOrPath
+								: path.resolve(process.cwd(), urlOrPath);
+
+							await addResource(server.url, {
+								type: 'local',
+								name: options.name,
+								path: resolvedPath,
+								...(options.notes && { specialNotes: options.notes })
+							});
+
+							console.log(`Added local resource: ${options.name}`);
+							return;
+						}
+
+						// Interactive wizard based on type
+						if (resourceType === 'git') {
+							await addGitResourceWizard(urlOrPath, options, server.url);
+						} else {
+							await addLocalResourceWizard(urlOrPath, options, server.url);
+						}
 					});
+				})
+			);
 
-					server.stop();
-
-					console.log(`Added git resource: ${options.name}`);
-					if (resource.type === 'git' && resource.url !== normalizedUrl) {
-						console.log(`  URL normalized: ${resource.url}`);
+			void runCli(program, {
+				onError: (error) => {
+					if (error instanceof Error && error.message === 'Invalid selection') {
+						console.error('\nError: Invalid selection. Please try again.');
+						return;
 					}
-					return;
+					console.error(formatError(error));
 				}
-
-				if (options.name && resourceType === 'local') {
-					// Non-interactive local add
-					const resolvedPath = path.isAbsolute(urlOrPath)
-						? urlOrPath
-						: path.resolve(process.cwd(), urlOrPath);
-					const server = await ensureServer({
-						serverUrl: globalOpts?.server,
-						port: globalOpts?.port,
-						quiet: true
-					});
-
-					await addResource(server.url, {
-						type: 'local',
-						name: options.name,
-						path: resolvedPath,
-						...(options.notes && { specialNotes: options.notes })
-					});
-
-					server.stop();
-					console.log(`Added local resource: ${options.name}`);
-					return;
-				}
-
-				// Interactive wizard based on type
-				if (resourceType === 'git') {
-					await addGitResourceWizard(urlOrPath, options, globalOpts);
-				} else {
-					await addLocalResourceWizard(urlOrPath, options, globalOpts);
-				}
-			} catch (error) {
-				if (error instanceof Error && error.message === 'Invalid selection') {
-					console.error('\nError: Invalid selection. Please try again.');
-					process.exit(1);
-				}
-				console.error(formatError(error));
-				process.exit(1);
-			}
+			});
 		}
 	);

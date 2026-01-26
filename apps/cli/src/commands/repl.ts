@@ -1,7 +1,10 @@
-import { ensureServer, type ServerManager } from '../server/manager.ts';
+import { Effect } from 'effect';
+import type { BtcaStreamEvent } from 'btca-server/stream/types';
 import { createClient, getResources, askQuestionStream, BtcaError } from '../client/index.ts';
 import { parseSSEStream } from '../client/stream.ts';
-import type { BtcaStreamEvent } from 'btca-server/stream/types';
+import { exitWith } from '../effect/cli-exit.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 type ResourceInfo = { name: string; type: string; url?: string };
 
@@ -121,32 +124,32 @@ async function prompt(message: string): Promise<string | null> {
  * Launch the simple REPL mode (no TUI)
  */
 export async function launchRepl(options: ReplOptions): Promise<void> {
-	let server: ServerManager | null = null;
+	const program = Effect.scoped(
+		Effect.gen(function* () {
+			const server = yield* withServer({
+				serverUrl: options.server,
+				port: options.port
+			});
 
-	try {
-		server = await ensureServer({
-			serverUrl: options.server,
-			port: options.port
-		});
+			yield* Effect.tryPromise(async () => {
+				const client = createClient(server.url);
+				const { resources } = await getResources(client);
 
-		const client = createClient(server.url);
-		const { resources } = await getResources(client);
+				if (resources.length === 0) {
+					console.error('Error: No resources configured.');
+					console.error('Add resources to your btca config file.');
+					exitWith(1, true);
+				}
 
-		if (resources.length === 0) {
-			console.error('Error: No resources configured.');
-			console.error('Add resources to your btca config file.');
-			process.exit(1);
-		}
+				console.log('btca REPL mode (--no-tui)');
+				console.log(`Available resources: ${resources.map((r) => r.name).join(', ')}`);
+				console.log('Use @resource to specify context. Type /help for commands, /quit to exit.\n');
 
-		console.log('btca REPL mode (--no-tui)');
-		console.log(`Available resources: ${resources.map((r) => r.name).join(', ')}`);
-		console.log('Use @resource to specify context. Type /help for commands, /quit to exit.\n');
+				// Track accumulated resources for the session
+				let sessionResources: string[] = [];
 
-		// Track accumulated resources for the session
-		let sessionResources: string[] = [];
-
-		const printHelp = () => {
-			console.log(`
+				const printHelp = () => {
+					console.log(`
 Commands:
   /help           Show this help message
   /resources      List available resources
@@ -161,136 +164,137 @@ Examples:
   @svelte How do stores work?
   @react @vue Compare component lifecycles
 `);
-		};
+				};
 
-		// Main REPL loop
-		while (true) {
-			const input = await prompt('btca> ');
+				// Main REPL loop
+				while (true) {
+					const input = await prompt('btca> ');
 
-			if (input === null) {
-				// EOF (Ctrl+D)
-				console.log('\nGoodbye!');
-				break;
-			}
-
-			if (!input) continue;
-
-			// Handle commands
-			if (input.startsWith('/')) {
-				const cmd = input.toLowerCase();
-				if (cmd === '/help') {
-					printHelp();
-				} else if (cmd === '/resources') {
-					console.log(`Available: ${resources.map((r) => r.name).join(', ')}`);
-					if (sessionResources.length > 0) {
-						console.log(`Session: ${sessionResources.join(', ')}`);
+					if (input === null) {
+						// EOF (Ctrl+D)
+						console.log('\nGoodbye!');
+						break;
 					}
-				} else if (cmd === '/clear') {
-					sessionResources = [];
-					console.log('Session resources cleared.');
-				} else if (cmd === '/quit' || cmd === '/exit') {
-					console.log('Goodbye!');
-					break;
-				} else {
-					console.log(`Unknown command: ${input}. Type /help for available commands.`);
-				}
-				continue;
-			}
 
-			// Extract @mentions from input
-			const mentions = extractMentions(input);
-			const validNewResources: string[] = [];
-			const invalidResources: string[] = [];
+					if (!input) continue;
 
-			for (const mention of mentions) {
-				const resolved = resolveResourceName(mention, resources);
-				if (resolved) validNewResources.push(resolved);
-				else invalidResources.push(mention);
-			}
-
-			if (invalidResources.length > 0) {
-				console.log(`Unknown resource(s): ${invalidResources.join(', ')}`);
-				console.log(`Available: ${resources.map((r) => r.name).join(', ')}`);
-				continue;
-			}
-
-			// Accumulate resources
-			if (validNewResources.length > 0) {
-				sessionResources = [...new Set([...sessionResources, ...validNewResources])];
-			}
-
-			// Require at least one resource
-			if (sessionResources.length === 0) {
-				console.log('Use @resource to specify context. Example: @svelte How do stores work?');
-				continue;
-			}
-
-			// Clean the question
-			const question = cleanInput(input, sessionResources);
-			if (!question) {
-				console.log('Please enter a question after the @mention.');
-				continue;
-			}
-
-			// Stream the response
-			try {
-				console.log(`[Searching: ${sessionResources.join(', ')}]\n`);
-
-				const response = await askQuestionStream(server.url, {
-					question,
-					resources: sessionResources,
-					quiet: true
-				});
-
-				let inReasoning = false;
-				let hasText = false;
-
-				for await (const event of parseSSEStream(response)) {
-					handleStreamEvent(event, {
-						onReasoningDelta: (delta) => {
-							if (!inReasoning) {
-								process.stdout.write('<thinking>\n');
-								inReasoning = true;
+					// Handle commands
+					if (input.startsWith('/')) {
+						const cmd = input.toLowerCase();
+						if (cmd === '/help') {
+							printHelp();
+						} else if (cmd === '/resources') {
+							console.log(`Available: ${resources.map((r) => r.name).join(', ')}`);
+							if (sessionResources.length > 0) {
+								console.log(`Session: ${sessionResources.join(', ')}`);
 							}
-							process.stdout.write(delta);
-						},
-						onTextDelta: (delta) => {
-							if (inReasoning) {
-								process.stdout.write('\n</thinking>\n\n');
-								inReasoning = false;
-							}
-							hasText = true;
-							process.stdout.write(delta);
-						},
-						onToolCall: (tool) => {
-							if (inReasoning) {
-								process.stdout.write('\n</thinking>\n\n');
-								inReasoning = false;
-							}
-							if (hasText) process.stdout.write('\n');
-							console.log(`[${tool}]`);
-						},
-						onError: (message) => {
-							console.error(`\nError: ${message}`);
+						} else if (cmd === '/clear') {
+							sessionResources = [];
+							console.log('Session resources cleared.');
+						} else if (cmd === '/quit' || cmd === '/exit') {
+							console.log('Goodbye!');
+							break;
+						} else {
+							console.log(`Unknown command: ${input}. Type /help for available commands.`);
 						}
-					});
-				}
+						continue;
+					}
 
-				if (inReasoning) {
-					process.stdout.write('\n</thinking>\n');
-				}
+					// Extract @mentions from input
+					const mentions = extractMentions(input);
+					const validNewResources: string[] = [];
+					const invalidResources: string[] = [];
 
-				console.log('\n');
-			} catch (error) {
-				console.error(formatError(error));
-			}
+					for (const mention of mentions) {
+						const resolved = resolveResourceName(mention, resources);
+						if (resolved) validNewResources.push(resolved);
+						else invalidResources.push(mention);
+					}
+
+					if (invalidResources.length > 0) {
+						console.log(`Unknown resource(s): ${invalidResources.join(', ')}`);
+						console.log(`Available: ${resources.map((r) => r.name).join(', ')}`);
+						continue;
+					}
+
+					// Accumulate resources
+					if (validNewResources.length > 0) {
+						sessionResources = [...new Set([...sessionResources, ...validNewResources])];
+					}
+
+					// Require at least one resource
+					if (sessionResources.length === 0) {
+						console.log('Use @resource to specify context. Example: @svelte How do stores work?');
+						continue;
+					}
+
+					// Clean the question
+					const question = cleanInput(input, sessionResources);
+					if (!question) {
+						console.log('Please enter a question after the @mention.');
+						continue;
+					}
+
+					// Stream the response
+					try {
+						console.log(`[Searching: ${sessionResources.join(', ')}]\n`);
+
+						const response = await askQuestionStream(server.url, {
+							question,
+							resources: sessionResources,
+							quiet: true
+						});
+
+						let inReasoning = false;
+						let hasText = false;
+
+						for await (const event of parseSSEStream(response)) {
+							handleStreamEvent(event, {
+								onReasoningDelta: (delta) => {
+									if (!inReasoning) {
+										process.stdout.write('<thinking>\n');
+										inReasoning = true;
+									}
+									process.stdout.write(delta);
+								},
+								onTextDelta: (delta) => {
+									if (inReasoning) {
+										process.stdout.write('\n</thinking>\n\n');
+										inReasoning = false;
+									}
+									hasText = true;
+									process.stdout.write(delta);
+								},
+								onToolCall: (tool) => {
+									if (inReasoning) {
+										process.stdout.write('\n</thinking>\n\n');
+										inReasoning = false;
+									}
+									if (hasText) process.stdout.write('\n');
+									console.log(`[${tool}]`);
+								},
+								onError: (message) => {
+									console.error(`\nError: ${message}`);
+								}
+							});
+						}
+
+						if (inReasoning) {
+							process.stdout.write('\n</thinking>\n');
+						}
+
+						console.log('\n');
+					} catch (error) {
+						console.error(formatError(error));
+					}
+				}
+			});
+		})
+	);
+
+	await runCli(program, {
+		onError: (error) => {
+			console.error(formatError(error));
 		}
-
-		server.stop();
-		process.exit(0);
-	} catch (error) {
-		console.error(formatError(error));
-		server?.stop();
-		process.exit(1);
-	}
+	});
 }

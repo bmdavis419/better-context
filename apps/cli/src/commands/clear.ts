@@ -1,6 +1,8 @@
 import { Command } from 'commander';
-import { ensureServer } from '../server/manager.ts';
+import { Effect } from 'effect';
 import { clearResources, BtcaError } from '../client/index.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 /**
  * Format an error for display, including hint if available.
@@ -18,22 +20,27 @@ function formatError(error: unknown): string {
 
 export const clearCommand = new Command('clear')
 	.description('Clear all locally cloned resources')
-	.action(async (_options, command) => {
+	.action((_options, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
-			const server = await ensureServer({
-				serverUrl: globalOpts?.server,
-				port: globalOpts?.port,
-				quiet: true
-			});
+		const program = Effect.scoped(
+			Effect.gen(function* () {
+				const server = yield* withServer({
+					serverUrl: globalOpts?.server,
+					port: globalOpts?.port,
+					quiet: true
+				});
 
-			const result = await clearResources(server.url);
-			console.log(`Cleared ${result.cleared} resource(s).`);
+				yield* Effect.tryPromise(async () => {
+					const result = await clearResources(server.url);
+					console.log(`Cleared ${result.cleared} resource(s).`);
+				});
+			})
+		);
 
-			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
-			process.exit(1);
-		}
+		void runCli(program, {
+			onError: (error) => {
+				console.error(formatError(error));
+			}
+		});
 	});

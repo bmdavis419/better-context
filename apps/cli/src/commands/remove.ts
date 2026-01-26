@@ -1,8 +1,11 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
-import { ensureServer } from '../server/manager.ts';
+import { Effect } from 'effect';
 import { createClient, getResources, removeResource, BtcaError } from '../client/index.ts';
 import { dim } from '../lib/utils/colors.ts';
+import { exitWith } from '../effect/cli-exit.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 /**
  * Resource definition types matching server schema.
@@ -79,52 +82,55 @@ export const removeCommand = new Command('remove')
 		'-g, --global',
 		'Remove from global config (not implemented yet - removes from active config)'
 	)
-	.action(async (name: string | undefined, options: { global?: boolean }, command) => {
+	.action((name: string | undefined, options: { global?: boolean }, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
-			const server = await ensureServer({
-				serverUrl: globalOpts?.server,
-				port: globalOpts?.port,
-				quiet: true
-			});
+		const program = Effect.scoped(
+			Effect.gen(function* () {
+				const server = yield* withServer({
+					serverUrl: globalOpts?.server,
+					port: globalOpts?.port,
+					quiet: true
+				});
 
-			const client = createClient(server.url);
-			const { resources } = await getResources(client);
+				yield* Effect.tryPromise(async () => {
+					const client = createClient(server.url);
+					const { resources } = await getResources(client);
 
-			if (resources.length === 0) {
-				console.log('No resources configured.');
-				server.stop();
-				return;
+					if (resources.length === 0) {
+						console.log('No resources configured.');
+						return;
+					}
+
+					const names = resources.map((r) => r.name);
+
+					// Use provided name or show interactive picker
+					let resourceName: string;
+					if (name) {
+						resourceName = name;
+					} else {
+						resourceName = await selectSingleResource(resources as ResourceDefinition[]);
+					}
+
+					if (!names.includes(resourceName)) {
+						console.error(`Error: Resource "${resourceName}" not found.`);
+						console.error(`\nAvailable resources: ${names.join(', ')}`);
+						exitWith(1, true);
+					}
+
+					await removeResource(server.url, resourceName);
+					console.log(`Removed resource: ${resourceName}`);
+				});
+			})
+		);
+
+		void runCli(program, {
+			onError: (error) => {
+				if (error instanceof Error && error.message === 'Invalid selection') {
+					console.error('\nError: Invalid selection. Please try again.');
+					return;
+				}
+				console.error(formatError(error));
 			}
-
-			const names = resources.map((r) => r.name);
-
-			// Use provided name or show interactive picker
-			let resourceName: string;
-			if (name) {
-				resourceName = name;
-			} else {
-				resourceName = await selectSingleResource(resources as ResourceDefinition[]);
-			}
-
-			if (!names.includes(resourceName)) {
-				console.error(`Error: Resource "${resourceName}" not found.`);
-				console.error(`\nAvailable resources: ${names.join(', ')}`);
-				server.stop();
-				process.exit(1);
-			}
-
-			await removeResource(server.url, resourceName);
-			console.log(`Removed resource: ${resourceName}`);
-
-			server.stop();
-		} catch (error) {
-			if (error instanceof Error && error.message === 'Invalid selection') {
-				console.error('\nError: Invalid selection. Please try again.');
-				process.exit(1);
-			}
-			console.error(formatError(error));
-			process.exit(1);
-		}
+		});
 	});
