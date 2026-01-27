@@ -8,6 +8,7 @@
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
+	import { getProjectStore } from '$lib/stores/project.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
 	import type { BtcaChunk, CancelState } from '$lib/types';
@@ -22,6 +23,7 @@
 	const billingStore = getBillingStore();
 	const client = useConvexClient();
 	const instanceStore = getInstanceStore();
+	const projectStore = getProjectStore();
 
 	const getConvexHttpBaseUrl = (url: string) => url.replace('.convex.cloud', '.convex.site');
 	const convexHttpBaseUrl = getConvexHttpBaseUrl(env.PUBLIC_CONVEX_URL!);
@@ -32,8 +34,14 @@
 		return useQuery(api.threads.getWithMessages, { threadId });
 	});
 
+	const selectedProjectId = $derived(projectStore.selectedProject?._id);
 	const resourcesQuery = $derived(
-		auth.instanceId ? useQuery(api.resources.listUserResources, {}) : null
+		auth.instanceId
+			? useQuery(
+					api.resources.listUserResources,
+					selectedProjectId ? { projectId: selectedProjectId } : {}
+				)
+			: null
 	);
 
 	// UI state
@@ -274,7 +282,9 @@
 			// If this is a new thread, create it first
 			let actualThreadId = threadId;
 			if (isNewThread) {
-				const newThreadId = await client.mutation(api.threads.create, {});
+				const newThreadId = await client.mutation(api.threads.create, {
+					projectId: projectStore.selectedProject?._id
+				});
 				actualThreadId = newThreadId;
 
 				await goto(`/app/chat/${newThreadId}`, { replaceState: true });

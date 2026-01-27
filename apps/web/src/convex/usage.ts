@@ -716,7 +716,7 @@ export const createCheckoutSession = action({
 		}
 
 		return {
-			url: attachPayload.data?.checkout_url ?? `${args.baseUrl}/checkout/success`
+			url: attachPayload.data?.checkout_url ?? `${args.baseUrl}/app/checkout/success`
 		};
 	}
 });
@@ -756,7 +756,7 @@ export const createBillingPortalSession = action({
 		}
 
 		return {
-			url: payload.data?.url ?? `${args.baseUrl}/settings/billing`
+			url: payload.data?.url ?? `${args.baseUrl}/app/settings/billing`
 		};
 	}
 });

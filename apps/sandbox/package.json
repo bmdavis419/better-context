@@ -21,6 +21,10 @@
 	},
 	"module": "src/index.ts",
 	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./shared": "./src/shared.ts"
+	},
 	"scripts": {
 		"check": "tsgo --noEmit",
 		"dev": "bun --watch src/index.ts",

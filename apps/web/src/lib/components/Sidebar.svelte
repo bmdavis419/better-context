@@ -2,12 +2,11 @@
 	import {
 		BookOpen,
 		Bot,
-		CreditCard,
-		Github,
-		Home,
-		Key,
+		Check,
+		ChevronDown,
+		FolderOpen,
 		Loader2,
-		Menu,
+		MessageSquare,
 		Moon,
 		Plus,
 		Search,
@@ -21,9 +20,9 @@
 	import { createEventDispatcher } from 'svelte';
 	import { useConvexClient } from 'convex-svelte';
 	import { api } from '../../convex/_generated/api';
-	import { getAuthState, openSignIn, openUserProfile, signOut } from '$lib/stores/auth.svelte';
+	import { getAuthState, openSignIn, signOut } from '$lib/stores/auth.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
-	import { getBillingStore } from '$lib/stores/billing.svelte';
+	import { getProjectStore } from '$lib/stores/project.svelte';
 	import InstanceStatus from '$lib/components/InstanceStatus.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 
@@ -45,12 +44,13 @@
 
 	const dispatch = createEventDispatcher<{ close: void }>();
 	const auth = getAuthState();
-	const billingStore = getBillingStore();
 	const themeStore = getThemeStore();
+	const projectStore = getProjectStore();
 	const client = useConvexClient();
 
 	let searchValue = $state('');
 	let showUserMenu = $state(false);
+	let showProjectsSection = $state(true);
 
 	const filteredThreads = $derived.by(() => {
 		const query = searchValue.trim().toLowerCase();
@@ -87,6 +87,7 @@
 
 	function toggleTheme() {
 		themeStore.toggle();
+		showUserMenu = false;
 	}
 
 	function handleSignOut() {
@@ -100,6 +101,14 @@
 		if (!target.closest('.sidebar-user-menu')) {
 			showUserMenu = false;
 		}
+	}
+
+	async function selectProject(projectId: string) {
+		await projectStore.selectProjectWithNavigation(projectId as any);
+	}
+
+	function openCreateProjectModal() {
+		projectStore.showCreateModal = true;
 	}
 </script>
 
@@ -119,14 +128,76 @@
 	</div>
 
 	<div class="bc-sidebar-section">
-		<div class="bc-sidebar-actions">
-			<button type="button" class="bc-btn bc-btn-primary text-xs" onclick={createNewThread}>
-				New Thread
-			</button>
-			<a href="/app/settings/resources" class="bc-btn text-xs" onclick={handleNavigate}>
-				Resources
-			</a>
-		</div>
+		<button
+			type="button"
+			class="flex w-full items-center justify-between px-1 py-1 text-[10px] font-semibold uppercase tracking-wider opacity-60 hover:opacity-100"
+			onclick={() => (showProjectsSection = !showProjectsSection)}
+		>
+			<div class="flex min-w-0 items-center gap-2">
+				<span class="shrink-0">Projects</span>
+				{#if !showProjectsSection && projectStore.selectedProject}
+					<span
+						class="max-w-[120px] truncate text-[10px] font-normal normal-case tracking-normal opacity-80"
+					>
+						({projectStore.selectedProject.name})
+					</span>
+				{/if}
+			</div>
+			<ChevronDown
+				size={12}
+				class="shrink-0 transition-transform {showProjectsSection ? '' : '-rotate-90'}"
+			/>
+		</button>
+
+		{#if showProjectsSection}
+			<div class="mt-1 flex flex-col gap-0.5">
+				{#if projectStore.isLoading}
+					<div class="flex items-center gap-2 px-2 py-1.5 text-xs">
+						<Loader2 size={12} class="animate-spin" />
+						<span class="bc-muted">Loading...</span>
+					</div>
+				{:else}
+					{#each projectStore.projects as project (project._id)}
+						<button
+							type="button"
+							class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-[hsl(var(--bc-muted)/0.1)] {projectStore
+								.selectedProject?._id === project._id
+								? 'bg-[hsl(var(--bc-muted)/0.15)]'
+								: ''}"
+							onclick={() => selectProject(project._id)}
+						>
+							<FolderOpen size={12} class="shrink-0" />
+							<span class="min-w-0 flex-1 truncate">{project.name}</span>
+							{#if project.isDefault}
+								<span class="bc-muted text-[10px]">(default)</span>
+							{/if}
+							{#if projectStore.selectedProject?._id === project._id}
+								<Check size={12} class="shrink-0 text-[hsl(var(--bc-accent))]" />
+							{/if}
+						</button>
+					{/each}
+					<button
+						type="button"
+						class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[hsl(var(--bc-accent))] transition-colors hover:bg-[hsl(var(--bc-muted)/0.1)]"
+						onclick={openCreateProjectModal}
+					>
+						<Plus size={12} />
+						<span>New Project</span>
+					</button>
+				{/if}
+			</div>
+		{/if}
+	</div>
+
+	<div class="bc-sidebar-section">
+		<button
+			type="button"
+			class="bc-btn bc-btn-primary w-full py-1.5 text-xs"
+			onclick={createNewThread}
+		>
+			<Plus size={14} />
+			New Thread
+		</button>
 	</div>
 
 	<div class="bc-sidebar-section">
@@ -206,7 +277,31 @@
 		{/if}
 	</div>
 
-	<div class="bc-sidebar-section bc-sidebar-footer">
+	<div class="bc-sidebar-section">
+		<div class="px-1 py-1 text-[10px] font-semibold uppercase tracking-wider opacity-60">
+			Workspace
+		</div>
+		<div class="mt-1 flex flex-col gap-0.5">
+			<a
+				href="/app/settings/resources"
+				class="flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors hover:bg-[hsl(var(--bc-muted)/0.1)]"
+				onclick={handleNavigate}
+			>
+				<BookOpen size={12} />
+				<span>Resources</span>
+			</a>
+			<a
+				href="/app/settings/questions"
+				class="flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors hover:bg-[hsl(var(--bc-muted)/0.1)]"
+				onclick={handleNavigate}
+			>
+				<MessageSquare size={12} />
+				<span>MCP Questions</span>
+			</a>
+		</div>
+	</div>
+
+	<div class="bc-sidebar-footer">
 		{#if auth.isSignedIn && auth.user}
 			<div class="sidebar-user-menu relative">
 				<button
@@ -226,64 +321,30 @@
 								<User size={14} />
 							</div>
 						{/if}
-						<div class="min-w-0 flex flex-col items-start">
-							<div class="truncate text-xs font-semibold">
-								{auth.user.fullName ?? 'User'}
-							</div>
+						<div class="min-w-0 truncate text-xs font-semibold">
+							{auth.user.fullName ?? 'User'}
 						</div>
 					</div>
-					<Menu size={14} />
+					<ChevronDown
+						size={14}
+						class="shrink-0 transition-transform {showUserMenu ? 'rotate-180' : ''}"
+					/>
 				</button>
 
 				{#if showUserMenu}
 					<div
 						class="bc-card bc-sidebar-dropdown absolute bottom-full left-0 right-0 mb-2 p-2 text-xs"
 					>
-						<button
-							type="button"
+						<a
+							href="/app/settings"
 							class="bc-sidebar-menu-item"
 							onclick={() => {
 								showUserMenu = false;
-								openUserProfile();
+								handleNavigate();
 							}}
 						>
-							<User size={14} />
-							Profile
-						</button>
-						{#if billingStore.isSubscribed}
-							<a href="/app/settings/usage" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-								<Settings size={14} />
-								Usage
-							</a>
-						{:else if billingStore.isOnFreePlan}
-							<a href="/pricing" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-								<Settings size={14} />
-								Pricing
-							</a>
-							<div class="bc-sidebar-menu-item bc-muted text-xs">
-								{billingStore.freeMessagesRemaining} / {billingStore.freeMessagesTotal} free messages
-							</div>
-						{:else}
-							<a href="/pricing" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-								<Settings size={14} />
-								Pricing
-							</a>
-						{/if}
-						<a href="/app/settings/billing" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-							<CreditCard size={14} />
-							Billing
-						</a>
-						<a href="/app/settings/resources" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-							<BookOpen size={14} />
-							Resources
-						</a>
-						<a href="/app/settings/mcp" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-							<Key size={14} />
-							MCP Server
-						</a>
-						<a href="/" class="bc-sidebar-menu-item" onclick={handleNavigate}>
-							<Home size={14} />
-							Home
+							<Settings size={14} />
+							Settings
 						</a>
 						<button type="button" class="bc-sidebar-menu-item" onclick={toggleTheme}>
 							{#if themeStore.theme === 'dark'}
@@ -294,15 +355,6 @@
 								Dark mode
 							{/if}
 						</button>
-						<a
-							href="https://github.com/bmdavis419/better-context"
-							target="_blank"
-							rel="noreferrer"
-							class="bc-sidebar-menu-item"
-						>
-							<Github size={14} />
-							GitHub
-						</a>
 						<button type="button" class="bc-sidebar-menu-item text-red-500" onclick={handleSignOut}>
 							<User size={14} />
 							Sign out

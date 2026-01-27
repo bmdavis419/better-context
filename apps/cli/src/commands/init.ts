@@ -4,10 +4,10 @@ import path from 'node:path';
 import * as readline from 'readline';
 
 const PROJECT_CONFIG_FILENAME = 'btca.config.jsonc';
-const CONFIG_SCHEMA_URL = 'https://btca.schema.json';
+const CONFIG_SCHEMA_URL = 'https://btca.dev/btca.schema.json';
 const DEFAULT_MODEL = 'claude-haiku-4-5';
 const DEFAULT_PROVIDER = 'opencode';
-const MCP_DASHBOARD_URL = 'https://btca.dev/app/settings/mcp/';
+const MCP_DASHBOARD_URL = 'https://btca.dev/app/settings';
 
 // AGENTS.md section templates
 const MCP_AGENTS_SECTION = `## Better Context MCP
@@ -27,14 +27,12 @@ Use Better Context MCP for documentation/resource questions when you need source
 **Common errors**
 - "Invalid resources" → re-run \`listResources\` and use exact names.
 - "Instance is provisioning / error state" → wait or retry after a minute.
-- "Missing or invalid Authorization header" → MCP auth is invalid; fix it in \`https://btca.dev/app/settings/mcp/\`.
+- "Missing or invalid Authorization header" → MCP auth is invalid; fix it in \`https://btca.dev/app/settings/\`.
 `;
 
 const CLI_AGENTS_SECTION = `## btca
 
 When you need up-to-date information about technologies used in this project, use btca to query source repositories directly.
-
-**Available resources**: (run \`btca config resources list\` to see configured resources)
 
 ### Usage
 
@@ -59,13 +57,7 @@ btca ask --question "@svelte @tailwind How do I style components?"
 
 ### Interactive Mode
 
-Start a chat session for deeper exploration:
-
-\`\`\`bash
-btca chat --resource svelte --resource effect
-\`\`\`
-
-Or use the TUI:
+Launch the TUI for interactive chat:
 
 \`\`\`bash
 btca
@@ -73,12 +65,26 @@ btca
 
 Then use \`@mentions\` to reference resources (e.g., "@svelte How do I create a store?")
 
+### Managing Resources
+
+\`\`\`bash
+# Add a git resource
+btca add https://github.com/owner/repo
+
+# Add a local directory
+btca add ./docs
+
+# Remove a resource
+btca remove <name>
+\`\`\`
+
 ### Configuration
 
-This project's btca resources are configured in \`btca.config.jsonc\` at the project root. To modify:
+This project's btca resources are configured in \`btca.config.jsonc\` at the project root. To change the AI model:
 
-- Edit the config file directly, or
-- Use \`btca config resources add/remove\` commands
+\`\`\`bash
+btca connect
+\`\`\`
 `;
 
 type SetupType = 'mcp' | 'cli';
@@ -343,7 +349,7 @@ async function handleCliSetup(cwd: string, configPath: string, force?: boolean):
 	console.log('\n--- Setup Complete (CLI) ---\n');
 	console.log('Next steps:');
 	console.log('  1. Add resources: btca add https://github.com/owner/repo');
-	console.log('     Or: btca config resources add -n <name> -t git -u <url>');
 	console.log('  2. Ask a question: btca ask -r <resource> -q "your question"');
+	console.log('  3. Or launch the TUI: btca');
 	console.log("\nRun 'btca --help' for more options.");
 }

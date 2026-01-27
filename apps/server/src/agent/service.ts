@@ -1,20 +1,25 @@
+/**
+ * Agent Service
+ * Refactored to use custom AI SDK loop instead of spawning OpenCode instances
+ */
 import {
 	createOpencode,
 	createOpencodeClient,
 	type Config as OpenCodeConfig,
-	type OpencodeClient,
-	type Event as OcEvent
+	type OpencodeClient
 } from '@opencode-ai/sdk';
 
 import { Config } from '../config/index.ts';
 import { CommonHints, type TaggedErrorOptions } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
+import { Auth, getSupportedProviders } from '../providers/index.ts';
 import type { CollectionResult } from '../collections/types.ts';
 import type { AgentResult, TrackedInstance, InstanceInfo } from './types.ts';
+import { AgentLoop } from './loop.ts';
 
 export namespace Agent {
 	// ─────────────────────────────────────────────────────────────────────────────
-	// Instance Registry - tracks OpenCode instances for cleanup
+	// Instance Registry - tracks OpenCode instances for cleanup (backward compat)
 	// ─────────────────────────────────────────────────────────────────────────────
 
 	const instanceRegistry = new Map<string, TrackedInstance>();
@@ -45,12 +50,10 @@ export namespace Agent {
 		return deleted;
 	};
 
-	const updateInstanceActivity = (id: string): void => {
-		const instance = instanceRegistry.get(id);
-		if (instance) {
-			instance.lastActivity = new Date();
-		}
-	};
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Error Classes
+	// ─────────────────────────────────────────────────────────────────────────────
+
 	export class AgentError extends Error {
 		readonly _tag = 'AgentError';
 		override readonly cause?: unknown;
@@ -115,11 +118,15 @@ export namespace Agent {
 		}
 	}
 
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Service Type
+	// ─────────────────────────────────────────────────────────────────────────────
+
 	export type Service = {
-		askStream: (args: {
-			collection: CollectionResult;
-			question: string;
-		}) => Promise<{ stream: AsyncIterable<OcEvent>; model: { provider: string; model: string } }>;
+		askStream: (args: { collection: CollectionResult; question: string }) => Promise<{
+			stream: AsyncIterable<AgentLoop.AgentEvent>;
+			model: { provider: string; model: string };
+		}>;
 
 		ask: (args: { collection: CollectionResult; question: string }) => Promise<AgentResult>;
 
@@ -139,6 +146,10 @@ export namespace Agent {
 		listInstances: () => InstanceInfo[];
 		closeAllInstances: () => Promise<{ closed: number }>;
 	};
+
+	// ─────────────────────────────────────────────────────────────────────────────
+	// OpenCode Instance Creation (for backward compatibility with getOpencodeInstance)
+	// ─────────────────────────────────────────────────────────────────────────────
 
 	const buildOpenCodeConfig = (args: {
 		agentInstructions: string;
@@ -207,44 +218,6 @@ export namespace Agent {
 		};
 	};
 
-	// Gateway providers route to other providers' models, so model validation
-	// should be skipped for these. The gateway itself handles model resolution.
-	const GATEWAY_PROVIDERS = ['opencode'] as const;
-
-	const isGatewayProvider = (providerId: string): boolean =>
-		GATEWAY_PROVIDERS.includes(providerId as (typeof GATEWAY_PROVIDERS)[number]);
-
-	const validateProviderAndModel = async (
-		client: OpencodeClient,
-		providerId: string,
-		modelId: string
-	) => {
-		const response = await client.provider.list().catch(() => null);
-		if (!response?.data) return;
-
-		type ProviderInfo = { id: string; models: Record<string, unknown> };
-		const data = response.data as { all: ProviderInfo[]; connected: string[] };
-
-		const { all, connected } = data;
-		const provider = all.find((p) => p.id === providerId);
-		if (!provider)
-			throw new InvalidProviderError({ providerId, availableProviders: all.map((p) => p.id) });
-		if (!connected.includes(providerId)) {
-			throw new ProviderNotConnectedError({ providerId, connectedProviders: connected });
-		}
-
-		// Skip model validation for gateway providers - they route to other providers' models
-		if (isGatewayProvider(providerId)) {
-			Metrics.info('agent.validation.gateway_skip', { providerId, modelId });
-			return;
-		}
-
-		const modelIds = Object.keys(provider.models);
-		if (!modelIds.includes(modelId)) {
-			throw new InvalidModelError({ providerId, modelId, availableModels: modelIds });
-		}
-	};
-
 	const createOpencodeInstance = async (args: {
 		collectionPath: string;
 		ocConfig: OpenCodeConfig;
@@ -256,14 +229,17 @@ export namespace Agent {
 		const maxAttempts = 10;
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			const port = Math.floor(Math.random() * 3000) + 3000;
-			const created = await createOpencode({ port, config: args.ocConfig }).catch((err: any) => {
-				if (err?.cause instanceof Error && err.cause.stack?.includes('port')) return null;
-				throw new AgentError({
-					message: 'Failed to create OpenCode instance',
-					hint: 'This may be a temporary issue. Try running the command again.',
-					cause: err
-				});
-			});
+			const created = await createOpencode({ port, config: args.ocConfig }).catch(
+				(err: unknown) => {
+					const error = err as { cause?: Error };
+					if (error?.cause instanceof Error && error.cause.stack?.includes('port')) return null;
+					throw new AgentError({
+						message: 'Failed to create OpenCode instance',
+						hint: 'This may be a temporary issue. Try running the command again.',
+						cause: err
+					});
+				}
+			);
 
 			if (created) {
 				const baseUrl = `http://localhost:${port}`;
@@ -281,164 +257,102 @@ export namespace Agent {
 		});
 	};
 
-	const sessionEvents = async (args: {
-		sessionID: string;
-		client: OpencodeClient;
-	}): Promise<AsyncIterable<OcEvent>> => {
-		const events = await args.client.event.subscribe().catch((cause: unknown) => {
-			throw new AgentError({
-				message: 'Failed to subscribe to events',
-				hint: 'This may be a temporary connection issue. Try running the command again.',
-				cause
-			});
-		});
-
-		async function* gen() {
-			for await (const event of events.stream) {
-				const props = event.properties as any;
-				if (props && 'sessionID' in props && props.sessionID !== args.sessionID) continue;
-				yield event;
-				if (
-					event.type === 'session.idle' &&
-					(event.properties as any)?.sessionID === args.sessionID
-				)
-					return;
-			}
-		}
-
-		return gen();
-	};
-
-	const extractAnswerFromEvents = (events: readonly OcEvent[]): string => {
-		const partIds: string[] = [];
-		const partText = new Map<string, string>();
-
-		for (const event of events) {
-			if (event.type !== 'message.part.updated') continue;
-			const part: any = (event.properties as any).part;
-			if (!part || part.type !== 'text') continue;
-			if (!partIds.includes(part.id)) partIds.push(part.id);
-			partText.set(part.id, String(part.text ?? ''));
-		}
-
-		return partIds
-			.map((id) => partText.get(id) ?? '')
-			.join('')
-			.trim();
-	};
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Service Factory
+	// ─────────────────────────────────────────────────────────────────────────────
 
 	export const create = (config: Config.Service): Service => {
+		/**
+		 * Ask a question and stream the response using the new AI SDK loop
+		 */
 		const askStream: Service['askStream'] = async ({ collection, question }) => {
-			const ocConfig = buildOpenCodeConfig({
-				agentInstructions: collection.agentInstructions,
-				providerId: config.provider,
-				providerTimeoutMs: config.providerTimeoutMs
-			});
-			const { client, server, baseUrl } = await createOpencodeInstance({
-				collectionPath: collection.path,
-				ocConfig
+			Metrics.info('agent.ask.start', {
+				provider: config.provider,
+				model: config.model,
+				questionLength: question.length
 			});
 
-			Metrics.info('agent.oc.ready', { baseUrl, collectionPath: collection.path });
+			// Validate provider is authenticated
+			const isAuthed = await Auth.isAuthenticated(config.provider);
+			if (!isAuthed && config.provider !== 'opencode') {
+				const authenticated = await Auth.getAuthenticatedProviders();
+				throw new ProviderNotConnectedError({
+					providerId: config.provider,
+					connectedProviders: authenticated
+				});
+			}
+
+			// Create a generator that wraps the AgentLoop stream
+			const eventGenerator = AgentLoop.stream({
+				providerId: config.provider,
+				modelId: config.model,
+				collectionPath: collection.path,
+				agentInstructions: collection.agentInstructions,
+				question
+			});
+
+			return {
+				stream: eventGenerator,
+				model: { provider: config.provider, model: config.model }
+			};
+		};
+
+		/**
+		 * Ask a question and return the complete response
+		 */
+		const ask: Service['ask'] = async ({ collection, question }) => {
+			Metrics.info('agent.ask.start', {
+				provider: config.provider,
+				model: config.model,
+				questionLength: question.length
+			});
+
+			// Validate provider is authenticated
+			const isAuthed = await Auth.isAuthenticated(config.provider);
+			if (!isAuthed && config.provider !== 'opencode') {
+				const authenticated = await Auth.getAuthenticatedProviders();
+				throw new ProviderNotConnectedError({
+					providerId: config.provider,
+					connectedProviders: authenticated
+				});
+			}
 
 			try {
-				try {
-					await validateProviderAndModel(client, config.provider, config.model);
-					Metrics.info('agent.validate.ok', { provider: config.provider, model: config.model });
-				} catch (cause) {
-					// Re-throw if it's already one of our specific error types with hints
-					if (
-						cause instanceof InvalidProviderError ||
-						cause instanceof InvalidModelError ||
-						cause instanceof ProviderNotConnectedError
-					) {
-						throw cause;
-					}
-					throw new AgentError({
-						message: 'Provider/model validation failed',
-						hint: `Check that provider "${config.provider}" and model "${config.model}" are valid. ${CommonHints.RUN_AUTH}`,
-						cause
-					});
-				}
-
-				const session = await client.session.create().catch((cause: unknown) => {
-					throw new AgentError({
-						message: 'Failed to create session',
-						hint: 'This may be a temporary issue with the OpenCode instance. Try running the command again.',
-						cause
-					});
+				const result = await AgentLoop.run({
+					providerId: config.provider,
+					modelId: config.model,
+					collectionPath: collection.path,
+					agentInstructions: collection.agentInstructions,
+					question
 				});
 
-				if (session.error)
-					throw new AgentError({
-						message: 'Failed to create session',
-						hint: 'The OpenCode server returned an error. Try running the command again.',
-						cause: session.error
-					});
-
-				const sessionID = session.data?.id;
-				if (!sessionID) {
-					throw new AgentError({
-						message: 'Failed to create session - no session ID returned',
-						hint: 'This is unexpected. Try running the command again or check for btca updates.',
-						cause: new Error('Missing session id')
-					});
-				}
-				Metrics.info('agent.session.created', { sessionID });
-
-				const eventStream = await sessionEvents({ sessionID, client });
-
-				Metrics.info('agent.prompt.sent', { sessionID, questionLength: question.length });
-				void client.session
-					.prompt({
-						path: { id: sessionID },
-						body: {
-							agent: 'btcaDocsAgent',
-							model: { providerID: config.provider, modelID: config.model },
-							parts: [{ type: 'text', text: question }]
-						}
-					})
-					.catch((cause: unknown) => {
-						Metrics.error('agent.prompt.err', { error: Metrics.errorInfo(cause) });
-					});
-
-				async function* filtered() {
-					try {
-						for await (const event of eventStream) {
-							if (event.type === 'session.error') {
-								const props: any = event.properties;
-								throw new AgentError({
-									message: props?.error?.name ?? 'Unknown session error',
-									hint: 'An error occurred during the AI session. Try running the command again or simplify your question.',
-									cause: props?.error
-								});
-							}
-							yield event;
-						}
-					} finally {
-						Metrics.info('agent.session.closed', { sessionID });
-						server.close();
-					}
-				}
+				Metrics.info('agent.ask.complete', {
+					provider: config.provider,
+					model: config.model,
+					answerLength: result.answer.length,
+					eventCount: result.events.length
+				});
 
 				return {
-					stream: filtered(),
-					model: { provider: config.provider, model: config.model }
+					answer: result.answer,
+					model: result.model,
+					events: result.events
 				};
-			} catch (cause) {
-				server.close();
-				throw cause;
+			} catch (error) {
+				Metrics.error('agent.ask.error', { error: Metrics.errorInfo(error) });
+				throw new AgentError({
+					message: 'Failed to get response from AI',
+					hint: 'This may be a temporary issue. Try running the command again.',
+					cause: error
+				});
 			}
 		};
 
-		const ask: Service['ask'] = async ({ collection, question }) => {
-			const { stream, model } = await askStream({ collection, question });
-			const events: OcEvent[] = [];
-			for await (const event of stream) events.push(event);
-			return { answer: extractAnswerFromEvents(events), model, events };
-		};
-
-		const getOpencodeInstanceMethod: Service['getOpencodeInstance'] = async ({ collection }) => {
+		/**
+		 * Get an OpenCode instance URL (backward compatibility)
+		 * This still spawns a full OpenCode instance for clients that need it
+		 */
+		const getOpencodeInstance: Service['getOpencodeInstance'] = async ({ collection }) => {
 			const ocConfig = buildOpenCodeConfig({
 				agentInstructions: collection.agentInstructions,
 				providerId: config.provider,
@@ -466,41 +380,32 @@ export namespace Agent {
 			};
 		};
 
+		/**
+		 * List available providers using local auth data
+		 */
 		const listProviders: Service['listProviders'] = async () => {
-			const ocConfig = buildOpenCodeConfig({
-				agentInstructions: '',
-				providerId: config.provider,
-				providerTimeoutMs: config.providerTimeoutMs
-			});
-			const { client, server } = await createOpencodeInstance({
-				collectionPath: process.cwd(),
-				ocConfig
-			});
+			// Get all supported providers from registry
+			const supportedProviders = getSupportedProviders();
 
-			try {
-				const response = await client.provider.list().catch((cause: unknown) => {
-					throw new AgentError({
-						message: 'Failed to fetch provider list',
-						hint: CommonHints.RUN_AUTH,
-						cause
-					});
-				});
-				if (!response?.data) {
-					throw new AgentError({
-						message: 'Failed to fetch provider list',
-						hint: CommonHints.RUN_AUTH
-					});
-				}
-				const data = response.data as {
-					all: { id: string; models: Record<string, unknown> }[];
-					connected: string[];
-				};
-				return { all: data.all, connected: data.connected };
-			} finally {
-				server.close();
-			}
+			// Get authenticated providers from OpenCode's auth storage
+			const authenticatedProviders = await Auth.getAuthenticatedProviders();
+
+			// Build the response - we don't have model lists without spawning OpenCode,
+			// so we return empty models for now
+			const all = supportedProviders.map((id) => ({
+				id,
+				models: {} as Record<string, unknown>
+			}));
+
+			return {
+				all,
+				connected: authenticatedProviders
+			};
 		};
 
+		/**
+		 * Close a specific OpenCode instance
+		 */
 		const closeInstance: Service['closeInstance'] = async (instanceId) => {
 			const instance = instanceRegistry.get(instanceId);
 			if (!instance) {
@@ -524,6 +429,9 @@ export namespace Agent {
 			}
 		};
 
+		/**
+		 * List all active OpenCode instances
+		 */
 		const listInstances: Service['listInstances'] = () => {
 			return Array.from(instanceRegistry.values()).map((instance) => ({
 				id: instance.id,
@@ -534,6 +442,9 @@ export namespace Agent {
 			}));
 		};
 
+		/**
+		 * Close all OpenCode instances
+		 */
 		const closeAllInstances: Service['closeAllInstances'] = async () => {
 			const instances = Array.from(instanceRegistry.values());
 			let closed = 0;
@@ -560,7 +471,7 @@ export namespace Agent {
 		return {
 			askStream,
 			ask,
-			getOpencodeInstance: getOpencodeInstanceMethod,
+			getOpencodeInstance,
 			listProviders,
 			closeInstance,
 			listInstances,

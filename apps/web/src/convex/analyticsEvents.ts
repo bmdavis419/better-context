@@ -27,6 +27,9 @@ export const AnalyticsEvents = {
 	THREAD_DELETED: 'thread_deleted',
 	THREAD_CLEARED: 'thread_cleared',
 
+	PROJECT_CREATED: 'project_created',
+	PROJECT_DELETED: 'project_deleted',
+
 	RESOURCE_ADDED: 'resource_added',
 	RESOURCE_REMOVED: 'resource_removed',
 

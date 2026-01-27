@@ -1,6 +1,7 @@
 'use node';
 
 import { Daytona, type Sandbox } from '@daytonaio/sdk';
+import { BTCA_SNAPSHOT_NAME } from 'btca-sandbox/shared';
 import { v } from 'convex/values';
 
 import { api, internal } from '../_generated/api';
@@ -11,8 +12,6 @@ import { instances } from '../apiHelpers';
 
 const instanceQueries = instances.queries;
 const instanceMutations = instances.mutations;
-
-const BTCA_SNAPSHOT_NAME = 'btca-app-sandbox';
 const BTCA_SERVER_PORT = 3000;
 const SANDBOX_IDLE_MINUTES = 2;
 const DEFAULT_MODEL = 'claude-haiku-4-5';
@@ -401,15 +400,57 @@ async function requireAuthenticatedInstance(ctx: ActionCtx): Promise<Doc<'instan
 	return instance;
 }
 
+async function createSandboxFromScratch(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	instance: Doc<'instances'>
+): Promise<{ sandbox: Sandbox; serverUrl: string }> {
+	requireEnv('OPENCODE_API_KEY');
+
+	const resources = await getResourceConfigs(ctx, instanceId);
+	const daytona = getDaytona();
+	const sandbox = await daytona.create({
+		snapshot: BTCA_SNAPSHOT_NAME,
+		autoStopInterval: SANDBOX_IDLE_MINUTES,
+		envVars: {
+			NODE_ENV: 'production',
+			OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
+		},
+		public: true
+	});
+
+	await uploadBtcaConfig(sandbox, resources);
+	const serverUrl = await startBtcaServer(sandbox);
+
+	const versions = await getInstalledVersions(sandbox);
+
+	await ctx.runMutation(instanceMutations.setProvisioned, {
+		instanceId,
+		sandboxId: sandbox.id,
+		btcaVersion: versions.btcaVersion,
+		opencodeVersion: versions.opencodeVersion
+	});
+
+	await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
+		distinctId: instance.clerkId,
+		event: AnalyticsEvents.SANDBOX_PROVISIONED,
+		properties: {
+			instanceId,
+			sandboxId: sandbox.id,
+			btcaVersion: versions.btcaVersion,
+			opencodeVersion: versions.opencodeVersion,
+			createdDuringWake: true
+		}
+	});
+
+	return { sandbox, serverUrl };
+}
+
 async function wakeInstanceInternal(
 	ctx: ActionCtx,
 	instanceId: Id<'instances'>
 ): Promise<{ serverUrl: string }> {
 	const instance = await requireInstance(ctx, instanceId);
-	if (!instance.sandboxId) {
-		throw new Error('Instance does not have a sandbox to wake');
-	}
-
 	const wakeStartedAt = Date.now();
 
 	await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
@@ -417,7 +458,7 @@ async function wakeInstanceInternal(
 		event: AnalyticsEvents.SANDBOX_WAKE_STARTED,
 		properties: {
 			instanceId,
-			sandboxId: instance.sandboxId
+			sandboxId: instance.sandboxId ?? null
 		}
 	});
 
@@ -427,13 +468,23 @@ async function wakeInstanceInternal(
 	});
 
 	try {
-		const resources = await getResourceConfigs(ctx, instanceId);
-		const daytona = getDaytona();
-		const sandbox = await daytona.get(instance.sandboxId);
+		let serverUrl: string;
+		let sandboxId: string;
 
-		await ensureSandboxStarted(sandbox);
-		await uploadBtcaConfig(sandbox, resources);
-		const serverUrl = await startBtcaServer(sandbox);
+		if (!instance.sandboxId) {
+			const result = await createSandboxFromScratch(ctx, instanceId, instance);
+			serverUrl = result.serverUrl;
+			sandboxId = result.sandbox.id;
+		} else {
+			const resources = await getResourceConfigs(ctx, instanceId);
+			const daytona = getDaytona();
+			const sandbox = await daytona.get(instance.sandboxId);
+
+			await ensureSandboxStarted(sandbox);
+			await uploadBtcaConfig(sandbox, resources);
+			serverUrl = await startBtcaServer(sandbox);
+			sandboxId = instance.sandboxId;
+		}
 
 		await ctx.runMutation(instanceMutations.setServerUrl, { instanceId, serverUrl });
 		await ctx.runMutation(instanceMutations.updateState, { instanceId, state: 'running' });
@@ -445,8 +496,9 @@ async function wakeInstanceInternal(
 			event: AnalyticsEvents.SANDBOX_WOKE,
 			properties: {
 				instanceId,
-				sandboxId: instance.sandboxId,
-				durationMs
+				sandboxId,
+				durationMs,
+				createdNewSandbox: !instance.sandboxId
 			}
 		});
 

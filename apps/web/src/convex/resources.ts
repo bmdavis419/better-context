@@ -19,17 +19,34 @@ export const listGlobal = query({
 });
 
 /**
- * List user resources for the authenticated user's instance
+ * List user resources for the authenticated user's instance, optionally filtered by project
  */
 export const listUserResources = query({
-	args: {},
-	handler: async (ctx) => {
+	args: {
+		projectId: v.optional(v.id('projects'))
+	},
+	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
-		return await ctx.db
+		if (args.projectId) {
+			const resources = await ctx.db
+				.query('userResources')
+				.withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+				.collect();
+			return resources.filter((r) => r.instanceId === instance._id);
+		}
+
+		const allResources = await ctx.db
 			.query('userResources')
 			.withIndex('by_instance', (q) => q.eq('instanceId', instance._id))
 			.collect();
+
+		const seen = new Set<string>();
+		return allResources.filter((r) => {
+			if (seen.has(r.name)) return false;
+			seen.add(r.name);
+			return true;
+		});
 	}
 });
 
@@ -119,13 +136,15 @@ export const addCustomResource = mutation({
 		url: v.string(),
 		branch: v.string(),
 		searchPath: v.optional(v.string()),
-		specialNotes: v.optional(v.string())
+		specialNotes: v.optional(v.string()),
+		projectId: v.optional(v.id('projects'))
 	},
 	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
 		const resourceId = await ctx.db.insert('userResources', {
 			instanceId: instance._id,
+			projectId: args.projectId,
 			name: args.name,
 			type: 'git',
 			url: args.url,

@@ -1,0 +1,13 @@
+{
+	"$schema": "https://btca.dev/btca.remote.schema.json",
+	"project": "mcp-sandbox",
+	"model": "claude-haiku",
+	"resources": [
+		{
+			"type": "git",
+			"name": "clerkJs",
+			"url": "https://github.com/clerk/javascript",
+			"branch": "main"
+		}
+	]
+}

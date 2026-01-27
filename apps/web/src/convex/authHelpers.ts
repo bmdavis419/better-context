@@ -117,36 +117,6 @@ export async function requireMessageOwnership(
 }
 
 /**
- * Validates that the authenticated user owns the API key (via its instance).
- * Returns the API key and instance if ownership is confirmed.
- */
-export async function requireApiKeyOwnership(
-	ctx: DbCtx,
-	keyId: Id<'apiKeys'>
-): Promise<{ apiKey: Doc<'apiKeys'>; instance: Doc<'instances'> }> {
-	const identity = await ctx.auth.getUserIdentity();
-	if (!identity) {
-		throw new Error('Unauthorized: Authentication required');
-	}
-
-	const apiKey = await ctx.db.get(keyId);
-	if (!apiKey) {
-		throw new Error('API key not found');
-	}
-
-	const instance = await ctx.db.get(apiKey.instanceId);
-	if (!instance) {
-		throw new Error('Instance not found');
-	}
-
-	if (instance.clerkId !== identity.subject) {
-		throw new Error('Unauthorized: Access denied');
-	}
-
-	return { apiKey, instance };
-}
-
-/**
  * Validates that the authenticated user owns the user resource (via its instance).
  * Returns the resource and instance if ownership is confirmed.
  */

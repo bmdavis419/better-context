@@ -52,8 +52,9 @@ const StoredConfigSchema = z.object({
 	dataDirectory: z.string().optional(),
 	providerTimeoutMs: z.number().int().positive().optional(),
 	resources: z.array(ResourceDefinitionSchema),
-	model: z.string(),
-	provider: z.string()
+	// Provider and model are optional - defaults are applied when loading
+	model: z.string().optional(),
+	provider: z.string().optional()
 });
 
 type StoredConfig = z.infer<typeof StoredConfigSchema>;
@@ -532,10 +533,10 @@ export namespace Config {
 				return getMergedResources();
 			},
 			get model() {
-				return getActiveConfig().model;
+				return getActiveConfig().model ?? DEFAULT_MODEL;
 			},
 			get provider() {
-				return getActiveConfig().provider;
+				return getActiveConfig().provider ?? DEFAULT_PROVIDER;
 			},
 			get providerTimeoutMs() {
 				return getActiveConfig().providerTimeoutMs;

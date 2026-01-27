@@ -30,30 +30,32 @@ export const BtcaStreamReasoningDeltaEventSchema = z.object({
 export const BtcaToolStateSchema = z.discriminatedUnion('status', [
 	z.object({
 		status: z.literal('pending'),
-		input: z.record(z.unknown()),
-		raw: z.string()
+		input: z.unknown(),
+		raw: z.string().optional()
 	}),
 	z.object({
 		status: z.literal('running'),
-		input: z.record(z.unknown()),
+		input: z.unknown(),
 		title: z.string().optional(),
 		metadata: z.record(z.unknown()).optional(),
-		time: z.object({ start: z.number() })
+		time: z.object({ start: z.number() }).optional()
 	}),
 	z.object({
 		status: z.literal('completed'),
-		input: z.record(z.unknown()),
+		input: z.unknown(),
 		output: z.string(),
-		title: z.string(),
-		metadata: z.record(z.unknown()),
-		time: z.object({ start: z.number(), end: z.number(), compacted: z.number().optional() })
+		title: z.string().optional(),
+		metadata: z.record(z.unknown()).optional(),
+		time: z
+			.object({ start: z.number(), end: z.number(), compacted: z.number().optional() })
+			.optional()
 	}),
 	z.object({
 		status: z.literal('error'),
-		input: z.record(z.unknown()),
+		input: z.unknown(),
 		error: z.string(),
 		metadata: z.record(z.unknown()).optional(),
-		time: z.object({ start: z.number(), end: z.number() })
+		time: z.object({ start: z.number(), end: z.number() }).optional()
 	})
 ]);
 

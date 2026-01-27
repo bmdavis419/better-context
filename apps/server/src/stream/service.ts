@@ -1,41 +1,16 @@
-import type { OcEvent } from '../agent/types.ts';
 import { getErrorMessage, getErrorTag } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
-import {
-	StreamingTagStripper,
-	extractCoreQuestion,
-	stripUserQuestionFromStart
-} from '@btca/shared';
+import { stripUserQuestionFromStart, extractCoreQuestion } from '@btca/shared';
+import type { AgentLoop } from '../agent/loop.ts';
 
 import type {
 	BtcaStreamDoneEvent,
 	BtcaStreamErrorEvent,
 	BtcaStreamEvent,
 	BtcaStreamMetaEvent,
-	BtcaStreamReasoningDeltaEvent,
 	BtcaStreamTextDeltaEvent,
 	BtcaStreamToolUpdatedEvent
 } from './types.ts';
-
-type Accumulator = {
-	partIds: string[];
-	partText: Map<string, string>;
-	combined: string;
-};
-
-const makeAccumulator = (): Accumulator => ({ partIds: [], partText: new Map(), combined: '' });
-
-const updateAccumulator = (acc: Accumulator, partId: string, nextText: string): string => {
-	if (!acc.partIds.includes(partId)) acc.partIds.push(partId);
-	acc.partText.set(partId, nextText);
-
-	const nextCombined = acc.partIds.map((id) => acc.partText.get(id) ?? '').join('');
-	const delta = nextCombined.startsWith(acc.combined)
-		? nextCombined.slice(acc.combined.length)
-		: nextCombined;
-	acc.combined = nextCombined;
-	return delta;
-};
 
 const toSse = (event: BtcaStreamEvent): string => {
 	// Standard SSE: an event name + JSON payload.
@@ -45,27 +20,10 @@ const toSse = (event: BtcaStreamEvent): string => {
 export namespace StreamService {
 	export const createSseStream = (args: {
 		meta: BtcaStreamMetaEvent;
-		eventStream: AsyncIterable<OcEvent>;
+		eventStream: AsyncIterable<AgentLoop.AgentEvent>;
 		question?: string; // Original question - used to filter echoed user message
 	}): ReadableStream<Uint8Array> => {
 		const encoder = new TextEncoder();
-
-		const text = makeAccumulator();
-		const reasoning = makeAccumulator();
-		const toolsByCallId = new Map<string, Omit<BtcaStreamToolUpdatedEvent, 'type'>>();
-
-		let toolUpdates = 0;
-		let textEvents = 0;
-		let reasoningEvents = 0;
-
-		// Create streaming tag stripper for filtering history markers
-		const tagStripper = new StreamingTagStripper();
-
-		// Extract the core question for stripping echoed user message from final response
-		const coreQuestion = extractCoreQuestion(args.question);
-
-		// Track total emitted text for accurate final text reconstruction
-		let emittedText = '';
 
 		const emit = (
 			controller: ReadableStreamDefaultController<Uint8Array>,
@@ -73,6 +31,15 @@ export namespace StreamService {
 		) => {
 			controller.enqueue(encoder.encode(toSse(event)));
 		};
+
+		// Track accumulated text and tool state
+		let accumulatedText = '';
+		const toolsByCallId = new Map<string, Omit<BtcaStreamToolUpdatedEvent, 'type'>>();
+		let textEvents = 0;
+		let toolEvents = 0;
+
+		// Extract the core question for stripping echoed user message from final response
+		const coreQuestion = extractCoreQuestion(args.question);
 
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
@@ -87,101 +54,107 @@ export namespace StreamService {
 				(async () => {
 					try {
 						for await (const event of args.eventStream) {
-							if (event.type === 'message.part.updated') {
-								const props = event.properties as any;
-								const part: any = props?.part;
-								if (!part || typeof part !== 'object') continue;
+							switch (event.type) {
+								case 'text-delta': {
+									textEvents += 1;
+									accumulatedText += event.text;
 
-								// Skip user messages - only stream assistant responses
-								const messageRole = props?.message?.role ?? props?.role;
-								if (messageRole === 'user') {
-									continue;
+									const msg: BtcaStreamTextDeltaEvent = {
+										type: 'text.delta',
+										delta: event.text
+									};
+									emit(controller, msg);
+									break;
 								}
 
-								if (part.type === 'text') {
-									const partId = String(part.id);
-									const nextText = String(part.text ?? '');
+								case 'tool-call': {
+									toolEvents += 1;
+									const callID = `tool-${toolEvents}`;
 
-									// Get the raw delta from accumulator
-									const rawDelta = updateAccumulator(text, partId, nextText);
-
-									if (rawDelta.length > 0) {
-										// Filter through the streaming tag stripper
-										const cleanDelta = tagStripper.process(rawDelta);
-
-										if (cleanDelta.length > 0) {
-											textEvents += 1;
-											emittedText += cleanDelta;
-											const msg: BtcaStreamTextDeltaEvent = {
-												type: 'text.delta',
-												delta: cleanDelta
-											};
-											emit(controller, msg);
+									// Store tool call info
+									toolsByCallId.set(callID, {
+										callID,
+										tool: event.toolName,
+										state: {
+											status: 'running',
+											input: event.input
 										}
-									}
-									continue;
-								}
-
-								if (part.type === 'reasoning') {
-									const partId = String(part.id);
-									const nextText = String(part.text ?? '');
-									const delta = updateAccumulator(reasoning, partId, nextText);
-									if (delta.length > 0) {
-										reasoningEvents += 1;
-										const msg: BtcaStreamReasoningDeltaEvent = { type: 'reasoning.delta', delta };
-										emit(controller, msg);
-									}
-									continue;
-								}
-
-								if (part.type === 'tool') {
-									const callID = String(part.callID);
-									const tool = String(part.tool);
-									const state = part.state as any;
+									});
 
 									const update: BtcaStreamToolUpdatedEvent = {
 										type: 'tool.updated',
 										callID,
-										tool,
-										state
+										tool: event.toolName,
+										state: {
+											status: 'running',
+											input: event.input
+										}
 									};
-									toolUpdates += 1;
-									toolsByCallId.set(callID, { callID, tool, state });
 									emit(controller, update);
-									continue;
-								}
-							}
-
-							if (event.type === 'session.idle') {
-								const tools = Array.from(toolsByCallId.values());
-
-								// Flush any remaining buffered content from the tag stripper
-								const flushed = tagStripper.flush();
-								if (flushed.length > 0) {
-									emittedText += flushed;
+									break;
 								}
 
-								// Strip the echoed user question from the final text
-								let finalText = stripUserQuestionFromStart(emittedText, coreQuestion);
+								case 'tool-result': {
+									// Find the tool call and update its state
+									for (const [callID, tool] of toolsByCallId) {
+										if (tool.tool === event.toolName && tool.state?.status === 'running') {
+											tool.state = {
+												status: 'completed',
+												input: tool.state.input,
+												output: event.output
+											};
 
-								Metrics.info('stream.done', {
-									collectionKey: args.meta.collection.key,
-									textLength: finalText.length,
-									reasoningLength: reasoning.combined.length,
-									toolCount: tools.length,
-									toolUpdates,
-									textEvents,
-									reasoningEvents
-								});
+											const update: BtcaStreamToolUpdatedEvent = {
+												type: 'tool.updated',
+												callID,
+												tool: event.toolName,
+												state: tool.state
+											};
+											emit(controller, update);
+											break;
+										}
+									}
+									break;
+								}
 
-								const done: BtcaStreamDoneEvent = {
-									type: 'done',
-									text: finalText,
-									reasoning: reasoning.combined,
-									tools
-								};
-								emit(controller, done);
-								continue;
+								case 'finish': {
+									const tools = Array.from(toolsByCallId.values());
+
+									// Strip the echoed user question from the final text
+									let finalText = stripUserQuestionFromStart(accumulatedText, coreQuestion);
+
+									Metrics.info('stream.done', {
+										collectionKey: args.meta.collection.key,
+										textLength: finalText.length,
+										toolCount: tools.length,
+										textEvents,
+										toolEvents,
+										finishReason: event.finishReason
+									});
+
+									const done: BtcaStreamDoneEvent = {
+										type: 'done',
+										text: finalText,
+										reasoning: '', // We don't have reasoning in the new format
+										tools
+									};
+									emit(controller, done);
+									break;
+								}
+
+								case 'error': {
+									Metrics.error('stream.error', {
+										collectionKey: args.meta.collection.key,
+										error: Metrics.errorInfo(event.error)
+									});
+									const err: BtcaStreamErrorEvent = {
+										type: 'error',
+										tag: getErrorTag(event.error),
+										message: getErrorMessage(event.error)
+									};
+									emit(controller, err);
+									break;
+								}
 							}
 						}
 					} catch (cause) {

@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import { addCommand } from './commands/add.ts';
 import { askCommand } from './commands/ask.ts';
-import { chatCommand } from './commands/chat.ts';
-import { configCommand } from './commands/config.ts';
 import { clearCommand } from './commands/clear.ts';
+import { connectCommand } from './commands/connect.ts';
 import { initCommand } from './commands/init.ts';
+import { removeCommand } from './commands/remove.ts';
+import { remoteCommand } from './commands/remote.ts';
 import { serveCommand } from './commands/serve.ts';
 import { launchTui } from './commands/tui.ts';
 import { launchRepl } from './commands/repl.ts';
@@ -28,13 +29,23 @@ const program = new Command()
 		'Use simple REPL mode instead of TUI (useful for Windows or minimal terminals)'
 	);
 
+// Resource management commands
 program.addCommand(addCommand);
+program.addCommand(removeCommand);
+
+// Query commands
 program.addCommand(askCommand);
-program.addCommand(chatCommand);
-program.addCommand(configCommand);
-program.addCommand(clearCommand);
+
+// Configuration commands
+program.addCommand(connectCommand);
 program.addCommand(initCommand);
+
+// Utility commands
+program.addCommand(clearCommand);
 program.addCommand(serveCommand);
+
+// Remote mode commands
+program.addCommand(remoteCommand);
 
 // Default action (no subcommand) → launch TUI or REPL
 program.action(async (options: { server?: string; port?: number; tui?: boolean }) => {

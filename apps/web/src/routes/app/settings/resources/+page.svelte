@@ -5,13 +5,21 @@
 	import { goto } from '$app/navigation';
 	import ResourceLogo from '$lib/components/ResourceLogo.svelte';
 	import { getAuthState } from '$lib/stores/auth.svelte';
+	import { getProjectStore } from '$lib/stores/project.svelte';
 	import { api } from '../../../../convex/_generated/api';
 
 	const auth = getAuthState();
 	const client = useConvexClient();
+	const projectStore = getProjectStore();
 
+	const selectedProjectId = $derived(projectStore.selectedProject?._id);
 	const userResourcesQuery = $derived(
-		auth.instanceId ? useQuery(api.resources.listUserResources, {}) : null
+		auth.instanceId
+			? useQuery(
+					api.resources.listUserResources,
+					selectedProjectId ? { projectId: selectedProjectId } : {}
+				)
+			: null
 	);
 
 	// Quick add state
@@ -164,7 +172,8 @@
 				url: formUrl.trim(),
 				branch: formBranch.trim() || 'main',
 				searchPath: formSearchPath.trim() || undefined,
-				specialNotes: formSpecialNotes.trim() || undefined
+				specialNotes: formSpecialNotes.trim() || undefined,
+				projectId: selectedProjectId
 			});
 
 			// Reset form
@@ -205,7 +214,8 @@
 				url: resource.url,
 				branch: resource.branch,
 				searchPath: resource.searchPath ?? resource.searchPaths?.[0],
-				specialNotes: resource.specialNotes
+				specialNotes: resource.specialNotes,
+				projectId: selectedProjectId
 			});
 		} catch (error) {
 			globalAddError = error instanceof Error ? error.message : 'Failed to add resource';
@@ -215,8 +225,8 @@
 	}
 </script>
 
-<div class="flex flex-1 overflow-hidden">
-	<div class="mx-auto flex w-full max-w-5xl flex-col gap-8 overflow-y-auto p-8">
+<div class="flex flex-1 overflow-y-auto">
+	<div class="mx-auto flex w-full max-w-5xl flex-col gap-8 p-8">
 		<!-- Header -->
 		<div>
 			<h1 class="text-2xl font-semibold">Resources</h1>
@@ -478,45 +488,44 @@
 					<Loader2 size={24} class="animate-spin" />
 				</div>
 			{:else if userResourcesQuery?.data && userResourcesQuery.data.length > 0}
-				<div class="grid gap-3">
+				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					{#each userResourcesQuery.data as resource (resource._id)}
-						<div class="bc-card flex items-start gap-4 p-4">
-							<div class="flex-1">
-								<div class="flex items-center gap-2">
-									<span class="font-medium">@{resource.name}</span>
+						<div class="bc-card flex flex-col p-4">
+							<div class="mb-3 flex items-start justify-between gap-2">
+								<span class="font-medium">@{resource.name}</span>
+								<div class="flex shrink-0 gap-1">
+									<a
+										href={resource.url}
+										target="_blank"
+										rel="noreferrer"
+										class="bc-chip p-1.5"
+										title="Open repository"
+									>
+										<ExternalLink size={12} />
+									</a>
+									<button
+										type="button"
+										class="bc-chip p-1.5 text-red-500"
+										title="Remove resource"
+										onclick={() => handleRemoveResource(resource._id)}
+									>
+										<Trash2 size={12} />
+									</button>
 								</div>
-								<div class="bc-muted mt-1 text-xs">
-									{resource.url}
+							</div>
+							<div class="bc-muted line-clamp-1 text-xs">
+								{resource.url.replace(/^https?:\/\//, '')}
+							</div>
+							<div class="bc-muted mt-1 text-xs">
+								{resource.branch}
+								{#if resource.searchPath}
 									<span class="mx-1">·</span>
-									{resource.branch}
-									{#if resource.searchPath}
-										<span class="mx-1">·</span>
-										{resource.searchPath}
-									{/if}
-								</div>
-								{#if resource.specialNotes}
-									<div class="bc-muted mt-2 text-xs italic">{resource.specialNotes}</div>
+									{resource.searchPath}
 								{/if}
 							</div>
-							<div class="flex shrink-0 gap-2">
-								<a
-									href={resource.url}
-									target="_blank"
-									rel="noreferrer"
-									class="bc-chip p-2"
-									title="Open repository"
-								>
-									<ExternalLink size={14} />
-								</a>
-								<button
-									type="button"
-									class="bc-chip p-2 text-red-500"
-									title="Remove resource"
-									onclick={() => handleRemoveResource(resource._id)}
-								>
-									<Trash2 size={14} />
-								</button>
-							</div>
+							{#if resource.specialNotes}
+								<div class="bc-muted mt-2 line-clamp-2 text-xs italic">{resource.specialNotes}</div>
+							{/if}
 						</div>
 					{/each}
 				</div>

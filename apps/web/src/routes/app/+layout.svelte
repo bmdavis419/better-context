@@ -8,6 +8,7 @@
 	import { setAuthState, getAuthState, setInstanceId } from '$lib/stores/auth.svelte';
 	import { setBillingStore } from '$lib/stores/billing.svelte';
 	import { setInstanceStore } from '$lib/stores/instance.svelte';
+	import { setProjectStore } from '$lib/stores/project.svelte';
 	import {
 		identifyUser,
 		resetUser,
@@ -17,6 +18,7 @@
 	import { api } from '../../convex/_generated/api';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import ProvisioningModal from '$lib/components/ProvisioningModal.svelte';
+	import CreateProjectModal from '$lib/components/CreateProjectModal.svelte';
 
 	let { children } = $props();
 
@@ -40,13 +42,19 @@
 	const auth = getAuthState();
 	const billingStore = setBillingStore();
 	const instanceStore = setInstanceStore();
+	const projectStore = setProjectStore();
 
 	let isInitializing = $state(true);
 	let sidebarOpen = $state(false);
 
 	const routeId = $derived((page.params as { id?: string }).id);
 	const currentThreadId = $derived(routeId && routeId !== 'new' ? routeId : null);
-	const threadsQuery = $derived(auth.instanceId ? useQuery(api.threads.list, {}) : null);
+	const selectedProjectId = $derived(projectStore.selectedProject?._id);
+	const threadsQuery = $derived(
+		auth.instanceId
+			? useQuery(api.threads.list, selectedProjectId ? { projectId: selectedProjectId } : {})
+			: null
+	);
 	const threads = $derived(threadsQuery?.data ?? []);
 	const threadsLoading = $derived(threadsQuery?.isLoading ?? false);
 
@@ -114,6 +122,14 @@
 		page.url.pathname;
 		sidebarOpen = false;
 	});
+
+	$effect(() => {
+		const projects = projectStore.projects;
+		const urlProjectId = page.url.searchParams.get('project');
+		if (projects.length > 0 && !projectStore.initialized) {
+			untrack(() => projectStore.initFromUrl(urlProjectId));
+		}
+	});
 </script>
 
 <svelte:head>
@@ -170,3 +186,4 @@
 </div>
 
 <ProvisioningModal />
+<CreateProjectModal {projectStore} />

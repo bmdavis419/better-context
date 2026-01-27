@@ -68,6 +68,20 @@ export const getByClerkId = query({
 });
 
 /**
+ * Internal query to get instance by Clerk ID
+ * Used by API key validation when we have the Clerk user ID but no auth context
+ */
+export const getByClerkIdInternal = internalQuery({
+	args: { clerkId: v.string() },
+	handler: async (ctx, args) => {
+		return await ctx.db
+			.query('instances')
+			.withIndex('by_clerk_id', (q) => q.eq('clerkId', args.clerkId))
+			.first();
+	}
+});
+
+/**
  * Get instance status for the authenticated user
  */
 export const getStatus = query({

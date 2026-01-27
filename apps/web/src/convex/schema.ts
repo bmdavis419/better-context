@@ -72,28 +72,28 @@ export default defineSchema({
 		.index('by_clerk_id', ['clerkId'])
 		.index('by_sandbox_id', ['sandboxId']),
 
+	projects: defineTable({
+		instanceId: v.id('instances'),
+		name: v.string(),
+		model: v.optional(v.string()),
+		isDefault: v.boolean(),
+		createdAt: v.number()
+	})
+		.index('by_instance', ['instanceId'])
+		.index('by_instance_and_name', ['instanceId', 'name']),
+
 	cachedResources: defineTable({
 		instanceId: v.id('instances'),
+		projectId: v.optional(v.id('projects')),
 		name: v.string(),
 		url: v.string(),
 		branch: v.string(),
 		sizeBytes: v.optional(v.number()),
 		cachedAt: v.number(),
 		lastUsedAt: v.number()
-	}).index('by_instance', ['instanceId']),
-
-	apiKeys: defineTable({
-		instanceId: v.id('instances'),
-		name: v.string(),
-		keyHash: v.string(),
-		keyPrefix: v.string(),
-		createdAt: v.number(),
-		lastUsedAt: v.optional(v.number()),
-		revokedAt: v.optional(v.number()),
-		usageCount: v.optional(v.number())
 	})
 		.index('by_instance', ['instanceId'])
-		.index('by_key_hash', ['keyHash']),
+		.index('by_project', ['projectId']),
 
 	globalResources: defineTable({
 		name: v.string(),
@@ -108,6 +108,7 @@ export default defineSchema({
 
 	userResources: defineTable({
 		instanceId: v.id('instances'),
+		projectId: v.optional(v.id('projects')),
 		name: v.string(),
 		type: v.literal('git'),
 		url: v.string(),
@@ -115,14 +116,19 @@ export default defineSchema({
 		searchPath: v.optional(v.string()),
 		specialNotes: v.optional(v.string()),
 		createdAt: v.number()
-	}).index('by_instance', ['instanceId']),
+	})
+		.index('by_instance', ['instanceId'])
+		.index('by_project', ['projectId']),
 
 	threads: defineTable({
 		instanceId: v.id('instances'),
+		projectId: v.optional(v.id('projects')),
 		title: v.optional(v.string()),
 		createdAt: v.number(),
 		lastActivityAt: v.number()
-	}).index('by_instance', ['instanceId']),
+	})
+		.index('by_instance', ['instanceId'])
+		.index('by_project', ['projectId']),
 
 	messages: defineTable({
 		threadId: v.id('threads'),
@@ -150,5 +156,25 @@ export default defineSchema({
 		.index('by_thread', ['threadId'])
 		.index('by_message', ['messageId'])
 		.index('by_session', ['sessionId'])
-		.index('by_status', ['status'])
+		.index('by_status', ['status']),
+
+	mcpQuestions: defineTable({
+		projectId: v.id('projects'),
+		question: v.string(),
+		resources: v.array(v.string()),
+		answer: v.string(),
+		createdAt: v.number()
+	}).index('by_project', ['projectId']),
+
+	apiKeyUsage: defineTable({
+		clerkApiKeyId: v.string(), // "ak_xxx" from Clerk
+		clerkUserId: v.string(), // "user_xxx" - the subject from Clerk
+		instanceId: v.id('instances'),
+		name: v.optional(v.string()), // Cached name for display
+		lastUsedAt: v.optional(v.number()),
+		usageCount: v.number(),
+		createdAt: v.number()
+	})
+		.index('by_clerk_api_key_id', ['clerkApiKeyId'])
+		.index('by_instance', ['instanceId'])
 });

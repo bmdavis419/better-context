@@ -103,8 +103,8 @@ describe('Agent', () => {
 			}
 
 			expect(events.length).toBeGreaterThan(0);
-			// Should have received some message.part.updated events
-			const textEvents = events.filter((e) => e.type === 'message.part.updated');
+			// Should have received some text-delta events
+			const textEvents = events.filter((e) => e.type === 'text-delta');
 			expect(textEvents.length).toBeGreaterThan(0);
 		}, 60000);
 	});

@@ -36,8 +36,11 @@
 	"dependencies": {
 		"@ai-sdk/openai-compatible": "^2.0.13",
 		"@btca/shared": "workspace:*",
+		"btca-sandbox": "workspace:*",
+		"@clerk/backend": "^2.29.5",
 		"@clerk/clerk-js": "^5.120.0",
 		"@clerk/types": "^4.101.11",
+		"@convex-dev/migrations": "^0.3.1",
 		"@daytonaio/sdk": "^0.130.0",
 		"@lucide/svelte": "^0.562.0",
 		"@shikijs/langs": "^3.20.0",

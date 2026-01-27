@@ -6,17 +6,28 @@ import { AnalyticsEvents } from './analyticsEvents';
 import { getAuthenticatedInstance, requireThreadOwnership } from './authHelpers';
 
 /**
- * List threads for the authenticated user's instance
+ * List threads for the authenticated user's instance, optionally filtered by project
  */
 export const list = query({
-	args: {},
-	handler: async (ctx) => {
+	args: {
+		projectId: v.optional(v.id('projects'))
+	},
+	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
-		const threads = await ctx.db
-			.query('threads')
-			.withIndex('by_instance', (q) => q.eq('instanceId', instance._id))
-			.collect();
+		let threads;
+		if (args.projectId) {
+			threads = await ctx.db
+				.query('threads')
+				.withIndex('by_project', (q) => q.eq('projectId', args.projectId))
+				.collect();
+			threads = threads.filter((t) => t.instanceId === instance._id);
+		} else {
+			threads = await ctx.db
+				.query('threads')
+				.withIndex('by_instance', (q) => q.eq('instanceId', instance._id))
+				.collect();
+		}
 
 		const activeStreamSessions = await ctx.db
 			.query('streamSessions')
@@ -79,13 +90,15 @@ export const getWithMessages = query({
  */
 export const create = mutation({
 	args: {
-		title: v.optional(v.string())
+		title: v.optional(v.string()),
+		projectId: v.optional(v.id('projects'))
 	},
 	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
 
 		const threadId = await ctx.db.insert('threads', {
 			instanceId: instance._id,
+			projectId: args.projectId,
 			title: args.title,
 			createdAt: Date.now(),
 			lastActivityAt: Date.now()
