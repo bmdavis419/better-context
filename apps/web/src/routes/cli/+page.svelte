@@ -178,7 +178,7 @@
 								></pre>
 						{/if}
 					</div>
-					<CopyButton text={CURSOR_RULE_CMD} label="Copy quick start command" />
+					<CopyButton text={CURSOR_RULE_CMD} label="Copy Cursor rule command" />
 				</div>
 			</div>
 		</div>
