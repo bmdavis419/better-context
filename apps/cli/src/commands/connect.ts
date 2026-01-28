@@ -1,9 +1,12 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { spawn } from 'bun';
-import { ensureServer } from '../server/manager.ts';
+import { Effect } from 'effect';
 import { createClient, getProviders, updateModel, BtcaError } from '../client/index.ts';
 import { dim, green } from '../lib/utils/colors.ts';
+import { exitWith } from '../effect/cli-exit.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 // Recommended models for quick selection
 const RECOMMENDED_MODELS = [
@@ -137,148 +140,154 @@ export const connectCommand = new Command('connect')
 	.option('-g, --global', 'Save to global config instead of project config')
 	.option('-p, --provider <id>', 'Provider ID (e.g., "opencode", "anthropic")')
 	.option('-m, --model <id>', 'Model ID (e.g., "claude-haiku-4-5")')
-	.action(async (options: { global?: boolean; provider?: string; model?: string }, command) => {
+	.action((options: { global?: boolean; provider?: string; model?: string }, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
-			const server = await ensureServer({
-				serverUrl: globalOpts?.server,
-				port: globalOpts?.port,
-				quiet: true
-			});
+		const program = Effect.scoped(
+			Effect.gen(function* () {
+				const server = yield* withServer({
+					serverUrl: globalOpts?.server,
+					port: globalOpts?.port,
+					quiet: true
+				});
 
-			const client = createClient(server.url);
-			const providers = await getProviders(client);
+				yield* Effect.tryPromise(async () => {
+					const client = createClient(server.url);
+					const providers = await getProviders(client);
 
-			// If both provider and model specified via flags, just set them
-			if (options.provider && options.model) {
-				const result = await updateModel(server.url, options.provider, options.model);
-				console.log(`Model updated: ${result.provider}/${result.model}`);
+					// If both provider and model specified via flags, just set them
+					if (options.provider && options.model) {
+						const result = await updateModel(server.url, options.provider, options.model);
+						console.log(`Model updated: ${result.provider}/${result.model}`);
 
-				// Warn if provider not connected
-				if (options.provider !== 'opencode' && !providers.connected.includes(options.provider)) {
-					console.warn(`\nWarning: Provider "${options.provider}" is not connected.`);
-					console.warn('Run "opencode auth" to configure credentials.');
-				}
+						// Warn if provider not connected
+						if (options.provider !== 'opencode' && !providers.connected.includes(options.provider)) {
+							console.warn(`\nWarning: Provider "${options.provider}" is not connected.`);
+							console.warn('Run "opencode auth" to configure credentials.');
+						}
 
-				server.stop();
-				return;
-			}
-
-			// Interactive mode
-			console.log('\n--- Configure AI Provider ---\n');
-
-			// Step 1: Choose between quick setup or custom
-			const setupMode = await promptSelect<'quick' | 'custom'>('How would you like to configure?', [
-				{ label: 'Quick setup (recommended models)', value: 'quick' },
-				{ label: 'Custom (choose provider and model)', value: 'custom' }
-			]);
-
-			let provider: string;
-			let model: string;
-
-			if (setupMode === 'quick') {
-				// Show recommended models
-				const modelChoice = await promptSelect<string>(
-					'Select a model:',
-					RECOMMENDED_MODELS.map((m) => ({
-						label: `${m.label}`,
-						value: `${m.provider}:${m.model}`
-					}))
-				);
-
-				const [p, m] = modelChoice.split(':');
-				provider = p!;
-				model = m!;
-			} else {
-				// Custom setup - choose provider first
-				const providerOptions: { label: string; value: string }[] = [];
-
-				// Add connected providers first
-				for (const connectedId of providers.connected) {
-					const info = PROVIDER_INFO[connectedId];
-					const label = info
-						? `${info.label} ${green('(connected)')}`
-						: `${connectedId} ${green('(connected)')}`;
-					providerOptions.push({ label, value: connectedId });
-				}
-
-				// Add unconnected providers
-				for (const p of providers.all) {
-					if (!providers.connected.includes(p.id)) {
-						const info = PROVIDER_INFO[p.id];
-						const label = info ? info.label : p.id;
-						providerOptions.push({ label, value: p.id });
+						return;
 					}
-				}
 
-				provider = await promptSelect('Select a provider:', providerOptions);
+					// Interactive mode
+					console.log('\n--- Configure AI Provider ---\n');
 
-				// Check if provider needs authentication
-				const isConnected = providers.connected.includes(provider);
-				const info = PROVIDER_INFO[provider];
-
-				if (!isConnected && info?.requiresAuth) {
-					console.log(`\nProvider "${provider}" requires authentication.`);
-					const shouldAuth = await promptSelect<'yes' | 'no'>(
-						'Would you like to authenticate now?',
+					// Step 1: Choose between quick setup or custom
+					const setupMode = await promptSelect<'quick' | 'custom'>(
+						'How would you like to configure?',
 						[
-							{ label: 'Yes, authenticate now', value: 'yes' },
-							{ label: "No, I'll do it later", value: 'no' }
+							{ label: 'Quick setup (recommended models)', value: 'quick' },
+							{ label: 'Custom (choose provider and model)', value: 'custom' }
 						]
 					);
 
-					if (shouldAuth === 'yes') {
-						const success = await runOpencodeAuth(provider);
-						if (!success) {
-							console.warn(
-								'\nAuthentication may have failed. You can try again later with: opencode auth'
-							);
-						}
+					let provider: string;
+					let model: string;
+
+					if (setupMode === 'quick') {
+						// Show recommended models
+						const modelChoice = await promptSelect<string>(
+							'Select a model:',
+							RECOMMENDED_MODELS.map((m) => ({
+								label: `${m.label}`,
+								value: `${m.provider}:${m.model}`
+							}))
+						);
+
+						const [p, m] = modelChoice.split(':');
+						provider = p!;
+						model = m!;
 					} else {
-						console.warn(`\nNote: You'll need to authenticate before using this provider.`);
-						console.warn('Run: opencode auth --provider ' + provider);
+						// Custom setup - choose provider first
+						const providerOptions: { label: string; value: string }[] = [];
+
+						// Add connected providers first
+						for (const connectedId of providers.connected) {
+							const info = PROVIDER_INFO[connectedId];
+							const label = info
+								? `${info.label} ${green('(connected)')}`
+								: `${connectedId} ${green('(connected)')}`;
+							providerOptions.push({ label, value: connectedId });
+						}
+
+						// Add unconnected providers
+						for (const p of providers.all) {
+							if (!providers.connected.includes(p.id)) {
+								const info = PROVIDER_INFO[p.id];
+								const label = info ? info.label : p.id;
+								providerOptions.push({ label, value: p.id });
+							}
+						}
+
+						provider = await promptSelect('Select a provider:', providerOptions);
+
+						// Check if provider needs authentication
+						const isConnected = providers.connected.includes(provider);
+						const info = PROVIDER_INFO[provider];
+
+						if (!isConnected && info?.requiresAuth) {
+							console.log(`\nProvider "${provider}" requires authentication.`);
+							const shouldAuth = await promptSelect<'yes' | 'no'>(
+								'Would you like to authenticate now?',
+								[
+									{ label: 'Yes, authenticate now', value: 'yes' },
+									{ label: "No, I'll do it later", value: 'no' }
+								]
+							);
+
+							if (shouldAuth === 'yes') {
+								const success = await runOpencodeAuth(provider);
+								if (!success) {
+									console.warn(
+										'\nAuthentication may have failed. You can try again later with: opencode auth'
+									);
+								}
+							} else {
+								console.warn(`\nNote: You'll need to authenticate before using this provider.`);
+								console.warn('Run: opencode auth --provider ' + provider);
+							}
+						}
+
+						// Get model from user
+						const rl = createRl();
+
+						// Show available models if we know them
+						const providerInfo = providers.all.find((p) => p.id === provider);
+						if (providerInfo?.models && Object.keys(providerInfo.models).length > 0) {
+							const modelIds = Object.keys(providerInfo.models);
+							console.log(`\nAvailable models for ${provider}:`);
+							modelIds.slice(0, 10).forEach((id) => console.log(`  - ${id}`));
+							if (modelIds.length > 10) {
+								console.log(`  ... and ${modelIds.length - 10} more`);
+							}
+						}
+
+						model = await promptInput(rl, 'Enter model ID');
+						rl.close();
+
+						if (!model) {
+							console.error('Error: Model ID is required.');
+							exitWith(1, true);
+						}
 					}
+
+					// Update the model
+					const result = await updateModel(server.url, provider, model);
+					console.log(`\nModel configured: ${result.provider}/${result.model}`);
+
+					// Show where it was saved
+					console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
+				});
+			})
+		);
+
+		void runCli(program, {
+			onError: (error) => {
+				if (error instanceof Error && error.message === 'Invalid selection') {
+					console.error('\nError: Invalid selection. Please try again.');
+					return;
 				}
-
-				// Get model from user
-				const rl = createRl();
-
-				// Show available models if we know them
-				const providerInfo = providers.all.find((p) => p.id === provider);
-				if (providerInfo?.models && Object.keys(providerInfo.models).length > 0) {
-					const modelIds = Object.keys(providerInfo.models);
-					console.log(`\nAvailable models for ${provider}:`);
-					modelIds.slice(0, 10).forEach((id) => console.log(`  - ${id}`));
-					if (modelIds.length > 10) {
-						console.log(`  ... and ${modelIds.length - 10} more`);
-					}
-				}
-
-				model = await promptInput(rl, 'Enter model ID');
-				rl.close();
-
-				if (!model) {
-					console.error('Error: Model ID is required.');
-					server.stop();
-					process.exit(1);
-				}
+				console.error(formatError(error));
 			}
-
-			// Update the model
-			const result = await updateModel(server.url, provider, model);
-			console.log(`\nModel configured: ${result.provider}/${result.model}`);
-
-			// Show where it was saved
-			console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
-
-			server.stop();
-		} catch (error) {
-			if (error instanceof Error && error.message === 'Invalid selection') {
-				console.error('\nError: Invalid selection. Please try again.');
-				process.exit(1);
-			}
-			console.error(formatError(error));
-			process.exit(1);
-		}
+		});
 	});

@@ -1,5 +1,7 @@
 import { Command } from 'commander';
+import { Effect } from 'effect';
 import { startServer } from 'btca-server';
+import { runCli } from '../effect/runner.ts';
 
 const DEFAULT_PORT = 8080;
 
@@ -22,10 +24,10 @@ function formatError(error: unknown): string {
 export const serveCommand = new Command('serve')
 	.description('Start the btca server and listen for requests')
 	.option('-p, --port <port>', 'Port to listen on (default: 8080)')
-	.action(async (options: { port?: string }) => {
+	.action((options: { port?: string }) => {
 		const port = options.port ? parseInt(options.port, 10) : DEFAULT_PORT;
 
-		try {
+		const program = Effect.tryPromise(async () => {
 			console.log(`Starting btca server on port ${port}...`);
 			const server = await startServer({ port });
 			console.log(`btca server running at ${server.url}`);
@@ -45,8 +47,11 @@ export const serveCommand = new Command('serve')
 			await new Promise(() => {
 				// Never resolves - keeps the server running
 			});
-		} catch (error) {
-			console.error(formatError(error));
-			process.exit(1);
-		}
+		});
+
+		void runCli(program, {
+			onError: (error) => {
+				console.error(formatError(error));
+			}
+		});
 	});

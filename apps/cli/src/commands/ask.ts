@@ -1,8 +1,11 @@
 import { Command } from 'commander';
-import { ensureServer } from '../server/manager.ts';
+import { Effect } from 'effect';
+import type { BtcaStreamEvent } from 'btca-server/stream/types';
 import { createClient, getResources, askQuestionStream, BtcaError } from '../client/index.ts';
 import { parseSSEStream } from '../client/stream.ts';
-import type { BtcaStreamEvent } from 'btca-server/stream/types';
+import { exitWith } from '../effect/cli-exit.ts';
+import { runCli } from '../effect/runner.ts';
+import { withServer } from '../effect/server-manager.ts';
 
 /**
  * Format an error for display, including hint if available.
@@ -94,110 +97,117 @@ export const askCommand = new Command('ask')
 	.description('Ask a question about configured resources')
 	.requiredOption('-q, --question <text>', 'Question to ask')
 	.option('-r, --resource <name...>', 'Resources to search (can specify multiple)')
-	.action(async (options, command) => {
+	.action((options, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		// Check for deprecated -t flag usage (not registered, but might be in user's muscle memory)
-		const rawArgs = process.argv;
-		if (rawArgs.includes('-t') || rawArgs.includes('--tech')) {
-			console.error('Error: The -t/--tech flag has been deprecated.');
-			console.error('Use -r/--resource instead: btca ask -r <resource> -q "your question"');
-			console.error('You can specify multiple resources: btca ask -r svelte -r effect -q "..."');
-			process.exit(1);
-		}
-
-		try {
-			const server = await ensureServer({
-				serverUrl: globalOpts?.server,
-				port: globalOpts?.port,
-				quiet: true
-			});
-
-			const client = createClient(server.url);
-
-			const { resources } = await getResources(client);
-			if (resources.length === 0) {
-				console.error('Error: No resources configured.');
-				console.error('Add resources to your btca config file.');
-				process.exit(1);
-			}
-
-			const questionText = options.question as string;
-			const cliResources = (options.resource as string[] | undefined) ?? [];
-			const mentionedResources = extractMentions(questionText);
-
-			const allRequestedResources = mergeResources(cliResources, mentionedResources);
-
-			const normalized = normalizeResourceNames(allRequestedResources, resources);
-
-			const resourceNames: string[] =
-				normalized.names.length > 0 ? normalized.names : resources.map((r) => r.name);
-
-			const cleanedQuery = cleanQueryOfValidResources(questionText, normalized.names);
-
-			console.log('loading resources...');
-
-			// Stream the response
-			const response = await askQuestionStream(server.url, {
-				question: cleanedQuery,
-				resources: resourceNames,
-				quiet: true
-			});
-
-			let receivedMeta = false;
-			let inReasoning = false;
-			let hasText = false;
-
-			for await (const event of parseSSEStream(response)) {
-				handleStreamEvent(event, {
-					onMeta: () => {
-						if (!receivedMeta) {
-							console.log('creating collection...\n');
-							receivedMeta = true;
-						}
-					},
-					onReasoningDelta: (delta) => {
-						if (!inReasoning) {
-							process.stdout.write('<thinking>\n');
-							inReasoning = true;
-						}
-						process.stdout.write(delta);
-					},
-					onTextDelta: (delta) => {
-						if (inReasoning) {
-							process.stdout.write('\n</thinking>\n\n');
-							inReasoning = false;
-						}
-						hasText = true;
-						process.stdout.write(delta);
-					},
-					onToolCall: (tool) => {
-						if (inReasoning) {
-							process.stdout.write('\n</thinking>\n\n');
-							inReasoning = false;
-						}
-						if (hasText) {
-							process.stdout.write('\n');
-						}
-						console.log(`[${tool}]`);
-					},
-					onError: (message) => {
-						console.error(`\nError: ${message}`);
+		const program = Effect.scoped(
+			Effect.gen(function* () {
+				// Check for deprecated -t flag usage (not registered, but might be in user's muscle memory)
+				yield* Effect.sync(() => {
+					const rawArgs = process.argv;
+					if (rawArgs.includes('-t') || rawArgs.includes('--tech')) {
+						console.error('Error: The -t/--tech flag has been deprecated.');
+						console.error('Use -r/--resource instead: btca ask -r <resource> -q \"your question\"');
+						console.error('You can specify multiple resources: btca ask -r svelte -r effect -q \"...\"');
+						exitWith(1, true);
 					}
 				});
-			}
 
-			if (inReasoning) {
-				process.stdout.write('\n</thinking>\n');
-			}
+				const server = yield* withServer({
+					serverUrl: globalOpts?.server,
+					port: globalOpts?.port,
+					quiet: true
+				});
 
-			console.log('\n');
-			server.stop();
-			process.exit(0);
-		} catch (error) {
-			console.error(formatError(error));
-			process.exit(1);
-		}
+				yield* Effect.tryPromise(async () => {
+					const client = createClient(server.url);
+
+					const { resources } = await getResources(client);
+					if (resources.length === 0) {
+						console.error('Error: No resources configured.');
+						console.error('Add resources to your btca config file.');
+						exitWith(1, true);
+					}
+
+					const questionText = options.question as string;
+					const cliResources = (options.resource as string[] | undefined) ?? [];
+					const mentionedResources = extractMentions(questionText);
+
+					const allRequestedResources = mergeResources(cliResources, mentionedResources);
+
+					const normalized = normalizeResourceNames(allRequestedResources, resources);
+
+					const resourceNames: string[] =
+						normalized.names.length > 0 ? normalized.names : resources.map((r) => r.name);
+
+					const cleanedQuery = cleanQueryOfValidResources(questionText, normalized.names);
+
+					console.log('loading resources...');
+
+					// Stream the response
+					const response = await askQuestionStream(server.url, {
+						question: cleanedQuery,
+						resources: resourceNames,
+						quiet: true
+					});
+
+					let receivedMeta = false;
+					let inReasoning = false;
+					let hasText = false;
+
+					for await (const event of parseSSEStream(response)) {
+						handleStreamEvent(event, {
+							onMeta: () => {
+								if (!receivedMeta) {
+									console.log('creating collection...\n');
+									receivedMeta = true;
+								}
+							},
+							onReasoningDelta: (delta) => {
+								if (!inReasoning) {
+									process.stdout.write('<thinking>\n');
+									inReasoning = true;
+								}
+								process.stdout.write(delta);
+							},
+							onTextDelta: (delta) => {
+								if (inReasoning) {
+									process.stdout.write('\n</thinking>\n\n');
+									inReasoning = false;
+								}
+								hasText = true;
+								process.stdout.write(delta);
+							},
+							onToolCall: (tool) => {
+								if (inReasoning) {
+									process.stdout.write('\n</thinking>\n\n');
+									inReasoning = false;
+								}
+								if (hasText) {
+									process.stdout.write('\n');
+								}
+								console.log(`[${tool}]`);
+							},
+							onError: (message) => {
+								console.error(`\nError: ${message}`);
+							}
+						});
+					}
+
+					if (inReasoning) {
+						process.stdout.write('\n</thinking>\n');
+					}
+
+					console.log('\n');
+				});
+			})
+		);
+
+		void runCli(program, {
+			onError: (error) => {
+				console.error(formatError(error));
+			}
+		});
 	});
 
 interface StreamHandlers {
