@@ -833,32 +833,37 @@ type McpAgent = 'opencode' | 'claude' | 'cursor';
 
 const MCP_API_KEY_URL = 'https://btca.dev/app/settings?tab=mcp';
 
-function getMcpConfig(agent: McpAgent, apiKey: string): object {
-	const baseConfig = {
-		command: 'npx',
-		args: ['-y', '@anthropic-ai/mcp-remote', 'https://btca.dev/api/mcp'],
-		env: {
-			API_KEY: apiKey
-		}
-	};
+function getMcpConfig(agent: McpAgent, apiKey: string): object | string {
+	const mcpUrl = 'https://btca.dev/api/mcp';
 
 	switch (agent) {
 		case 'opencode':
 			return {
-				mcpServers: {
-					btca: baseConfig
+				$schema: 'https://opencode.ai/config.json',
+				mcp: {
+					'better-context': {
+						type: 'remote',
+						url: mcpUrl,
+						enabled: true,
+						headers: {
+							Authorization: `Bearer ${apiKey}`
+						}
+					}
 				}
 			};
 		case 'claude':
-			return {
-				mcpServers: {
-					btca: baseConfig
-				}
-			};
+			// Return shell command string for Claude Code
+			return `claude mcp add --transport http better-context ${mcpUrl} \\
+  --header "Authorization: Bearer ${apiKey}"`;
 		case 'cursor':
 			return {
 				mcpServers: {
-					btca: baseConfig
+					'better-context': {
+						url: mcpUrl,
+						headers: {
+							Authorization: `Bearer ${apiKey}`
+						}
+					}
 				}
 			};
 	}
@@ -869,7 +874,7 @@ function getMcpInstructions(agent: McpAgent): string {
 		case 'opencode':
 			return `Add this to your ${bold('opencode.json')} file:`;
 		case 'claude':
-			return `Add this to your ${bold('claude_desktop_config.json')} file:`;
+			return `Run this command to add the MCP server:`;
 		case 'cursor':
 			return `Add this to your ${bold('.cursor/mcp.json')} file:`;
 	}
@@ -905,7 +910,7 @@ const mcpCommand = new Command('mcp')
 				// Prompt user to select agent
 				console.log('\nSelect your AI agent:\n');
 				console.log('  1) OpenCode');
-				console.log('  2) Claude Desktop');
+				console.log('  2) Claude Code');
 				console.log('  3) Cursor');
 				console.log('');
 
@@ -934,7 +939,12 @@ const mcpCommand = new Command('mcp')
 			const instructions = getMcpInstructions(selectedAgent);
 
 			console.log(`\n${instructions}\n`);
-			console.log(JSON.stringify(config, null, 2));
+			if (typeof config === 'string') {
+				// Claude Code outputs a shell command
+				console.log(config);
+			} else {
+				console.log(JSON.stringify(config, null, 2));
+			}
 			console.log('');
 		} catch (error) {
 			console.error(formatError(error));
