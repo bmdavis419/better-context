@@ -179,6 +179,7 @@ export namespace Agent {
 				: undefined;
 
 		return {
+			mcp: {}, // Explicitly disable all MCP servers - btca only uses local file tools
 			agent: {
 				build: { disable: true },
 				explore: { disable: true },
