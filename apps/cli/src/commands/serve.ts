@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { startServer } from 'btca-server';
 
@@ -25,7 +26,7 @@ export const serveCommand = new Command('serve')
 	.action(async (options: { port?: string }) => {
 		const port = options.port ? parseInt(options.port, 10) : DEFAULT_PORT;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			console.log(`Starting btca server on port ${port}...`);
 			const server = await startServer({ port });
 			console.log(`btca server running at ${server.url}`);
@@ -45,8 +46,10 @@ export const serveCommand = new Command('serve')
 			await new Promise(() => {
 				// Never resolves - keeps the server running
 			});
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});

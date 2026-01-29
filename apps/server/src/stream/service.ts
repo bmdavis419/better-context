@@ -1,6 +1,8 @@
+import { stripUserQuestionFromStart, extractCoreQuestion } from '@btca/shared';
+import { Result } from 'better-result';
+
 import { getErrorMessage, getErrorTag } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
-import { stripUserQuestionFromStart, extractCoreQuestion } from '@btca/shared';
 import type { AgentLoop } from '../agent/loop.ts';
 
 import type {
@@ -52,7 +54,7 @@ export namespace StreamService {
 				emit(controller, args.meta);
 
 				(async () => {
-					try {
+					const result = await Result.tryPromise(async () => {
 						for await (const event of args.eventStream) {
 							switch (event.type) {
 								case 'text-delta': {
@@ -157,18 +159,25 @@ export namespace StreamService {
 								}
 							}
 						}
-					} catch (cause) {
-						Metrics.error('stream.error', {
-							collectionKey: args.meta.collection.key,
-							error: Metrics.errorInfo(cause)
-						});
-						const err: BtcaStreamErrorEvent = {
-							type: 'error',
-							tag: getErrorTag(cause),
-							message: getErrorMessage(cause)
-						};
-						emit(controller, err);
-					} finally {
+					});
+
+					result.match({
+						ok: () => undefined,
+						err: (cause) => {
+							Metrics.error('stream.error', {
+								collectionKey: args.meta.collection.key,
+								error: Metrics.errorInfo(cause)
+							});
+							const err: BtcaStreamErrorEvent = {
+								type: 'error',
+								tag: getErrorTag(cause),
+								message: getErrorMessage(cause)
+							};
+							emit(controller, err);
+						}
+					});
+
+					{
 						Metrics.info('stream.closed', { collectionKey: args.meta.collection.key });
 						controller.close();
 					}

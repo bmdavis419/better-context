@@ -3,6 +3,8 @@
  * Shared authentication functions for remote commands
  */
 
+import { Result } from 'better-result';
+
 const GLOBAL_CONFIG_DIR = '~/.config/btca';
 const REMOTE_AUTH_FILENAME = 'remote-auth.json';
 
@@ -23,12 +25,11 @@ export async function getAuthPath(): Promise<string> {
 
 export async function loadAuth(): Promise<RemoteAuth | null> {
 	const authPath = await getAuthPath();
-	try {
+	const result = await Result.tryPromise(async () => {
 		const content = await Bun.file(authPath).text();
 		return JSON.parse(content) as RemoteAuth;
-	} catch {
-		return null;
-	}
+	});
+	return Result.isOk(result) ? result.value : null;
 }
 
 export async function saveAuth(auth: RemoteAuth): Promise<void> {
@@ -41,10 +42,9 @@ export async function saveAuth(auth: RemoteAuth): Promise<void> {
 
 export async function deleteAuth(): Promise<void> {
 	const authPath = await getAuthPath();
-	try {
+	const result = await Result.tryPromise(async () => {
 		const fs = await import('node:fs/promises');
 		await fs.unlink(authPath);
-	} catch {
-		// Ignore if file doesn't exist
-	}
+	});
+	if (Result.isError(result)) return;
 }

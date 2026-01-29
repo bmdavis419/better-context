@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { ensureServer } from '../server/manager.ts';
 import { clearResources, BtcaError } from '../client/index.ts';
@@ -21,7 +22,7 @@ export const clearCommand = new Command('clear')
 	.action(async (_options, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -32,8 +33,10 @@ export const clearCommand = new Command('clear')
 			console.log(`Cleared ${result.cleared} resource(s).`);
 
 			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});

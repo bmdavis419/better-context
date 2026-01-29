@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { ensureServer } from '../server/manager.ts';
 import { createClient, getResources, askQuestionStream, BtcaError } from '../client/index.ts';
@@ -106,7 +107,7 @@ export const askCommand = new Command('ask')
 			process.exit(1);
 		}
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -194,8 +195,10 @@ export const askCommand = new Command('ask')
 			console.log('\n');
 			server.stop();
 			process.exit(0);
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});

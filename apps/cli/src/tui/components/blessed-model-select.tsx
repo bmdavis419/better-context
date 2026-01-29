@@ -1,9 +1,12 @@
 import { For, createSignal, createMemo, type Component } from 'solid-js';
-import { colors } from '../theme.ts';
 import { useKeyboard } from '@opentui/solid';
+import { Result } from 'better-result';
+
+import { colors } from '../theme.ts';
 import { useConfigContext } from '../context/config-context.tsx';
 import { useMessagesContext } from '../context/messages-context.tsx';
 import { services } from '../services.ts';
+import { formatError } from '../lib/format-error.ts';
 
 // Blessed models
 const BLESSED_MODELS = [
@@ -55,16 +58,17 @@ export const BlessedModelSelect: Component<BlessedModelSelectProps> = (props) =>
 		const selectedModel = BLESSED_MODELS[selectedIndex()];
 		if (!selectedModel) return;
 
-		try {
-			const result = await services.updateModel(selectedModel.provider, selectedModel.model);
-			config.setProvider(result.provider);
-			config.setModel(result.model);
-			messages.addSystemMessage(`Model updated: ${result.provider}/${result.model}`);
-		} catch (error) {
-			messages.addSystemMessage(`Error: ${error}`);
-		} finally {
-			props.onClose();
+		const result = await Result.tryPromise(() =>
+			services.updateModel(selectedModel.provider, selectedModel.model)
+		);
+		if (result.isOk()) {
+			config.setProvider(result.value.provider);
+			config.setModel(result.value.model);
+			messages.addSystemMessage(`Model updated: ${result.value.provider}/${result.value.model}`);
+		} else {
+			messages.addSystemMessage(`Error: ${formatError(result.error)}`);
 		}
+		props.onClose();
 	};
 
 	useKeyboard((key) => {

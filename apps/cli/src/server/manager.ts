@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { startServer, type ServerInstance } from 'btca-server';
 
 export interface ServerManager {
@@ -27,15 +28,13 @@ const waitForHealth = async (url: string, timeout: number): Promise<void> => {
 	const pollInterval = 100;
 
 	while (Date.now() - startTime < timeout) {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const response = await fetch(`${url}/`);
-			if (response.ok) {
-				const data = (await response.json()) as { ok?: boolean };
-				if (data.ok) return;
-			}
-		} catch {
-			// Server not ready yet
-		}
+			if (!response.ok) return false;
+			const data = (await response.json()) as { ok?: boolean };
+			return Boolean(data.ok);
+		});
+		if (Result.isOk(result) && result.value) return;
 		await new Promise((resolve) => setTimeout(resolve, pollInterval));
 	}
 
@@ -65,12 +64,11 @@ export async function ensureServer(options: EnsureServerOptions = {}): Promise<S
 	// Start the server in-process
 	const port = options.port ?? getRandomPort();
 
-	let server: ServerInstance;
-	try {
-		server = await startServer({ port, quiet: options.quiet });
-	} catch (error) {
-		throw new Error(`Failed to start server: ${error}`);
+	const result = await Result.tryPromise(() => startServer({ port, quiet: options.quiet }));
+	if (Result.isError(result)) {
+		throw new Error(`Failed to start server: ${result.error}`);
 	}
+	const server: ServerInstance = result.value;
 
 	return {
 		url: server.url,

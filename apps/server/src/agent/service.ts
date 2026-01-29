@@ -8,6 +8,7 @@ import {
 	type Config as OpenCodeConfig,
 	type OpencodeClient
 } from '@opencode-ai/sdk';
+import { Result } from 'better-result';
 
 import { Config } from '../config/index.ts';
 import { CommonHints, type TaggedErrorOptions } from '../errors.ts';
@@ -228,11 +229,11 @@ export namespace Agent {
 		server: { close(): void; url: string };
 		baseUrl: string;
 	}> => {
-		const maxAttempts = 10;
-		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			const port = Math.floor(Math.random() * 3000) + 3000;
-			const created = await createOpencode({ port, config: args.ocConfig }).catch(
-				(err: unknown) => {
+		const tryCreateOpencode = async (port: number) => {
+			const result = await Result.tryPromise(() => createOpencode({ port, config: args.ocConfig }));
+			return result.match({
+				ok: (created) => created,
+				err: (err) => {
 					const error = err as { cause?: Error };
 					if (error?.cause instanceof Error && error.cause.stack?.includes('port')) return null;
 					throw new AgentError({
@@ -241,7 +242,13 @@ export namespace Agent {
 						cause: err
 					});
 				}
-			);
+			});
+		};
+
+		const maxAttempts = 10;
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			const port = Math.floor(Math.random() * 3000) + 3000;
+			const created = await tryCreateOpencode(port);
 
 			if (created) {
 				const baseUrl = `http://localhost:${port}`;
@@ -343,38 +350,43 @@ export namespace Agent {
 				});
 			}
 
-			try {
-				const result = await AgentLoop.run({
+			const runResult = await Result.tryPromise(() =>
+				AgentLoop.run({
 					providerId: config.provider,
 					modelId: config.model,
 					collectionPath: collection.path,
 					vfsId: collection.vfsId,
 					agentInstructions: collection.agentInstructions,
 					question
-				});
+				})
+			);
 
-				Metrics.info('agent.ask.complete', {
-					provider: config.provider,
-					model: config.model,
-					answerLength: result.answer.length,
-					eventCount: result.events.length
-				});
+			cleanup();
 
-				return {
-					answer: result.answer,
-					model: result.model,
-					events: result.events
-				};
-			} catch (error) {
-				Metrics.error('agent.ask.error', { error: Metrics.errorInfo(error) });
-				throw new AgentError({
-					message: 'Failed to get response from AI',
-					hint: 'This may be a temporary issue. Try running the command again.',
-					cause: error
-				});
-			} finally {
-				cleanup();
-			}
+			return runResult.match({
+				ok: (result) => {
+					Metrics.info('agent.ask.complete', {
+						provider: config.provider,
+						model: config.model,
+						answerLength: result.answer.length,
+						eventCount: result.events.length
+					});
+
+					return {
+						answer: result.answer,
+						model: result.model,
+						events: result.events
+					};
+				},
+				err: (error) => {
+					Metrics.error('agent.ask.error', { error: Metrics.errorInfo(error) });
+					throw new AgentError({
+						message: 'Failed to get response from AI',
+						hint: 'This may be a temporary issue. Try running the command again.',
+						cause: error
+					});
+				}
+			});
 		};
 
 		/**
@@ -422,20 +434,23 @@ export namespace Agent {
 				return { closed: false };
 			}
 
-			try {
-				instance.server.close();
-				unregisterInstance(instanceId);
-				Metrics.info('agent.instance.closed', { instanceId });
-				return { closed: true };
-			} catch (cause) {
-				Metrics.error('agent.instance.close.err', {
-					instanceId,
-					error: Metrics.errorInfo(cause)
-				});
-				// Still remove from registry even if close failed
-				unregisterInstance(instanceId);
-				return { closed: true };
-			}
+			const closeResult = Result.try(() => instance.server.close());
+			return closeResult.match({
+				ok: () => {
+					unregisterInstance(instanceId);
+					Metrics.info('agent.instance.closed', { instanceId });
+					return { closed: true };
+				},
+				err: (cause) => {
+					Metrics.error('agent.instance.close.err', {
+						instanceId,
+						error: Metrics.errorInfo(cause)
+					});
+					// Still remove from registry even if close failed
+					unregisterInstance(instanceId);
+					return { closed: true };
+				}
+			});
 		};
 
 		/**
@@ -459,17 +474,20 @@ export namespace Agent {
 			let closed = 0;
 
 			for (const instance of instances) {
-				try {
-					instance.server.close();
-					closed++;
-				} catch (cause) {
-					Metrics.error('agent.instance.close.err', {
-						instanceId: instance.id,
-						error: Metrics.errorInfo(cause)
-					});
-					// Count as closed even if there was an error
-					closed++;
-				}
+				const closeResult = Result.try(() => instance.server.close());
+				closeResult.match({
+					ok: () => {
+						closed++;
+					},
+					err: (cause) => {
+						Metrics.error('agent.instance.close.err', {
+							instanceId: instance.id,
+							error: Metrics.errorInfo(cause)
+						});
+						// Count as closed even if there was an error
+						closed++;
+					}
+				});
 			}
 
 			instanceRegistry.clear();

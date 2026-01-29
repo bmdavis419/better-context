@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import * as path from 'node:path';
 
+import { Result } from 'better-result';
 import { InMemoryFs } from 'just-bash';
 
 const posix = path.posix;
@@ -107,12 +108,11 @@ export namespace VirtualFs {
 	}
 
 	export async function exists(filePath: string, vfsId?: string) {
-		try {
-			await getInstance(vfsId).stat(normalize(filePath));
-			return true;
-		} catch {
-			return false;
-		}
+		const result = await Result.tryPromise(() => getInstance(vfsId).stat(normalize(filePath)));
+		return result.match({
+			ok: () => true,
+			err: () => false
+		});
 	}
 
 	export async function stat(filePath: string, vfsId?: string) {
@@ -121,17 +121,20 @@ export namespace VirtualFs {
 	}
 
 	export async function readdir(filePath: string, vfsId?: string) {
-		const resolved = await realpath(filePath, vfsId).catch(() => normalize(filePath));
+		const resolvedResult = await Result.tryPromise(() => realpath(filePath, vfsId));
+		const resolved = resolvedResult.match({
+			ok: (value) => value,
+			err: () => normalize(filePath)
+		});
 		const entries = (await getInstance(vfsId).readdir(resolved)) as string[];
 		const result: VfsDirEntry[] = [];
 		for (const name of entries) {
 			const entryPath = normalize(posix.join(filePath, name));
-			let entryStat: VfsStat | null = null;
-			try {
-				entryStat = await stat(entryPath, vfsId);
-			} catch {
-				entryStat = null;
-			}
+			const entryStatResult = await Result.tryPromise(() => stat(entryPath, vfsId));
+			const entryStat = entryStatResult.match({
+				ok: (value) => value,
+				err: () => null
+			});
 			result.push({
 				name,
 				isFile: entryStat?.isFile ?? false,
@@ -176,12 +179,12 @@ export namespace VirtualFs {
 		while (stack.length > 0) {
 			const current = stack.pop();
 			if (!current) continue;
-			let entries: VfsDirEntry[] = [];
-			try {
-				entries = await readdir(current, vfsId);
-			} catch {
-				continue;
-			}
+			const entriesResult = await Result.tryPromise(() => readdir(current, vfsId));
+			const entries = entriesResult.match({
+				ok: (value) => value,
+				err: () => []
+			});
+			if (entries.length === 0) continue;
 
 			for (const entry of entries) {
 				const entryPath = normalize(posix.join(current, entry.name));
@@ -210,12 +213,14 @@ export namespace VirtualFs {
 		const walk = async (currentPath: string): Promise<void> => {
 			const relative = path.relative(base, currentPath);
 			if (relative && ignore(relative)) return;
-			let dirents: Dirent[] = [];
-			try {
-				dirents = await fs.readdir(currentPath, { withFileTypes: true });
-			} catch {
-				return;
-			}
+			const direntsResult = await Result.tryPromise(() =>
+				fs.readdir(currentPath, { withFileTypes: true })
+			);
+			const dirents = direntsResult.match({
+				ok: (value) => value,
+				err: () => []
+			});
+			if (dirents.length === 0) return;
 
 			for (const dirent of dirents) {
 				const srcPath = path.join(currentPath, dirent.name);
@@ -230,21 +235,33 @@ export namespace VirtualFs {
 				}
 
 				if (dirent.isSymbolicLink()) {
-					try {
-						const target = await fs.readlink(srcPath);
-						await symlink(target, destPath, vfsId);
-					} catch {
-						// Ignore broken symlinks
+					const targetResult = await Result.tryPromise(() => fs.readlink(srcPath));
+					const target = targetResult.match({
+						ok: (value) => value,
+						err: () => null
+					});
+					if (target) {
+						const linkResult = await Result.tryPromise(() => symlink(target, destPath, vfsId));
+						linkResult.match({
+							ok: () => undefined,
+							err: () => undefined
+						});
 					}
 					continue;
 				}
 
 				if (dirent.isFile()) {
-					try {
-						const buffer = await fs.readFile(srcPath);
-						await writeFile(destPath, buffer, vfsId);
-					} catch {
-						// Skip unreadable files
+					const bufferResult = await Result.tryPromise(() => fs.readFile(srcPath));
+					const buffer = bufferResult.match({
+						ok: (value) => value,
+						err: () => null
+					});
+					if (buffer) {
+						const writeResult = await Result.tryPromise(() => writeFile(destPath, buffer, vfsId));
+						writeResult.match({
+							ok: () => undefined,
+							err: () => undefined
+						});
 					}
 				}
 			}

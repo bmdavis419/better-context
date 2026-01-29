@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { z } from 'zod';
 
 import { LIMITS } from '../validation/index.ts';
@@ -17,6 +18,12 @@ const RESOURCE_NAME_REGEX = /^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(\/[a-zA-Z0-9][a-zA-Z0
  * Must not start with hyphen to prevent git option injection.
  */
 const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
+
+const parseUrl = (value: string) =>
+	Result.try(() => new URL(value)).match({
+		ok: (url) => url,
+		err: () => null
+	});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Field Schemas
@@ -52,43 +59,33 @@ const GitUrlSchema = z
 	.min(1, 'Git URL cannot be empty')
 	.refine(
 		(url) => {
-			try {
-				const parsed = new URL(url);
-				return parsed.protocol === 'https:';
-			} catch {
-				return false;
-			}
+			const parsed = parseUrl(url);
+			return parsed ? parsed.protocol === 'https:' : false;
 		},
 		{ message: 'Git URL must be a valid HTTPS URL' }
 	)
 	.refine(
 		(url) => {
-			try {
-				const parsed = new URL(url);
-				return !parsed.username && !parsed.password;
-			} catch {
-				return true; // Let the URL check above handle invalid URLs
-			}
+			const parsed = parseUrl(url);
+			if (!parsed) return true;
+			return !parsed.username && !parsed.password;
 		},
 		{ message: 'Git URL must not contain embedded credentials' }
 	)
 	.refine(
 		(url) => {
-			try {
-				const parsed = new URL(url);
-				const hostname = parsed.hostname.toLowerCase();
-				return !(
-					hostname === 'localhost' ||
-					hostname.startsWith('127.') ||
-					hostname.startsWith('192.168.') ||
-					hostname.startsWith('10.') ||
-					hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
-					hostname === '::1' ||
-					hostname === '0.0.0.0'
-				);
-			} catch {
-				return true;
-			}
+			const parsed = parseUrl(url);
+			if (!parsed) return true;
+			const hostname = parsed.hostname.toLowerCase();
+			return !(
+				hostname === 'localhost' ||
+				hostname.startsWith('127.') ||
+				hostname.startsWith('192.168.') ||
+				hostname.startsWith('10.') ||
+				hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+				hostname === '::1' ||
+				hostname === '0.0.0.0'
+			);
 		},
 		{ message: 'Git URL must not point to localhost or private IP addresses' }
 	);

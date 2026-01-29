@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { ensureServer, type ServerManager } from '../server/manager.ts';
 import { createClient, getResources, askQuestionStream, BtcaError } from '../client/index.ts';
 import { parseSSEStream } from '../client/stream.ts';
@@ -102,19 +103,22 @@ async function prompt(message: string): Promise<string | null> {
 	const decoder = new TextDecoder();
 	let input = '';
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) return null;
-			input += decoder.decode(value, { stream: true });
+			input += decoder.decode(value ?? new Uint8Array(), { stream: true });
 			const newlineIndex = input.indexOf('\n');
 			if (newlineIndex !== -1) {
 				return input.slice(0, newlineIndex).trim();
 			}
 		}
-	} finally {
-		reader.releaseLock();
+	});
+	reader.releaseLock();
+	if (result.isErr()) {
+		throw result.error;
 	}
+	return result.value;
 }
 
 /**
@@ -123,11 +127,15 @@ async function prompt(message: string): Promise<string | null> {
 export async function launchRepl(options: ReplOptions): Promise<void> {
 	let server: ServerManager | null = null;
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		server = await ensureServer({
 			serverUrl: options.server,
 			port: options.port
 		});
+		if (!server) {
+			throw new Error('Server not initialized');
+		}
+		const activeServer = server;
 
 		const client = createClient(server.url);
 		const { resources } = await getResources(client);
@@ -233,10 +241,10 @@ Examples:
 			}
 
 			// Stream the response
-			try {
+			const streamResult = await Result.tryPromise(async () => {
 				console.log(`[Searching: ${sessionResources.join(', ')}]\n`);
 
-				const response = await askQuestionStream(server.url, {
+				const response = await askQuestionStream(activeServer.url, {
 					question,
 					resources: sessionResources,
 					quiet: true
@@ -281,16 +289,19 @@ Examples:
 				}
 
 				console.log('\n');
-			} catch (error) {
-				console.error(formatError(error));
+			});
+
+			if (Result.isError(streamResult)) {
+				console.error(formatError(streamResult.error));
 			}
 		}
 
-		server.stop();
+		activeServer.stop();
 		process.exit(0);
-	} catch (error) {
-		console.error(formatError(error));
-		server?.stop();
+	});
+
+	if (Result.isError(result)) {
+		console.error(formatError(result.error));
 		process.exit(1);
 	}
 }

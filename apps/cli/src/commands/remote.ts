@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import * as readline from 'readline';
 import {
@@ -36,13 +37,12 @@ function getConfigPath(cwd: string = process.cwd()): string {
 
 async function loadConfig(cwd: string = process.cwd()): Promise<RemoteConfig | null> {
 	const configPath = getConfigPath(cwd);
-	try {
+	const result = await Result.tryPromise(async () => {
 		const content = await Bun.file(configPath).text();
 		const stripped = stripJsonComments(content);
 		return JSON.parse(stripped) as RemoteConfig;
-	} catch {
-		return null;
-	}
+	});
+	return Result.isOk(result) ? result.value : null;
 }
 
 function stripJsonComments(content: string): string {
@@ -183,7 +183,7 @@ const linkCommand = new Command('link')
 	.description('Authenticate with the btca cloud service')
 	.option('--key <apiKey>', 'API key (if you have one already)')
 	.action(async (options: { key?: string }) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const existingAuth = await loadAuth();
 			if (existingAuth) {
 				const rl = createRl();
@@ -238,8 +238,10 @@ const linkCommand = new Command('link')
 			console.log(`  ${dim('btca remote status')}  - Check instance status`);
 			console.log(`  ${dim('btca remote ask')}     - Ask questions via cloud`);
 			console.log(`  ${dim('btca remote sync')}    - Sync local config with cloud`);
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -250,7 +252,7 @@ const linkCommand = new Command('link')
 const unlinkCommand = new Command('unlink')
 	.description('Remove authentication with the btca cloud service')
 	.action(async () => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const auth = await loadAuth();
 			if (!auth) {
 				console.log('Not currently authenticated.');
@@ -259,8 +261,10 @@ const unlinkCommand = new Command('unlink')
 
 			await deleteAuth();
 			console.log(green('Successfully unlinked from btca cloud.'));
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -271,7 +275,7 @@ const unlinkCommand = new Command('unlink')
 const statusCommand = new Command('status')
 	.description('Show sandbox and project status')
 	.action(async () => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const client = await requireAuth();
 			const config = await loadConfig();
 
@@ -324,8 +328,10 @@ const statusCommand = new Command('status')
 			}
 
 			console.log('');
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -336,7 +342,7 @@ const statusCommand = new Command('status')
 const wakeCommand = new Command('wake')
 	.description('Pre-warm the cloud sandbox')
 	.action(async () => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const client = await requireAuth();
 
 			console.log('Waking sandbox...');
@@ -348,8 +354,10 @@ const wakeCommand = new Command('wake')
 			}
 
 			console.log(green('Sandbox is ready!'));
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -410,7 +418,7 @@ async function addRemoteResourceWizard(url: string): Promise<void> {
 
 	const rl = createRl();
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		const finalUrl = await promptInput(rl, 'URL', normalizedUrl);
 
 		const defaultName = urlParts.repo;
@@ -503,9 +511,12 @@ async function addRemoteResourceWizard(url: string): Promise<void> {
 
 		console.log('\nYou can now use this resource:');
 		console.log(`  ${dim(`btca remote ask -q "your question" -r ${name}`)}`);
-	} catch (error) {
-		rl.close();
-		throw error;
+	});
+
+	rl.close();
+
+	if (Result.isError(result)) {
+		throw result.error;
 	}
 }
 
@@ -529,7 +540,7 @@ const addCommand = new Command('add')
 				notes?: string;
 			}
 		) => {
-			try {
+			const result = await Result.tryPromise(async () => {
 				if (!url) {
 					const rl = createRl();
 					const inputUrl = await promptInput(rl, 'GitHub URL');
@@ -608,8 +619,10 @@ const addCommand = new Command('add')
 				}
 
 				await addRemoteResourceWizard(url);
-			} catch (error) {
-				console.error(formatError(error));
+			});
+
+			if (Result.isError(result)) {
+				console.error(formatError(result.error));
 				process.exit(1);
 			}
 		}
@@ -622,7 +635,7 @@ const syncCommand = new Command('sync')
 	.description('Sync local remote config with cloud')
 	.option('--force', 'Force push local config, overwriting cloud on conflicts')
 	.action(async (options: { force?: boolean }) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const client = await requireAuth();
 			const config = await loadConfig();
 
@@ -663,8 +676,10 @@ const syncCommand = new Command('sync')
 			} else {
 				console.log(green('\nAlready in sync!'));
 			}
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -677,7 +692,7 @@ const askCommand = new Command('ask')
 	.requiredOption('-q, --question <text>', 'Question to ask')
 	.option('-r, --resource <name...>', 'Resources to query')
 	.action(async (options: { question: string; resource?: string[] }) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const client = await requireAuth();
 			const config = await loadConfig();
 
@@ -724,8 +739,10 @@ const askCommand = new Command('ask')
 
 			console.log(result.text);
 			console.log('');
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -739,7 +756,7 @@ const grabCommand = new Command('grab')
 	.option('--json', 'Output as JSON')
 	.option('--markdown', 'Output as markdown (default)')
 	.action(async (threadId: string, options: { json?: boolean; markdown?: boolean }) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const client = await requireAuth();
 
 			const result = await client.getThread(threadId);
@@ -773,8 +790,10 @@ const grabCommand = new Command('grab')
 				console.log(msg.content);
 				console.log('\n---\n');
 			}
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -786,7 +805,7 @@ const initCommand = new Command('init')
 	.description('Initialize a remote config file in the current directory')
 	.option('-p, --project <name>', 'Project name')
 	.action(async (options: { project?: string }) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const existingConfig = await loadConfig();
 			if (existingConfig) {
 				console.error(red(`Remote config already exists (${REMOTE_CONFIG_FILENAME}).`));
@@ -819,8 +838,10 @@ const initCommand = new Command('init')
 			console.log(`  1. ${dim('btca remote link')}       - Authenticate (if not already)`);
 			console.log(`  2. ${dim('btca remote add <url>')}  - Add resources`);
 			console.log(`  3. ${dim('btca remote sync')}       - Sync to cloud`);
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -887,7 +908,7 @@ const mcpCommand = new Command('mcp')
 	.description('Output MCP configuration for your AI agent')
 	.argument('[agent]', 'Agent type: opencode, claude, or cursor')
 	.action(async (agent?: string) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const auth = await loadAuth();
 			if (!auth) {
 				console.error(red('Not authenticated with remote.'));
@@ -946,8 +967,10 @@ const mcpCommand = new Command('mcp')
 				console.log(JSON.stringify(config, null, 2));
 			}
 			console.log('');
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});

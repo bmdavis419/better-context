@@ -10,6 +10,7 @@
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { z } from 'zod';
+import { Result } from 'better-result';
 
 export namespace Auth {
 	// Auth schema matching OpenCode's format
@@ -71,18 +72,21 @@ export namespace Auth {
 			return {};
 		}
 
-		try {
-			const content = await file.json();
-			const parsed = AuthFileSchema.safeParse(content);
-			if (!parsed.success) {
-				console.warn('Invalid auth.json format:', parsed.error);
+		const result = await Result.tryPromise(() => file.json());
+		return result.match({
+			ok: (content) => {
+				const parsed = AuthFileSchema.safeParse(content);
+				if (!parsed.success) {
+					console.warn('Invalid auth.json format:', parsed.error);
+					return {};
+				}
+				return parsed.data;
+			},
+			err: (error) => {
+				console.warn('Failed to read auth.json:', error);
 				return {};
 			}
-			return parsed.data;
-		} catch (error) {
-			console.warn('Failed to read auth.json:', error);
-			return {};
-		}
+		});
 	}
 
 	/**

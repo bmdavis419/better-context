@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { addCommand } from './commands/add.ts';
 import { askCommand } from './commands/ask.ts';
@@ -49,15 +50,20 @@ program.addCommand(remoteCommand);
 
 // Default action (no subcommand) → launch TUI or REPL
 program.action(async (options: { server?: string; port?: number; tui?: boolean }) => {
-	try {
+	const result = await Result.tryPromise(async () => {
 		// --no-tui sets tui to false
 		if (options.tui === false) {
 			await launchRepl(options);
 		} else {
 			await launchTui(options);
 		}
-	} catch (error) {
-		console.error('Error:', error instanceof Error ? error.message : String(error));
+	});
+
+	if (Result.isError(result)) {
+		console.error(
+			'Error:',
+			result.error instanceof Error ? result.error.message : String(result.error)
+		);
 		process.exit(1);
 	}
 });

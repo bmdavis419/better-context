@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { ensureServer } from '../server/manager.ts';
@@ -82,7 +83,7 @@ export const removeCommand = new Command('remove')
 	.action(async (name: string | undefined, options: { global?: boolean }, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -119,7 +120,10 @@ export const removeCommand = new Command('remove')
 			console.log(`Removed resource: ${resourceName}`);
 
 			server.stop();
-		} catch (error) {
+		});
+
+		if (Result.isError(result)) {
+			const error = result.error;
 			if (error instanceof Error && error.message === 'Invalid selection') {
 				console.error('\nError: Invalid selection. Please try again.');
 				process.exit(1);

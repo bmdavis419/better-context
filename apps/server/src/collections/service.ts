@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { Result } from 'better-result';
+
 import { Config } from '../config/index.ts';
 import { Transaction } from '../context/transaction.ts';
 import { CommonHints, getErrorHint, getErrorMessage } from '../errors.ts';
@@ -38,8 +40,83 @@ export namespace Collections {
 		return lines.join('\n');
 	};
 
+	const ignoreErrors = async (action: () => Promise<unknown>) => {
+		const result = await Result.tryPromise(action);
+		result.match({
+			ok: () => undefined,
+			err: () => undefined
+		});
+	};
+
+	const initVirtualRoot = (collectionPath: string, vfsId: string) =>
+		Result.tryPromise({
+			try: () => VirtualFs.mkdir(collectionPath, { recursive: true }, vfsId),
+			catch: (cause) =>
+				new CollectionError({
+					message: `Failed to initialize virtual collection root: "${collectionPath}"`,
+					hint: 'Check that the virtual filesystem is available.',
+					cause
+				})
+		});
+
+	const loadResource = (resources: Resources.Service, name: string, quiet: boolean) =>
+		Result.tryPromise({
+			try: () => resources.load(name, { quiet }),
+			catch: (cause) => {
+				const underlyingHint = getErrorHint(cause);
+				const underlyingMessage = getErrorMessage(cause);
+				return new CollectionError({
+					message: `Failed to load resource "${name}": ${underlyingMessage}`,
+					hint:
+						underlyingHint ??
+						`${CommonHints.CLEAR_CACHE} Check that the resource "${name}" is correctly configured.`,
+					cause
+				});
+			}
+		});
+
+	const resolveResourcePath = (resource: BtcaFsResource) =>
+		Result.tryPromise({
+			try: () => resource.getAbsoluteDirectoryPath(),
+			catch: (cause) =>
+				new CollectionError({
+					message: `Failed to get path for resource "${resource.name}"`,
+					hint: CommonHints.CLEAR_CACHE,
+					cause
+				})
+		});
+
+	const virtualizeResource = (args: {
+		resource: BtcaFsResource;
+		resourcePath: string;
+		virtualResourcePath: string;
+		vfsId: string;
+	}) =>
+		Result.tryPromise({
+			try: () =>
+				VirtualFs.importDirectoryFromDisk({
+					sourcePath: args.resourcePath,
+					destinationPath: args.virtualResourcePath,
+					vfsId: args.vfsId,
+					ignore: (relativePath) => {
+						const normalized = relativePath.split(path.sep).join('/');
+						return (
+							normalized === '.git' ||
+							normalized.startsWith('.git/') ||
+							normalized.includes('/.git/')
+						);
+					}
+				}),
+			catch: (cause) =>
+				new CollectionError({
+					message: `Failed to virtualize resource "${args.resource.name}"`,
+					hint: CommonHints.CLEAR_CACHE,
+					cause
+				})
+		});
+
 	const getGitHeadHash = async (resourcePath: string) => {
-		try {
+		const result = await Result.tryPromise(async () => {
 			const proc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
 				cwd: resourcePath,
 				stdout: 'pipe',
@@ -50,9 +127,12 @@ export namespace Collections {
 			if (exitCode !== 0) return undefined;
 			const trimmed = stdout.trim();
 			return trimmed.length > 0 ? trimmed : undefined;
-		} catch {
-			return undefined;
-		}
+		});
+
+		return result.match({
+			ok: (value) => value,
+			err: () => undefined
+		});
 	};
 
 	const buildVirtualMetadata = async (args: {
@@ -105,105 +185,67 @@ export namespace Collections {
 						clearVirtualCollectionMetadata(vfsId);
 					};
 
-					try {
-						// Virtual collections use the VFS root as the collection root.
-						await VirtualFs.mkdir(collectionPath, { recursive: true }, vfsId);
-					} catch (cause) {
-						cleanupVirtual();
-						throw new CollectionError({
-							message: `Failed to initialize virtual collection root: "${collectionPath}"`,
-							hint: 'Check that the virtual filesystem is available.',
-							cause
+					const result = await Result.gen(async function* () {
+						yield* Result.await(initVirtualRoot(collectionPath, vfsId));
+
+						const loadedResources: BtcaFsResource[] = [];
+						for (const name of sortedNames) {
+							const resource = yield* Result.await(loadResource(args.resources, name, quiet));
+							loadedResources.push(resource);
+						}
+
+						const metadataResources: VirtualResourceMetadata[] = [];
+						const loadedAt = new Date().toISOString();
+						for (const resource of loadedResources) {
+							const resourcePath = yield* Result.await(resolveResourcePath(resource));
+							const virtualResourcePath = path.posix.join('/', resource.fsName);
+
+							await ignoreErrors(() =>
+								VirtualFs.rm(virtualResourcePath, { recursive: true, force: true }, vfsId)
+							);
+
+							yield* Result.await(
+								virtualizeResource({
+									resource,
+									resourcePath,
+									virtualResourcePath,
+									vfsId
+								})
+							);
+
+							const definition = args.config.getResource(resource.name);
+							const metadata = await buildVirtualMetadata({
+								resource,
+								resourcePath,
+								loadedAt,
+								definition
+							});
+							if (metadata) metadataResources.push(metadata);
+						}
+
+						setVirtualCollectionMetadata({
+							vfsId,
+							collectionKey: key,
+							createdAt: loadedAt,
+							resources: metadataResources
 						});
-					}
 
-					const loadedResources: BtcaFsResource[] = [];
-					const metadataResources: VirtualResourceMetadata[] = [];
-					const loadedAt = new Date().toISOString();
-					for (const name of sortedNames) {
-						try {
-							loadedResources.push(await args.resources.load(name, { quiet }));
-						} catch (cause) {
-							// Preserve the hint from the underlying error if available
-							const underlyingHint = getErrorHint(cause);
-							const underlyingMessage = getErrorMessage(cause);
-							cleanupVirtual();
-							throw new CollectionError({
-								message: `Failed to load resource "${name}": ${underlyingMessage}`,
-								hint:
-									underlyingHint ??
-									`${CommonHints.CLEAR_CACHE} Check that the resource "${name}" is correctly configured.`,
-								cause
-							});
-						}
-					}
+						const instructionBlocks = loadedResources.map(createCollectionInstructionBlock);
 
-					for (const resource of loadedResources) {
-						let resourcePath: string;
-						try {
-							resourcePath = await resource.getAbsoluteDirectoryPath();
-						} catch (cause) {
-							cleanupVirtual();
-							throw new CollectionError({
-								message: `Failed to get path for resource "${resource.name}"`,
-								hint: CommonHints.CLEAR_CACHE,
-								cause
-							});
-						}
-
-						const virtualResourcePath = path.posix.join('/', resource.fsName);
-						try {
-							await VirtualFs.rm(virtualResourcePath, { recursive: true, force: true }, vfsId);
-						} catch {
-							// ignore
-						}
-						try {
-							await VirtualFs.importDirectoryFromDisk({
-								sourcePath: resourcePath,
-								destinationPath: virtualResourcePath,
-								vfsId,
-								ignore: (relativePath) => {
-									const normalized = relativePath.split(path.sep).join('/');
-									return (
-										normalized === '.git' ||
-										normalized.startsWith('.git/') ||
-										normalized.includes('/.git/')
-									);
-								}
-							});
-						} catch (cause) {
-							cleanupVirtual();
-							throw new CollectionError({
-								message: `Failed to virtualize resource "${resource.name}"`,
-								hint: CommonHints.CLEAR_CACHE,
-								cause
-							});
-						}
-
-						const definition = args.config.getResource(resource.name);
-						const metadata = await buildVirtualMetadata({
-							resource,
-							resourcePath,
-							loadedAt,
-							definition
+						return Result.ok({
+							path: collectionPath,
+							agentInstructions: instructionBlocks.join('\n\n'),
+							vfsId
 						});
-						if (metadata) metadataResources.push(metadata);
-					}
-
-					setVirtualCollectionMetadata({
-						vfsId,
-						collectionKey: key,
-						createdAt: loadedAt,
-						resources: metadataResources
 					});
 
-					const instructionBlocks = loadedResources.map(createCollectionInstructionBlock);
-
-					return {
-						path: collectionPath,
-						agentInstructions: instructionBlocks.join('\n\n'),
-						vfsId
-					};
+					return result.match({
+						ok: (value) => value,
+						err: (error) => {
+							cleanupVirtual();
+							throw error;
+						}
+					});
 				})
 		};
 	};

@@ -4,6 +4,7 @@
  */
 import * as path from 'node:path';
 import { z } from 'zod';
+import { Result } from 'better-result';
 
 import type { ToolContext } from './context.ts';
 import { VirtualSandbox } from './virtual-sandbox.ts';
@@ -39,6 +40,28 @@ export namespace GrepTool {
 		};
 	};
 
+	const safeStat = async (filePath: string, vfsId?: string) => {
+		const result = await Result.tryPromise(() => VirtualFs.stat(filePath, vfsId));
+		return result.match({
+			ok: (value) => value,
+			err: () => null
+		});
+	};
+
+	const safeReadBuffer = async (filePath: string, vfsId?: string) => {
+		const result = await Result.tryPromise(() => VirtualFs.readFileBuffer(filePath, vfsId));
+		return result.match({
+			ok: (value) => value,
+			err: () => null
+		});
+	};
+
+	const compileRegex = (pattern: string) =>
+		Result.try(() => new RegExp(pattern)).match({
+			ok: (value) => value,
+			err: () => null
+		});
+
 	/**
 	 * Execute the grep tool
 	 */
@@ -49,20 +72,8 @@ export namespace GrepTool {
 		const searchPath = params.path ? VirtualSandbox.resolvePath(basePath, params.path) : basePath;
 
 		// Validate the search path exists and is a directory
-		try {
-			const stats = await VirtualFs.stat(searchPath, vfsId);
-			if (!stats.isDirectory) {
-				return {
-					title: params.pattern,
-					output: `Path is not a directory: ${params.path || '.'}`,
-					metadata: {
-						matchCount: 0,
-						fileCount: 0,
-						truncated: false
-					}
-				};
-			}
-		} catch {
+		const stats = await safeStat(searchPath, vfsId);
+		if (!stats) {
 			return {
 				title: params.pattern,
 				output: `Directory not found: ${params.path || '.'}`,
@@ -73,11 +84,20 @@ export namespace GrepTool {
 				}
 			};
 		}
+		if (!stats.isDirectory) {
+			return {
+				title: params.pattern,
+				output: `Path is not a directory: ${params.path || '.'}`,
+				metadata: {
+					matchCount: 0,
+					fileCount: 0,
+					truncated: false
+				}
+			};
+		}
 
-		let regex: RegExp;
-		try {
-			regex = new RegExp(params.pattern);
-		} catch {
+		const regex = compileRegex(params.pattern);
+		if (!regex) {
 			return {
 				title: params.pattern,
 				output: 'Invalid regex pattern.',
@@ -98,21 +118,13 @@ export namespace GrepTool {
 			if (results.length > MAX_RESULTS) break;
 			const relative = path.posix.relative(searchPath, filePath);
 			if (includeMatcher && !includeMatcher(relative)) continue;
-			let buffer: Uint8Array;
-			try {
-				buffer = await VirtualFs.readFileBuffer(filePath, vfsId);
-			} catch {
-				continue;
-			}
+			const buffer = await safeReadBuffer(filePath, vfsId);
+			if (!buffer) continue;
 			if (isBinaryBuffer(buffer)) continue;
 			const text = await VirtualFs.readFile(filePath, vfsId);
 			const lines = text.split('\n');
-			let mtime = 0;
-			try {
-				mtime = (await VirtualFs.stat(filePath, vfsId)).mtimeMs;
-			} catch {
-				mtime = 0;
-			}
+			const fileStats = await safeStat(filePath, vfsId);
+			const mtime = fileStats?.mtimeMs ?? 0;
 			for (let i = 0; i < lines.length; i++) {
 				const lineText = lines[i] ?? '';
 				if (!regex.test(lineText)) continue;

@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { ensureServer } from '../server/manager.ts';
@@ -90,7 +91,7 @@ const modelCommand = new Command('model')
 			| { server?: string; port?: number }
 			| undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -104,7 +105,7 @@ const modelCommand = new Command('model')
 			);
 			console.log(`Model updated: ${result.provider}/${result.model}`);
 
-			try {
+			const validationResult = await Result.tryPromise(async () => {
 				const client = createClient(server.url);
 				const providers = await getProviders(client);
 				const provider = providers.all.find((p: { id: string }) => p.id === result.provider);
@@ -113,29 +114,34 @@ const modelCommand = new Command('model')
 						`Warning: Provider "${result.provider}" is not available. ` +
 							`Available providers: ${providers.all.map((p: { id: string }) => p.id).join(', ')}`
 					);
-				} else if (!providers.connected.includes(result.provider)) {
+					return;
+				}
+				if (!providers.connected.includes(result.provider)) {
 					console.warn(
 						`Warning: Provider "${result.provider}" is not connected. ` +
 							'Run "opencode auth" to configure credentials.'
 					);
-				} else {
-					const modelIds = Object.keys(provider.models ?? {});
-					if (modelIds.length > 0 && !modelIds.includes(result.model)) {
-						console.warn(
-							`Warning: Model "${result.model}" not found for provider "${result.provider}". ` +
-								`Available models: ${modelIds.join(', ')}`
-						);
-					}
+					return;
 				}
-			} catch (error) {
+				const modelIds = Object.keys(provider.models ?? {});
+				if (modelIds.length > 0 && !modelIds.includes(result.model)) {
+					console.warn(
+						`Warning: Model "${result.model}" not found for provider "${result.provider}". ` +
+							`Available models: ${modelIds.join(', ')}`
+					);
+				}
+			});
+			if (Result.isError(validationResult)) {
 				console.warn(
-					`Warning: Unable to validate provider/model. ${error instanceof BtcaError ? error.message : ''}`.trim()
+					`Warning: Unable to validate provider/model. ${validationResult.error instanceof BtcaError ? validationResult.error.message : ''}`.trim()
 				);
 			}
 
 			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -148,7 +154,7 @@ const resourcesListCommand = new Command('list')
 			| { server?: string; port?: number }
 			| undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -183,8 +189,10 @@ const resourcesListCommand = new Command('list')
 			}
 
 			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -204,7 +212,7 @@ const resourcesAddCommand = new Command('add')
 			| { server?: string; port?: number }
 			| undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -265,8 +273,10 @@ const resourcesAddCommand = new Command('add')
 			}
 
 			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});
@@ -280,7 +290,7 @@ const resourcesRemoveCommand = new Command('remove')
 			| { server?: string; port?: number }
 			| undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -316,7 +326,14 @@ const resourcesRemoveCommand = new Command('remove')
 			console.log(`Removed resource: ${resourceName}`);
 
 			server.stop();
-		} catch (error) {
+		});
+
+		if (Result.isError(result)) {
+			const error = result.error;
+			if (error instanceof Error && error.message === 'Invalid selection') {
+				console.error('\nError: Invalid selection. Please try again.');
+				process.exit(1);
+			}
 			console.error(formatError(error));
 			process.exit(1);
 		}

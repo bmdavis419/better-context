@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Hono } from 'hono';
 import type { Context as HonoContext, Next } from 'hono';
 import { z } from 'zod';
@@ -148,16 +149,17 @@ class RequestError extends Error {
 }
 
 const decodeJson = async <T>(req: Request, schema: z.ZodType<T>): Promise<T> => {
-	let body: unknown;
-	try {
-		body = await req.json();
-	} catch (cause) {
-		throw new RequestError('Failed to parse request JSON', cause);
-	}
-
-	const parsed = schema.safeParse(body);
-	if (!parsed.success) throw new RequestError('Invalid request body', parsed.error);
-	return parsed.data;
+	const bodyResult = await Result.tryPromise(() => req.json());
+	return bodyResult.match({
+		ok: (body) => {
+			const parsed = schema.safeParse(body);
+			if (!parsed.success) throw new RequestError('Invalid request body', parsed.error);
+			return parsed.data;
+		},
+		err: (cause) => {
+			throw new RequestError('Failed to parse request JSON', cause);
+		}
+	});
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

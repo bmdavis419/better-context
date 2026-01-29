@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { spawn } from 'bun';
 import { ensureServer } from '../server/manager.ts';
@@ -23,7 +24,7 @@ export const chatCommand = new Command('chat')
 	.action(async (options, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port
@@ -64,8 +65,10 @@ export const chatCommand = new Command('chat')
 			await proc.exited;
 
 			server.stop();
-		} catch (error) {
-			console.error(formatError(error));
+		});
+
+		if (Result.isError(result)) {
+			console.error(formatError(result.error));
 			process.exit(1);
 		}
 	});

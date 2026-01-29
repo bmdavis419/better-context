@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { hc } from 'hono/client';
 import type { AppType } from 'btca-server';
 
@@ -25,15 +26,17 @@ async function parseErrorResponse(
 	res: { json: () => Promise<unknown> },
 	fallbackMessage: string
 ): Promise<BtcaError> {
-	try {
-		const body = (await res.json()) as { error?: string; hint?: string; tag?: string };
-		return new BtcaError(body.error ?? fallbackMessage, {
-			hint: body.hint,
-			tag: body.tag
-		});
-	} catch {
-		return new BtcaError(fallbackMessage);
-	}
+	const result = await Result.tryPromise(() => res.json());
+	return result.match({
+		ok: (body) => {
+			const parsed = body as { error?: string; hint?: string; tag?: string };
+			return new BtcaError(parsed.error ?? fallbackMessage, {
+				hint: parsed.hint,
+				tag: parsed.tag
+			});
+		},
+		err: () => new BtcaError(fallbackMessage)
+	});
 }
 
 /**

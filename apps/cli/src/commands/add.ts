@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import * as readline from 'readline';
 import path from 'node:path';
@@ -167,7 +168,7 @@ async function addGitResourceWizard(
 
 	const rl = createRl();
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		// Step 1: URL (prefilled, confirm)
 		const finalUrl = await promptInput(rl, 'URL', normalizedUrl);
 
@@ -240,9 +241,12 @@ async function addGitResourceWizard(
 		}
 		console.log('\nYou can now use this resource:');
 		console.log(`  btca ask -r ${name} -q "your question"`);
-	} catch (error) {
-		rl.close();
-		throw error;
+	});
+
+	rl.close();
+
+	if (Result.isError(result)) {
+		throw result.error;
 	}
 }
 
@@ -264,7 +268,7 @@ async function addLocalResourceWizard(
 
 	const rl = createRl();
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		// Step 1: Path (prefilled, confirm)
 		const finalPath = await promptInput(rl, 'Path', resolvedPath);
 
@@ -317,9 +321,12 @@ async function addLocalResourceWizard(
 		console.log(`\nAdded resource: ${name}`);
 		console.log('\nYou can now use this resource:');
 		console.log(`  btca ask -r ${name} -q "your question"`);
-	} catch (error) {
-		rl.close();
-		throw error;
+	});
+
+	rl.close();
+
+	if (Result.isError(result)) {
+		throw result.error;
 	}
 }
 
@@ -347,7 +354,7 @@ export const addCommand = new Command('add')
 		) => {
 			const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-			try {
+			const result = await Result.tryPromise(async () => {
 				// If no argument provided, start interactive wizard
 				if (!urlOrPath) {
 					const resourceType = await promptSelect<'git' | 'local'>(
@@ -457,7 +464,10 @@ export const addCommand = new Command('add')
 				} else {
 					await addLocalResourceWizard(urlOrPath, options, globalOpts);
 				}
-			} catch (error) {
+			});
+
+			if (Result.isError(result)) {
+				const error = result.error;
 				if (error instanceof Error && error.message === 'Invalid selection') {
 					console.error('\nError: Invalid selection. Please try again.');
 					process.exit(1);

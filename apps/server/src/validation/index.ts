@@ -7,6 +7,7 @@
  * - Command injection via branch names
  * - DoS via unbounded input sizes
  */
+import { Result } from 'better-result';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regex Patterns
@@ -70,6 +71,7 @@ const ok = (): ValidationResult => ({ valid: true });
 const okWithValue = <T>(value: T): ValidationResultWithValue<T> => ({ valid: true, value });
 const fail = (error: string): ValidationResult => ({ valid: false, error });
 const failWithValue = <T>(error: string): ValidationResultWithValue<T> => ({ valid: false, error });
+const parseUrl = (value: string) => Result.try(() => new URL(value));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validators
@@ -156,12 +158,11 @@ export const validateBranchName = (branch: string): ValidationResult => {
  * Non-GitHub URLs are returned unchanged.
  */
 export const normalizeGitHubUrl = (url: string): string => {
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return url; // Return as-is if not a valid URL
-	}
+	const parsed = parseUrl(url).match({
+		ok: (value) => value,
+		err: () => null
+	});
+	if (!parsed) return url;
 
 	const hostname = parsed.hostname.toLowerCase();
 	if (hostname !== 'github.com') {
@@ -205,12 +206,11 @@ export const validateGitUrl = (url: string): ValidationResultWithValue<string> =
 		return failWithValue('Git URL cannot be empty');
 	}
 
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return failWithValue(`Invalid URL format: "${url}"`);
-	}
+	const parsed = parseUrl(url).match({
+		ok: (value) => value,
+		err: () => null
+	});
+	if (!parsed) return failWithValue(`Invalid URL format: "${url}"`);
 
 	// Only allow HTTPS protocol
 	if (parsed.protocol !== 'https:') {

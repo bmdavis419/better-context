@@ -69,6 +69,7 @@
 		"@btca/shared": "workspace:*",
 		"@opencode-ai/sdk": "^1.1.28",
 		"ai": "^6.0.49",
+		"better-result": "^2.6.0",
 		"hono": "^4.7.11",
 		"just-bash": "^2.7.0",
 		"opencode-ai": "^1.1.36",

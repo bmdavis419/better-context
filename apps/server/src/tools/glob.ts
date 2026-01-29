@@ -4,6 +4,7 @@
  */
 import * as path from 'node:path';
 import { z } from 'zod';
+import { Result } from 'better-result';
 
 import type { ToolContext } from './context.ts';
 import { VirtualSandbox } from './virtual-sandbox.ts';
@@ -36,6 +37,14 @@ export namespace GlobTool {
 		};
 	};
 
+	const safeStat = async (filePath: string, vfsId?: string) => {
+		const result = await Result.tryPromise(() => VirtualFs.stat(filePath, vfsId));
+		return result.match({
+			ok: (value) => value,
+			err: () => null
+		});
+	};
+
 	/**
 	 * Execute the glob tool
 	 */
@@ -46,22 +55,21 @@ export namespace GlobTool {
 		const searchPath = params.path ? VirtualSandbox.resolvePath(basePath, params.path) : basePath;
 
 		// Validate the search path exists and is a directory
-		try {
-			const stats = await VirtualFs.stat(searchPath, vfsId);
-			if (!stats.isDirectory) {
-				return {
-					title: params.pattern,
-					output: `Path is not a directory: ${params.path || '.'}`,
-					metadata: {
-						count: 0,
-						truncated: false
-					}
-				};
-			}
-		} catch {
+		const stats = await safeStat(searchPath, vfsId);
+		if (!stats) {
 			return {
 				title: params.pattern,
 				output: `Directory not found: ${params.path || '.'}`,
+				metadata: {
+					count: 0,
+					truncated: false
+				}
+			};
+		}
+		if (!stats.isDirectory) {
+			return {
+				title: params.pattern,
+				output: `Path is not a directory: ${params.path || '.'}`,
 				metadata: {
 					count: 0,
 					truncated: false
@@ -82,12 +90,8 @@ export namespace GlobTool {
 			}
 			const relative = path.posix.relative(searchPath, file);
 			if (!patternRegex.test(relative)) continue;
-			try {
-				const stats = await VirtualFs.stat(file, vfsId);
-				files.push({ path: file, mtime: stats.mtimeMs });
-			} catch {
-				files.push({ path: file, mtime: 0 });
-			}
+			const fileStats = await safeStat(file, vfsId);
+			files.push({ path: file, mtime: fileStats?.mtimeMs ?? 0 });
 		}
 
 		if (files.length === 0) {

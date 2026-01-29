@@ -1,7 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { Result } from 'better-result';
 import { z } from 'zod';
+
 import { CommonHints, type TaggedErrorOptions } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
 import { GitResourceSchema, type GitResource } from '../resources/schema.ts';
@@ -192,6 +194,20 @@ const stripJsonc = (content: string): string => {
 
 const parseJsonc = (content: string): unknown => JSON.parse(stripJsonc(content));
 
+const readJsonFile = (filePath: string) =>
+	Result.gen(async function* () {
+		const content = yield* Result.await(Result.tryPromise(() => Bun.file(filePath).text()));
+		const parsed = yield* Result.try(() => JSON.parse(content));
+		return Result.ok(parsed);
+	});
+
+const readJsoncFile = (filePath: string) =>
+	Result.gen(async function* () {
+		const content = yield* Result.await(Result.tryPromise(() => Bun.file(filePath).text()));
+		const parsed = yield* Result.try(() => parseJsonc(content));
+		return Result.ok(parsed);
+	});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Remote Config Namespace
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,14 +232,14 @@ export namespace RemoteConfigService {
 	 */
 	export async function isAuthenticated(): Promise<boolean> {
 		const authPath = getAuthPath();
-		try {
-			const content = await Bun.file(authPath).text();
-			const parsed = JSON.parse(content);
-			const result = RemoteAuthSchema.safeParse(parsed);
-			return result.success && !!result.data.apiKey;
-		} catch {
-			return false;
-		}
+		const result = await readJsonFile(authPath);
+		return result.match({
+			ok: (parsed) => {
+				const authResult = RemoteAuthSchema.safeParse(parsed);
+				return authResult.success && !!authResult.data.apiKey;
+			},
+			err: () => false
+		});
 	}
 
 	/**
@@ -231,18 +247,18 @@ export namespace RemoteConfigService {
 	 */
 	export async function loadAuth(): Promise<RemoteAuth | null> {
 		const authPath = getAuthPath();
-		try {
-			const content = await Bun.file(authPath).text();
-			const parsed = JSON.parse(content);
-			const result = RemoteAuthSchema.safeParse(parsed);
-			if (!result.success) {
-				Metrics.error('remote.auth.invalid', { path: authPath, error: result.error.message });
-				return null;
-			}
-			return result.data;
-		} catch {
-			return null;
-		}
+		const result = await readJsonFile(authPath);
+		return result.match({
+			ok: (parsed) => {
+				const authResult = RemoteAuthSchema.safeParse(parsed);
+				if (!authResult.success) {
+					Metrics.error('remote.auth.invalid', { path: authPath, error: authResult.error.message });
+					return null;
+				}
+				return authResult.data;
+			},
+			err: () => null
+		});
 	}
 
 	/**
@@ -252,19 +268,52 @@ export namespace RemoteConfigService {
 		const authPath = getAuthPath();
 		const configDir = path.dirname(authPath);
 
-		try {
-			await fs.mkdir(configDir, { recursive: true });
-			await Bun.write(authPath, JSON.stringify(auth, null, 2));
-			// Set file permissions to owner-only (600)
-			await fs.chmod(authPath, 0o600);
-			Metrics.info('remote.auth.saved', { path: authPath });
-		} catch (cause) {
-			throw new RemoteConfigError({
-				message: `Failed to save remote auth to: "${authPath}"`,
-				hint: 'Check that you have write permissions to the config directory.',
-				cause
-			});
-		}
+		const result = await Result.gen(async function* () {
+			yield* Result.await(
+				Result.tryPromise({
+					try: () => fs.mkdir(configDir, { recursive: true }),
+					catch: (cause) =>
+						new RemoteConfigError({
+							message: `Failed to save remote auth to: "${authPath}"`,
+							hint: 'Check that you have write permissions to the config directory.',
+							cause
+						})
+				})
+			);
+
+			yield* Result.await(
+				Result.tryPromise({
+					try: () => Bun.write(authPath, JSON.stringify(auth, null, 2)),
+					catch: (cause) =>
+						new RemoteConfigError({
+							message: `Failed to save remote auth to: "${authPath}"`,
+							hint: 'Check that you have write permissions to the config directory.',
+							cause
+						})
+				})
+			);
+
+			yield* Result.await(
+				Result.tryPromise({
+					try: () => fs.chmod(authPath, 0o600),
+					catch: (cause) =>
+						new RemoteConfigError({
+							message: `Failed to save remote auth to: "${authPath}"`,
+							hint: 'Check that you have write permissions to the config directory.',
+							cause
+						})
+				})
+			);
+
+			return Result.ok(undefined);
+		});
+
+		result.match({
+			ok: () => Metrics.info('remote.auth.saved', { path: authPath }),
+			err: (error) => {
+				throw error;
+			}
+		});
 	}
 
 	/**
@@ -272,12 +321,11 @@ export namespace RemoteConfigService {
 	 */
 	export async function deleteAuth(): Promise<void> {
 		const authPath = getAuthPath();
-		try {
-			await fs.unlink(authPath);
-			Metrics.info('remote.auth.deleted', { path: authPath });
-		} catch {
-			// Ignore if file doesn't exist
-		}
+		const result = await Result.tryPromise(() => fs.unlink(authPath));
+		result.match({
+			ok: () => Metrics.info('remote.auth.deleted', { path: authPath }),
+			err: () => undefined
+		});
 	}
 
 	/**
@@ -294,34 +342,32 @@ export namespace RemoteConfigService {
 	export async function loadConfig(cwd: string = process.cwd()): Promise<RemoteConfig | null> {
 		const configPath = getConfigPath(cwd);
 
-		try {
-			const content = await Bun.file(configPath).text();
-			const parsed = parseJsonc(content);
-			const result = RemoteConfigSchema.safeParse(parsed);
+		const result = await readJsoncFile(configPath);
+		const parsed = result.match({
+			ok: (value) => value,
+			err: () => null
+		});
+		if (!parsed) return null;
 
-			if (!result.success) {
-				const issues = result.error.issues
-					.map((i) => `  - ${i.path.join('.')}: ${i.message}`)
-					.join('\n');
-				throw new RemoteConfigError({
-					message: `Invalid remote config structure:\n${issues}`,
-					hint: `${CommonHints.CHECK_CONFIG} Required field: "project" (string).`,
-					cause: result.error
-				});
-			}
-
-			Metrics.info('remote.config.loaded', {
-				path: configPath,
-				project: result.data.project,
-				resourceCount: result.data.resources.length
+		const parsedResult = RemoteConfigSchema.safeParse(parsed);
+		if (!parsedResult.success) {
+			const issues = parsedResult.error.issues
+				.map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+				.join('\n');
+			throw new RemoteConfigError({
+				message: `Invalid remote config structure:\n${issues}`,
+				hint: `${CommonHints.CHECK_CONFIG} Required field: "project" (string).`,
+				cause: parsedResult.error
 			});
-
-			return result.data;
-		} catch (error) {
-			if (error instanceof RemoteConfigError) throw error;
-			// File doesn't exist or can't be read
-			return null;
 		}
+
+		Metrics.info('remote.config.loaded', {
+			path: configPath,
+			project: parsedResult.data.project,
+			resourceCount: parsedResult.data.resources.length
+		});
+
+		return parsedResult.data;
 	}
 
 	/**
@@ -338,20 +384,27 @@ export namespace RemoteConfigService {
 			...config
 		};
 
-		try {
-			await Bun.write(configPath, JSON.stringify(toSave, null, '\t'));
-			Metrics.info('remote.config.saved', {
-				path: configPath,
-				project: config.project,
-				resourceCount: config.resources.length
-			});
-		} catch (cause) {
-			throw new RemoteConfigError({
-				message: `Failed to save remote config to: "${configPath}"`,
-				hint: 'Check that you have write permissions to the directory.',
-				cause
-			});
-		}
+		const result = await Result.tryPromise({
+			try: () => Bun.write(configPath, JSON.stringify(toSave, null, '\t')),
+			catch: (cause) =>
+				new RemoteConfigError({
+					message: `Failed to save remote config to: "${configPath}"`,
+					hint: 'Check that you have write permissions to the directory.',
+					cause
+				})
+		});
+
+		result.match({
+			ok: () =>
+				Metrics.info('remote.config.saved', {
+					path: configPath,
+					project: config.project,
+					resourceCount: config.resources.length
+				}),
+			err: (error) => {
+				throw error;
+			}
+		});
 	}
 
 	/**

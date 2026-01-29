@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { Result } from 'better-result';
 import type { InputState } from './types.ts';
 
 const HISTORY_FILE = join(homedir(), '.local', 'share', 'btca', 'input-history.json');
@@ -20,39 +21,41 @@ function getPlainText(state: InputState): string {
  * Load history from disk
  */
 async function loadHistory(): Promise<InputState[]> {
-	try {
-		const file = Bun.file(HISTORY_FILE);
-		if (!(await file.exists())) {
-			return [];
-		}
-		const data = (await file.json()) as HistoryData;
-		// Migrate old string-based format if needed
-		if (Array.isArray(data.entries) && data.entries.length > 0) {
-			if (typeof data.entries[0] === 'string') {
-				// Old format - convert strings to InputState
-				return (data.entries as unknown as string[]).map((str) => [{ type: 'text', content: str }]);
-			}
-		}
-		return data.entries ?? [];
-	} catch {
+	const file = Bun.file(HISTORY_FILE);
+	const existsResult = await Result.tryPromise(() => file.exists());
+	if (existsResult.isErr() || !existsResult.value) {
 		return [];
 	}
+
+	const dataResult = await Result.tryPromise(async () => (await file.json()) as HistoryData);
+	if (dataResult.isErr()) {
+		return [];
+	}
+
+	const data = dataResult.value;
+	// Migrate old string-based format if needed
+	if (Array.isArray(data.entries) && data.entries.length > 0) {
+		if (typeof data.entries[0] === 'string') {
+			// Old format - convert strings to InputState
+			return (data.entries as unknown as string[]).map((str) => [{ type: 'text', content: str }]);
+		}
+	}
+	return data.entries ?? [];
 }
 
 /**
  * Save history to disk
  */
 async function saveHistory(entries: InputState[]): Promise<void> {
-	try {
+	const result = await Result.tryPromise(async () => {
 		// Ensure directory exists (mkdir -p is idempotent)
 		const dir = join(homedir(), '.local', 'share', 'btca');
 		await Bun.$`mkdir -p ${dir}`.quiet();
 
 		const data: HistoryData = { entries };
 		await Bun.write(HISTORY_FILE, JSON.stringify(data, null, 2));
-	} catch {
-		// Silently fail - history is not critical
-	}
+	});
+	if (result.isErr()) return;
 }
 
 /**

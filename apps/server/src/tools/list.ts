@@ -4,6 +4,7 @@
  */
 import * as path from 'node:path';
 import { z } from 'zod';
+import { Result } from 'better-result';
 
 import type { ToolContext } from './context.ts';
 import { VirtualSandbox } from './virtual-sandbox.ts';
@@ -35,6 +36,14 @@ export namespace ListTool {
 		};
 	};
 
+	const safeStat = async (filePath: string, vfsId?: string) => {
+		const result = await Result.tryPromise(() => VirtualFs.stat(filePath, vfsId));
+		return result.match({
+			ok: (value) => value,
+			err: () => null
+		});
+	};
+
 	/**
 	 * Execute the list tool
 	 */
@@ -45,23 +54,22 @@ export namespace ListTool {
 		const resolvedPath = VirtualSandbox.resolvePath(basePath, params.path);
 
 		// Check if path exists
-		try {
-			const stats = await VirtualFs.stat(resolvedPath, vfsId);
-			if (!stats.isDirectory) {
-				return {
-					title: params.path,
-					output: `Path is not a directory: ${params.path}`,
-					metadata: {
-						entries: [],
-						fileCount: 0,
-						directoryCount: 0
-					}
-				};
-			}
-		} catch {
+		const stats = await safeStat(resolvedPath, vfsId);
+		if (!stats) {
 			return {
 				title: params.path,
 				output: `Directory not found: ${params.path}`,
+				metadata: {
+					entries: [],
+					fileCount: 0,
+					directoryCount: 0
+				}
+			};
+		}
+		if (!stats.isDirectory) {
+			return {
+				title: params.path,
+				output: `Path is not a directory: ${params.path}`,
 				metadata: {
 					entries: [],
 					fileCount: 0,
@@ -81,12 +89,8 @@ export namespace ListTool {
 				type = 'directory';
 			} else if (dirent.isFile) {
 				type = 'file';
-				try {
-					const stats = await VirtualFs.stat(path.posix.join(resolvedPath, dirent.name), vfsId);
-					size = stats.size;
-				} catch {
-					// Ignore stat errors
-				}
+				const stats = await safeStat(path.posix.join(resolvedPath, dirent.name), vfsId);
+				size = stats?.size;
 			}
 			entries.push({
 				name: dirent.name,

@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -159,23 +160,20 @@ async function promptInput(question: string, defaultValue?: string): Promise<str
  * Check if a pattern is already in .gitignore (handles variations like .btca, .btca/, .btca/*).
  */
 async function isPatternInGitignore(dir: string, pattern: string): Promise<boolean> {
-	try {
-		const gitignorePath = path.join(dir, '.gitignore');
-		const content = await fs.readFile(gitignorePath, 'utf-8');
-		const lines = content.split('\n').map((line) => line.trim());
+	const gitignorePath = path.join(dir, '.gitignore');
+	const result = await Result.tryPromise(() => fs.readFile(gitignorePath, 'utf-8'));
+	if (Result.isError(result)) return false;
+	const lines = result.value.split('\n').map((line) => line.trim());
 
-		// Check for the pattern and common variations
-		const basePattern = pattern.replace(/\/$/, ''); // Remove trailing slash
-		const patterns = [basePattern, `${basePattern}/`, `${basePattern}/*`];
+	// Check for the pattern and common variations
+	const basePattern = pattern.replace(/\/$/, '');
+	const patterns = [basePattern, `${basePattern}/`, `${basePattern}/*`];
 
-		return lines.some((line) => {
-			// Skip comments and empty lines
-			if (line.startsWith('#') || line === '') return false;
-			return patterns.includes(line);
-		});
-	} catch {
-		return false;
-	}
+	return lines.some((line) => {
+		// Skip comments and empty lines
+		if (line.startsWith('#') || line === '') return false;
+		return patterns.includes(line);
+	});
 }
 
 /**
@@ -183,16 +181,10 @@ async function isPatternInGitignore(dir: string, pattern: string): Promise<boole
  */
 async function addToGitignore(dir: string, pattern: string, comment?: string): Promise<void> {
 	const gitignorePath = path.join(dir, '.gitignore');
-	let content = '';
-
-	try {
-		content = await fs.readFile(gitignorePath, 'utf-8');
-		// Ensure file ends with newline
-		if (!content.endsWith('\n')) {
-			content += '\n';
-		}
-	} catch {
-		// File doesn't exist, start fresh
+	const contentResult = await Result.tryPromise(() => fs.readFile(gitignorePath, 'utf-8'));
+	let content = Result.isOk(contentResult) ? contentResult.value : '';
+	if (content && !content.endsWith('\n')) {
+		content += '\n';
 	}
 
 	// Add comment and pattern
@@ -208,24 +200,16 @@ async function addToGitignore(dir: string, pattern: string, comment?: string): P
  * Check if directory is a git repository.
  */
 async function isGitRepo(dir: string): Promise<boolean> {
-	try {
-		await fs.access(path.join(dir, '.git'));
-		return true;
-	} catch {
-		return false;
-	}
+	const result = await Result.tryPromise(() => fs.access(path.join(dir, '.git')));
+	return Result.isOk(result);
 }
 
 /**
  * Check if a file exists.
  */
 async function fileExists(filePath: string): Promise<boolean> {
-	try {
-		await fs.access(filePath);
-		return true;
-	} catch {
-		return false;
-	}
+	const result = await Result.tryPromise(() => fs.access(filePath));
+	return Result.isOk(result);
 }
 
 /**
@@ -257,7 +241,7 @@ export const initCommand = new Command('init')
 		const cwd = process.cwd();
 		const configPath = path.join(cwd, PROJECT_CONFIG_FILENAME);
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			// Step 1: Ask for setup type
 			const setupType = await promptSelect<SetupType>('Choose setup type:', [
 				{ label: 'MCP (cloud hosted resources)', value: 'mcp' },
@@ -271,7 +255,10 @@ export const initCommand = new Command('init')
 				// CLI Path
 				await handleCliSetup(cwd, configPath, options.force);
 			}
-		} catch (error) {
+		});
+
+		if (Result.isError(result)) {
+			const error = result.error;
 			if (error instanceof Error && error.message === 'Invalid selection') {
 				console.error('\nError: Invalid selection. Please run btca init again.');
 				process.exit(1);

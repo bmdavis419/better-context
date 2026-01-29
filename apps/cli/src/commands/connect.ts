@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { spawn } from 'bun';
@@ -113,7 +114,7 @@ async function runOpencodeAuth(providerId: string): Promise<boolean> {
 	console.log(`\nOpening browser for ${providerId} authentication...`);
 	console.log('(This requires OpenCode CLI to be installed)\n');
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		const proc = spawn(['opencode', 'auth', '--provider', providerId], {
 			stdin: 'inherit',
 			stdout: 'inherit',
@@ -122,14 +123,16 @@ async function runOpencodeAuth(providerId: string): Promise<boolean> {
 
 		const exitCode = await proc.exited;
 		return exitCode === 0;
-	} catch (error) {
-		console.error(
-			'Failed to run opencode auth:',
-			error instanceof Error ? error.message : String(error)
-		);
-		console.error('\nMake sure OpenCode CLI is installed: npm install -g opencode');
-		return false;
-	}
+	});
+
+	if (Result.isOk(result)) return result.value;
+
+	console.error(
+		'Failed to run opencode auth:',
+		result.error instanceof Error ? result.error.message : String(result.error)
+	);
+	console.error('\nMake sure OpenCode CLI is installed: npm install -g opencode');
+	return false;
 }
 
 export const connectCommand = new Command('connect')
@@ -140,7 +143,7 @@ export const connectCommand = new Command('connect')
 	.action(async (options: { global?: boolean; provider?: string; model?: string }, command) => {
 		const globalOpts = command.parent?.opts() as { server?: string; port?: number } | undefined;
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const server = await ensureServer({
 				serverUrl: globalOpts?.server,
 				port: globalOpts?.port,
@@ -273,7 +276,10 @@ export const connectCommand = new Command('connect')
 			console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
 
 			server.stop();
-		} catch (error) {
+		});
+
+		if (Result.isError(result)) {
+			const error = result.error;
 			if (error instanceof Error && error.message === 'Invalid selection') {
 				console.error('\nError: Invalid selection. Please try again.');
 				process.exit(1);

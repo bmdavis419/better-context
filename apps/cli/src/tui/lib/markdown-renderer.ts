@@ -1,6 +1,7 @@
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { Marked, type Token, type Tokens } from 'marked';
+import { Result } from 'better-result';
 
 // Import languages
 import typescript from '@shikijs/langs/typescript';
@@ -214,12 +215,14 @@ async function tokenToChunks(
 			const codeBg = '#1e1e1e'; // VS Code dark background
 
 			if (SUPPORTED_LANGS.includes(lang) || SUPPORTED_LANGS.includes(t.lang || '')) {
-				try {
-					const hast = highlighter.codeToHast(t.text, {
+				const hastResult = Result.try(() =>
+					highlighter.codeToHast(t.text, {
 						lang: lang,
 						theme: 'dark-plus'
-					});
-					const codeChunks = shikiHastToChunks(hast);
+					})
+				);
+				if (hastResult.isOk()) {
+					const codeChunks = shikiHastToChunks(hastResult.value);
 					// Mark all chunks as code block and add background
 					const styledCodeChunks = codeChunks.map((c) => ({
 						...c,
@@ -227,8 +230,6 @@ async function tokenToChunks(
 						isCodeBlock: true
 					}));
 					return [{ text: '\n' }, ...styledCodeChunks, { text: '\n' }];
-				} catch {
-					// Fall through to plain code block
 				}
 			}
 
