@@ -134,6 +134,7 @@ const modelCommand = new Command('model')
 			}
 
 			server.stop();
+			process.exit(0);
 		} catch (error) {
 			console.error(formatError(error));
 			process.exit(1);
