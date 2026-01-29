@@ -103,19 +103,22 @@ async function prompt(message: string): Promise<string | null> {
 	const decoder = new TextDecoder();
 	let input = '';
 
-	try {
+	const result = await Result.tryPromise(async () => {
 		while (true) {
 			const { value, done } = await reader.read();
 			if (done) return null;
-			input += decoder.decode(value, { stream: true });
+			input += decoder.decode(value ?? new Uint8Array(), { stream: true });
 			const newlineIndex = input.indexOf('\n');
 			if (newlineIndex !== -1) {
 				return input.slice(0, newlineIndex).trim();
 			}
 		}
-	} finally {
-		reader.releaseLock();
+	});
+	reader.releaseLock();
+	if (result.isErr()) {
+		throw result.error;
 	}
+	return result.value;
 }
 
 /**

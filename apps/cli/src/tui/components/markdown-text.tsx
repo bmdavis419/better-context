@@ -1,7 +1,9 @@
 import { createResource, For, Show, type Component } from 'solid-js';
+import { TextAttributes } from '@opentui/core';
+import { Result } from 'better-result';
+
 import { renderMarkdownToChunks, type StyledChunk } from '../lib/markdown-renderer.ts';
 import { colors } from '../theme.ts';
-import { TextAttributes } from '@opentui/core';
 
 export interface MarkdownTextProps {
 	content: string;
@@ -20,8 +22,8 @@ export const MarkdownText: Component<MarkdownTextProps> = (props) => {
 	const [chunks] = createResource(
 		() => props.content,
 		async (content) => {
-			try {
-				return await renderMarkdownToChunks(content, {
+			const result = await Result.tryPromise(() =>
+				renderMarkdownToChunks(content, {
 					colors: {
 						accent: colors.accent,
 						text: colors.text,
@@ -31,11 +33,11 @@ export const MarkdownText: Component<MarkdownTextProps> = (props) => {
 						info: colors.info,
 						error: colors.error
 					}
-				});
-			} catch (error) {
-				// Fallback to plain text on error
-				return null;
-			}
+				})
+			);
+			if (result.isOk()) return result.value;
+			// Fallback to plain text on error
+			return null;
 		}
 	);
 

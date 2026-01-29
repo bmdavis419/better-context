@@ -1,3 +1,6 @@
+import { Result } from 'better-result';
+import type { BtcaStreamEvent } from 'btca-server/stream/types';
+
 import {
 	createClient,
 	getConfig,
@@ -9,7 +12,6 @@ import {
 	type ResourceInput
 } from '../client/index.ts';
 import { parseSSEStream } from '../client/stream.ts';
-import type { BtcaStreamEvent } from 'btca-server/stream/types';
 import type { Repo, BtcaChunk } from './types.ts';
 
 // Get server URL from global (set by TUI launcher)
@@ -84,15 +86,15 @@ export const services = {
 		const chunksById = new Map<string, BtcaChunk>();
 		const chunkOrder: string[] = [];
 
-		try {
+		const streamResult = await Result.tryPromise(async () => {
 			for await (const event of parseSSEStream(response)) {
 				if (signal.aborted) break;
 				processStreamEvent(event, chunksById, chunkOrder, onChunkUpdate);
 			}
-		} catch (error) {
-			if (error instanceof Error && error.name === 'AbortError') {
-				// Request was canceled, return what we have
-			} else {
+		});
+		if (streamResult.isErr()) {
+			const error = streamResult.error;
+			if (!(error instanceof Error && error.name === 'AbortError')) {
 				throw error;
 			}
 		}

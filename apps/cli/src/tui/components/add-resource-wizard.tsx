@@ -6,11 +6,14 @@ import {
 	type Component,
 	type Setter
 } from 'solid-js';
-import { colors } from '../theme.ts';
 import { useKeyboard, usePaste } from '@opentui/solid';
+import { Result } from 'better-result';
+
+import { colors } from '../theme.ts';
 import { useMessagesContext } from '../context/messages-context.tsx';
 import { useConfigContext } from '../context/config-context.tsx';
 import { services } from '../services.ts';
+import { formatError } from '../lib/format-error.ts';
 import type { WizardStep, Repo } from '../types.ts';
 
 type ResourceType = 'git' | 'local';
@@ -256,7 +259,7 @@ export const AddResourceWizard: Component<AddResourceWizardProps> = (props) => {
 	const handleConfirm = async () => {
 		const vals = values();
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			if (vals.type === 'git') {
 				const resource = {
 					type: 'git' as const,
@@ -287,11 +290,11 @@ export const AddResourceWizard: Component<AddResourceWizardProps> = (props) => {
 				// Local resources aren't shown as repos in the current UI but the server has them
 				messages.addSystemMessage(`Added local resource: ${resource.name}`);
 			}
-		} catch (err) {
-			messages.addSystemMessage(`Error: ${err}`);
-		} finally {
-			props.onClose();
+		});
+		if (result.isErr()) {
+			messages.addSystemMessage(`Error: ${formatError(result.error)}`);
 		}
+		props.onClose();
 	};
 
 	useKeyboard((key) => {

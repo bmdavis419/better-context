@@ -6,10 +6,13 @@ import {
 	type Component,
 	type ParentProps
 } from 'solid-js';
-import type { Message, InputState, CancelState, BtcaChunk } from '../types.ts';
 import { formatConversationHistory, type ThreadMessage } from '@btca/shared';
+import { Result } from 'better-result';
+
+import type { Message, InputState, CancelState, BtcaChunk } from '../types.ts';
 import { services, type ChunkUpdate } from '../services.ts';
 import { copyToClipboard } from '../clipboard.ts';
+import { formatError } from '../lib/format-error.ts';
 
 type MessagesState = {
 	// Message history
@@ -188,7 +191,7 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 		// Build the full question with history using shared formatting
 		const questionWithHistory = formatConversationHistory(threadMessages, question);
 
-		try {
+		const result = await Result.tryPromise(async () => {
 			const finalChunks = await services.askQuestion(
 				updatedResources,
 				questionWithHistory,
@@ -205,14 +208,12 @@ export const MessagesProvider: Component<ParentProps> = (props) => {
 				await copyToClipboard(fullResponse);
 				addMessage({ role: 'system', content: 'Answer copied to clipboard!' });
 			}
-		} catch (error) {
-			if (cancelState() !== 'pending') {
-				addMessage({ role: 'system', content: `Error: ${error}` });
-			}
-		} finally {
-			setIsStreaming(false);
-			setCancelState('none');
+		});
+		if (result.isErr() && cancelState() !== 'pending') {
+			addMessage({ role: 'system', content: `Error: ${formatError(result.error)}` });
 		}
+		setIsStreaming(false);
+		setCancelState('none');
 	};
 
 	const requestCancel = () => {
