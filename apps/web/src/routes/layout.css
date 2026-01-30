@@ -189,7 +189,19 @@
 		font-size: 13px;
 		letter-spacing: 0.02em;
 		background: transparent;
-		transition: background 120ms ease;
+		transition:
+			background 120ms ease,
+			transform 120ms ease;
+		position: relative;
+	}
+
+	.bc-navLink::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -4px;
+		height: 4px;
 	}
 
 	.bc-navLink:hover {
@@ -209,7 +221,18 @@
 		text-decoration: none;
 		transition:
 			background 120ms ease,
-			border-color 120ms ease;
+			border-color 120ms ease,
+			transform 120ms ease;
+		position: relative;
+	}
+
+	.bc-chip::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -4px;
+		height: 4px;
 	}
 
 	.bc-chip:hover {
@@ -373,6 +396,16 @@
 			transform 220ms ease,
 			border-color 220ms ease,
 			background 220ms ease;
+		position: relative;
+	}
+
+	.bc-cardHover::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -6px;
+		height: 6px;
 	}
 
 	.bc-cardHover:hover {
@@ -446,7 +479,18 @@
 		color: hsl(var(--bc-fg));
 		transition:
 			background 120ms ease,
-			border-color 120ms ease;
+			border-color 120ms ease,
+			transform 120ms ease;
+		position: relative;
+	}
+
+	.bc-iconBtn::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -4px;
+		height: 4px;
 	}
 
 	.bc-iconBtn:hover {
