@@ -13,7 +13,7 @@
 	} from '@lucide/svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
 
-	type InstanceAction = 'wake' | 'stop' | 'update';
+	type InstanceAction = 'wake' | 'stop' | 'update' | 'reset';
 	const instanceStore = getInstanceStore();
 	let pendingAction = $state<InstanceAction | null>(null);
 	let isExpanded = $state(false);
@@ -79,7 +79,7 @@
 		},
 		error: {
 			label: 'Attention',
-			description: 'Instance hit an error. Try waking again.',
+			description: 'Instance hit an error. Retry provisioning to recover.',
 			tone: 'error',
 			icon: AlertTriangle
 		}
@@ -122,6 +122,7 @@
 	);
 	const canStop = $derived.by(() => instanceStore.state === 'running');
 	const canUpdate = $derived.by(() => ['running', 'stopped'].includes(instanceStore.state ?? ''));
+	const canReset = $derived.by(() => instanceStore.state === 'error');
 
 	const storageUsed = $derived.by(() => instanceStore.storageUsedBytes ?? 0);
 	const storagePercent = $derived.by(() => Math.min((storageUsed / storageLimitBytes) * 100, 100));
@@ -140,6 +141,13 @@
 		}
 		return parts.join(', ');
 	});
+
+	const errorText = $derived.by(
+		() =>
+			instanceStore.instance?.errorMessage ??
+			instanceStore.error ??
+			'Instance failed to start. Please retry.'
+	);
 
 	function formatBytes(bytes: number) {
 		if (!bytes) return '0 B';
@@ -180,6 +188,8 @@
 				await instanceStore.wake();
 			} else if (action === 'stop') {
 				await instanceStore.stop();
+			} else if (action === 'reset') {
+				await instanceStore.reset();
 			} else {
 				await instanceStore.update();
 			}
@@ -274,6 +284,33 @@
 					</div>
 				</div>
 			{:else}
+				{#if instanceStore.state === 'error'}
+					<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
+						<div class="flex items-start gap-3">
+							<div class="bc-logoMark shrink-0">
+								<AlertTriangle size={16} />
+							</div>
+							<div class="min-w-0 flex-1">
+								<h3 class="text-sm font-semibold">Instance needs attention</h3>
+								<p class="mt-1 text-xs text-red-500">{errorText}</p>
+								<button
+									type="button"
+									class="bc-btn mt-3 text-xs"
+									onclick={() => runAction('reset')}
+									disabled={!canReset || pendingAction !== null}
+								>
+									{#if pendingAction === 'reset'}
+										<Loader2 size={12} class="animate-spin" />
+										Retrying...
+									{:else}
+										<RefreshCcw size={12} />
+										Retry provisioning
+									{/if}
+								</button>
+							</div>
+						</div>
+					</div>
+				{/if}
 				<div class="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
 					<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
 						<div class="flex items-start justify-between gap-4">
@@ -348,7 +385,7 @@
 								{/if}
 							</button>
 						</div>
-						{#if instanceStore.error || instanceStore.instance?.errorMessage}
+						{#if instanceStore.state !== 'error' && (instanceStore.error || instanceStore.instance?.errorMessage)}
 							<div class="mt-3 flex items-start gap-2 text-xs text-red-500">
 								<AlertTriangle size={14} />
 								<span>{instanceStore.error ?? instanceStore.instance?.errorMessage}</span>

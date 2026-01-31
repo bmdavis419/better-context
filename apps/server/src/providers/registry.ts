@@ -18,6 +18,7 @@ import { createPerplexity } from '@ai-sdk/perplexity';
 import { createTogetherAI } from '@ai-sdk/togetherai';
 import { createXai } from '@ai-sdk/xai';
 
+import { createCursor } from './cursor.ts';
 import { createOpenCodeZen } from './opencode.ts';
 import { createOpenRouter } from './openrouter.ts';
 
@@ -45,6 +46,8 @@ export const PROVIDER_REGISTRY: Record<string, ProviderFactory> = {
 
 	// OpenAI
 	openai: createOpenAI as ProviderFactory,
+	// Cursor
+	cursor: createCursor as ProviderFactory,
 
 	// Google
 	google: createGoogleGenerativeAI as ProviderFactory,
@@ -80,7 +83,8 @@ export const PROVIDER_ALIASES: Record<string, string> = {
 	vertex: 'google-vertex',
 	bedrock: 'amazon-bedrock',
 	grok: 'xai',
-	together: 'togetherai'
+	together: 'togetherai',
+	'cursor-cli': 'cursor'
 };
 
 /**

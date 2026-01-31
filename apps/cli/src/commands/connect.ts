@@ -19,6 +19,7 @@ const RECOMMENDED_MODELS = [
 // Provider display info
 const PROVIDER_INFO: Record<string, { label: string; requiresAuth: boolean }> = {
 	opencode: { label: 'OpenCode Zen (free tier available)', requiresAuth: false },
+	cursor: { label: 'Cursor CLI (ask mode)', requiresAuth: true },
 	anthropic: { label: 'Anthropic (Claude)', requiresAuth: true },
 	openai: { label: 'OpenAI (GPT)', requiresAuth: true },
 	google: { label: 'Google (Gemini)', requiresAuth: true },
@@ -135,6 +136,31 @@ async function runOpencodeAuth(providerId: string): Promise<boolean> {
 	return false;
 }
 
+async function runCursorAuth(): Promise<boolean> {
+	console.log('\nOpening Cursor CLI authentication...');
+	console.log('(This requires cursor-agent to be installed)\n');
+
+	const result = await Result.tryPromise(async () => {
+		const proc = spawn(['cursor-agent', 'login'], {
+			stdin: 'inherit',
+			stdout: 'inherit',
+			stderr: 'inherit'
+		});
+
+		const exitCode = await proc.exited;
+		return exitCode === 0;
+	});
+
+	if (Result.isOk(result)) return result.value;
+
+	console.error(
+		'Failed to run cursor-agent login:',
+		result.error instanceof Error ? result.error.message : String(result.error)
+	);
+	console.error('\nInstall Cursor CLI or set CURSOR_API_KEY to authenticate.');
+	return false;
+}
+
 export const connectCommand = new Command('connect')
 	.description('Configure the AI provider and model')
 	.option('-g, --global', 'Save to global config instead of project config')
@@ -161,7 +187,11 @@ export const connectCommand = new Command('connect')
 				// Warn if provider not connected
 				if (options.provider !== 'opencode' && !providers.connected.includes(options.provider)) {
 					console.warn(`\nWarning: Provider "${options.provider}" is not connected.`);
-					console.warn('Run "opencode auth" to configure credentials.');
+					if (options.provider === 'cursor') {
+						console.warn('Run "cursor-agent login" or set CURSOR_API_KEY to authenticate.');
+					} else {
+						console.warn('Run "opencode auth" to configure credentials.');
+					}
 				}
 
 				server.stop();
@@ -232,10 +262,12 @@ export const connectCommand = new Command('connect')
 					);
 
 					if (shouldAuth === 'yes') {
-						const success = await runOpencodeAuth(provider);
+						const success =
+							provider === 'cursor' ? await runCursorAuth() : await runOpencodeAuth(provider);
 						if (!success) {
+							const retryHint = provider === 'cursor' ? 'cursor-agent login' : 'opencode auth';
 							console.warn(
-								'\nAuthentication may have failed. You can try again later with: opencode auth'
+								`\nAuthentication may have failed. You can try again later with: ${retryHint}`
 							);
 						}
 					} else {

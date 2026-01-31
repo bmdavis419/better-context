@@ -120,10 +120,30 @@ const AddGitResourceRequestSchema = z.object({
 	specialNotes: GitResourceSchema.shape.specialNotes
 });
 
+const isWsl = () =>
+	process.platform === 'linux' &&
+	(Boolean(process.env.WSL_DISTRO_NAME) ||
+		Boolean(process.env.WSL_INTEROP) ||
+		Boolean(process.env.WSLENV));
+
+const normalizeWslPath = (value: string) => {
+	if (!isWsl()) return value;
+	const match = value.match(/^([a-zA-Z]):\\(.*)$/);
+	if (!match) return value;
+	const drive = match[1]!.toLowerCase();
+	const rest = match[2]!.replace(/\\/g, '/');
+	return `/mnt/${drive}/${rest}`;
+};
+
+const LocalPathRequestSchema = z.preprocess(
+	(value) => (typeof value === 'string' ? normalizeWslPath(value) : value),
+	LocalResourceSchema.shape.path
+) as z.ZodType<string>;
+
 const AddLocalResourceRequestSchema = z.object({
 	type: z.literal('local'),
 	name: LocalResourceSchema.shape.name,
-	path: LocalResourceSchema.shape.path,
+	path: LocalPathRequestSchema,
 	specialNotes: LocalResourceSchema.shape.specialNotes
 });
 

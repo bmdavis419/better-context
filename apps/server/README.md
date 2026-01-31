@@ -130,7 +130,7 @@ Update the AI provider and model configuration.
 
 The server reads configuration from `~/.btca/config.toml` or your local project's `.btca/config.toml`. You'll need to configure:
 
-- **AI Provider**: OpenCode AI provider (e.g., "anthropic")
+- **AI Provider**: OpenCode AI provider (e.g., "opencode", "cursor", "anthropic")
 - **Model**: AI model to use (e.g., "claude-3-7-sonnet-20250219")
 - **Resources**: Local directories or git repositories to query
 
@@ -157,6 +157,8 @@ branch = "main"
 
 - `PORT`: Server port (default: 8080)
 - `OPENCODE_API_KEY`: OpenCode AI API key (required)
+- `CURSOR_API_KEY`: Cursor CLI API key (required when provider is `cursor`)
+- `CURSOR_BASE_URL`: Override Cursor API base URL (optional)
 - `OPENROUTER_API_KEY`: OpenRouter API key (required when provider is `openrouter`)
 - `OPENROUTER_BASE_URL`: Override OpenRouter base URL (optional)
 - `OPENROUTER_HTTP_REFERER`: Optional OpenRouter header for rankings

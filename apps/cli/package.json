@@ -36,7 +36,8 @@
 		"check": "tsgo --noEmit",
 		"format": "prettier --write .",
 		"dev": "bun run src/index.ts",
-		"build": "bun run scripts/build-binaries.ts"
+		"build": "bun run scripts/build-binaries.ts",
+		"prepublishOnly": "bun run scripts/verify-dist.ts"
 	},
 	"devDependencies": {
 		"@btca/shared": "workspace:*",

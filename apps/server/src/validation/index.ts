@@ -72,6 +72,19 @@ const okWithValue = <T>(value: T): ValidationResultWithValue<T> => ({ valid: tru
 const fail = (error: string): ValidationResult => ({ valid: false, error });
 const failWithValue = <T>(error: string): ValidationResultWithValue<T> => ({ valid: false, error });
 const parseUrl = (value: string) => Result.try(() => new URL(value));
+const isWsl = () =>
+	process.platform === 'linux' &&
+	(Boolean(process.env.WSL_DISTRO_NAME) ||
+		Boolean(process.env.WSL_INTEROP) ||
+		Boolean(process.env.WSLENV));
+const normalizeWslPath = (value: string) => {
+	if (!isWsl()) return value;
+	const match = value.match(/^([a-zA-Z]):\\(.*)$/);
+	if (!match) return value;
+	const drive = match[1]!.toLowerCase();
+	const rest = match[2]!.replace(/\\/g, '/');
+	return `/mnt/${drive}/${rest}`;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validators
@@ -301,17 +314,19 @@ export const validateSearchPaths = (searchPaths: string[] | undefined): Validati
  * - Must be absolute path
  */
 export const validateLocalPath = (path: string): ValidationResult => {
-	if (!path || path.trim().length === 0) {
+	const normalizedPath = normalizeWslPath(path);
+
+	if (!normalizedPath || normalizedPath.trim().length === 0) {
 		return fail('Local path cannot be empty');
 	}
 
 	// Reject null bytes
-	if (path.includes('\0')) {
+	if (normalizedPath.includes('\0')) {
 		return fail('Path must not contain null bytes');
 	}
 
 	// Must be absolute path (starts with / on Unix or drive letter on Windows)
-	if (!path.startsWith('/') && !path.match(/^[a-zA-Z]:\\/)) {
+	if (!normalizedPath.startsWith('/') && !normalizedPath.match(/^[a-zA-Z]:\\/)) {
 		return fail('Local path must be an absolute path');
 	}
 
@@ -502,7 +517,8 @@ export const validateLocalResource = (resource: {
 	const nameResult = validateResourceName(resource.name);
 	if (!nameResult.valid) return failWithValue(nameResult.error);
 
-	const pathResult = validateLocalPath(resource.path);
+	const normalizedPath = normalizeWslPath(resource.path);
+	const pathResult = validateLocalPath(normalizedPath);
 	if (!pathResult.valid) return failWithValue(pathResult.error);
 
 	const notesResult = validateNotes(resource.specialNotes);
@@ -510,7 +526,7 @@ export const validateLocalResource = (resource: {
 
 	return okWithValue({
 		name: resource.name,
-		path: resource.path,
+		path: normalizedPath,
 		...(resource.specialNotes && { specialNotes: resource.specialNotes })
 	});
 };
