@@ -13,6 +13,11 @@ import { z } from 'zod';
 import { Result } from 'better-result';
 
 export namespace Auth {
+	const getOpenRouterApiKey = () => {
+		const apiKey = process.env.OPENROUTER_API_KEY;
+		return apiKey && apiKey.trim().length > 0 ? apiKey.trim() : undefined;
+	};
+
 	// Auth schema matching OpenCode's format
 	const ApiKeyAuthSchema = z.object({
 		type: z.literal('api'),
@@ -95,6 +100,9 @@ export namespace Auth {
 	 */
 	export async function getCredentials(providerId: string): Promise<AuthInfo | undefined> {
 		const authData = await readAuthFile();
+		if (providerId === 'openrouter') {
+			return authData.openrouter ?? authData['openrouter.ai'] ?? authData['openrouter-ai'];
+		}
 		return authData[providerId];
 	}
 
@@ -102,6 +110,7 @@ export namespace Auth {
 	 * Check if a provider is authenticated
 	 */
 	export async function isAuthenticated(providerId: string): Promise<boolean> {
+		if (providerId === 'openrouter' && getOpenRouterApiKey()) return true;
 		const auth = await getCredentials(providerId);
 		return auth !== undefined;
 	}
@@ -111,6 +120,11 @@ export namespace Auth {
 	 * Returns undefined if not authenticated or no key available
 	 */
 	export async function getApiKey(providerId: string): Promise<string | undefined> {
+		if (providerId === 'openrouter') {
+			const envKey = getOpenRouterApiKey();
+			if (envKey) return envKey;
+		}
+
 		const auth = await getCredentials(providerId);
 		if (!auth) return undefined;
 
@@ -138,6 +152,15 @@ export namespace Auth {
 	 */
 	export async function getAuthenticatedProviders(): Promise<string[]> {
 		const authData = await readAuthFile();
-		return Object.keys(authData);
+		const providers = new Set(Object.keys(authData));
+
+		if (getOpenRouterApiKey()) {
+			providers.add('openrouter');
+		}
+		if (authData['openrouter.ai'] || authData['openrouter-ai']) {
+			providers.add('openrouter');
+		}
+
+		return Array.from(providers);
 	}
 }

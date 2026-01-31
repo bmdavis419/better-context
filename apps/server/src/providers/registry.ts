@@ -19,6 +19,7 @@ import { createTogetherAI } from '@ai-sdk/togetherai';
 import { createXai } from '@ai-sdk/xai';
 
 import { createOpenCodeZen } from './opencode.ts';
+import { createOpenRouter } from './openrouter.ts';
 
 // Type for provider factory options
 export type ProviderOptions = {
@@ -66,6 +67,7 @@ export const PROVIDER_REGISTRY: Record<string, ProviderFactory> = {
 	togetherai: createTogetherAI as ProviderFactory,
 
 	// OpenAI-compatible providers (for custom endpoints)
+	openrouter: createOpenRouter as ProviderFactory,
 	'openai-compatible': createOpenAICompatible as ProviderFactory
 };
 
