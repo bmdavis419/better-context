@@ -194,10 +194,6 @@ After completing the setup, show me:
 5. **Next steps**:
    - "Resources will be cloned to `~/.local/share/btca/resources/` on first use"
    - "Use `btca clear` to remove cached git repositories if needed"
-   - **If using Cursor**: Run this command to install the btca rule file:
-     ```bash
-     mkdir -p .cursor/rules && curl -fsSL "https://btca.dev/rule" -o .cursor/rules/better_context.mdc && echo "Rule file created."
-     ```
 
 ---
 

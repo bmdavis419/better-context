@@ -31,9 +31,7 @@ export namespace Model {
 			super(
 				providerId === 'openrouter'
 					? `Provider "${providerId}" is not authenticated. Set OPENROUTER_API_KEY to authenticate.`
-					: providerId === 'cursor'
-						? `Provider "${providerId}" is not authenticated. Run 'cursor-agent login' or set CURSOR_API_KEY.`
-						: `Provider "${providerId}" is not authenticated. Run 'opencode auth login' to authenticate.`
+					: `Provider "${providerId}" is not authenticated. Run 'opencode auth login' to authenticate.`
 			);
 			this.providerId = providerId;
 		}

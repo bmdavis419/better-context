@@ -86,33 +86,14 @@
 	let newlyCreatedKey = $state<string | null>(null);
 	let isCreatingKey = $state(false);
 
-	type McpTool = 'cursor' | 'opencode' | 'claude-code';
-	let selectedTool = $state<McpTool>('cursor');
+	type McpTool = 'opencode' | 'claude-code';
+	let selectedTool = $state<McpTool>('opencode');
 
 	const mcpUrl = $derived(
 		page.url.hostname === 'localhost' ? `${page.url.origin}/api/mcp` : 'https://btca.dev/api/mcp'
 	);
 
 	const toolConfigs = $derived({
-		cursor: {
-			name: 'Cursor',
-			docsUrl: 'https://cursor.com/docs/context/mcp#using-mcpjson',
-			filename: '.cursor/mcp.json',
-			config: JSON.stringify(
-				{
-					mcpServers: {
-						'better-context': {
-							url: mcpUrl,
-							headers: {
-								Authorization: 'Bearer YOUR_API_KEY'
-							}
-						}
-					}
-				},
-				null,
-				2
-			)
-		},
 		opencode: {
 			name: 'OpenCode',
 			docsUrl: 'https://opencode.ai/docs/mcp-servers/#remote',
@@ -492,7 +473,7 @@
 							<input
 								type="text"
 								bind:value={newKeyName}
-								placeholder="Key name (e.g., Cursor, Claude)"
+								placeholder="Key name (e.g., OpenCode, Claude)"
 								class="bc-input flex-1 text-sm"
 								onkeydown={(e) => e.key === 'Enter' && handleCreateKey()}
 							/>

@@ -115,34 +115,15 @@
 		}
 	});
 
-	type McpTool = 'cursor' | 'opencode' | 'claude-code';
-	let selectedTool = $state<McpTool>('cursor');
-	let modalSelectedTool = $state<McpTool>('cursor');
+	type McpTool = 'opencode' | 'claude-code';
+	let selectedTool = $state<McpTool>('opencode');
+	let modalSelectedTool = $state<McpTool>('opencode');
 
 	const mcpUrl = $derived(
 		page.url.hostname === 'localhost' ? `${page.url.origin}/api/mcp` : 'https://btca.dev/api/mcp'
 	);
 
 	const toolConfigs = $derived({
-		cursor: {
-			name: 'Cursor',
-			docsUrl: 'https://cursor.com/docs/context/mcp#using-mcpjson',
-			filename: '.cursor/mcp.json',
-			config: JSON.stringify(
-				{
-					mcpServers: {
-						'better-context': {
-							url: mcpUrl,
-							headers: {
-								Authorization: 'Bearer YOUR_API_KEY'
-							}
-						}
-					}
-				},
-				null,
-				2
-			)
-		},
 		opencode: {
 			name: 'OpenCode',
 			docsUrl: 'https://opencode.ai/docs/mcp-servers/#remote',
@@ -179,22 +160,7 @@
 
 	// Config with actual API key for the modal
 	const getConfigWithKey = (tool: McpTool, apiKey: string) => {
-		if (tool === 'cursor') {
-			return JSON.stringify(
-				{
-					mcpServers: {
-						'better-context': {
-							url: mcpUrl,
-							headers: {
-								Authorization: `Bearer ${apiKey}`
-							}
-						}
-					}
-				},
-				null,
-				2
-			);
-		} else if (tool === 'opencode') {
+		if (tool === 'opencode') {
 			return JSON.stringify(
 				{
 					$schema: 'https://opencode.ai/config.json',
@@ -310,7 +276,7 @@ Use the Better Context MCP for documentation questions.
 		showCreateModal = false;
 		newlyCreatedKey = null;
 		newKeyName = '';
-		modalSelectedTool = 'cursor';
+		modalSelectedTool = 'opencode';
 	}
 
 	const formatPercent = (value: number | undefined) =>
@@ -865,7 +831,7 @@ Use the Better Context MCP for documentation questions.
 				<input
 					type="text"
 					bind:value={newKeyName}
-					placeholder="e.g., Cursor, opencode, Claude Desktop"
+					placeholder="e.g., OpenCode, Claude Desktop"
 					class="bc-input mt-4 w-full"
 					onkeydown={(e) => e.key === 'Enter' && handleCreateKey()}
 				/>

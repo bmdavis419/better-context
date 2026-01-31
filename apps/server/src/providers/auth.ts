@@ -7,7 +7,6 @@
  * - macOS: ~/.local/share/opencode/auth.json (uses XDG on macOS too)
  * - Windows: %APPDATA%/opencode/auth.json
  */
-import { Database } from 'bun:sqlite';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { z } from 'zod';
@@ -17,75 +16,6 @@ export namespace Auth {
 	const getOpenRouterApiKey = () => {
 		const apiKey = process.env.OPENROUTER_API_KEY;
 		return apiKey && apiKey.trim().length > 0 ? apiKey.trim() : undefined;
-	};
-
-	const decodeSqliteValue = (value: unknown): string | undefined => {
-		if (typeof value === 'string') return value;
-		if (value instanceof Uint8Array) {
-			const decoded = new TextDecoder().decode(value);
-			return decoded.trim().length > 0 ? decoded : undefined;
-		}
-		if (value && typeof (value as { toString?: () => string }).toString === 'function') {
-			const text = String(value);
-			return text.trim().length > 0 ? text : undefined;
-		}
-		return undefined;
-	};
-
-	const getCursorAuthDbPath = (): string => {
-		const platform = os.platform();
-
-		if (platform === 'darwin') {
-			return path.join(
-				os.homedir(),
-				'Library',
-				'Application Support',
-				'Cursor',
-				'User',
-				'globalStorage',
-				'state.vscdb'
-			);
-		}
-
-		if (platform === 'win32') {
-			const appdata = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
-			return path.join(appdata, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
-		}
-
-		const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-		return path.join(xdgConfig, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
-	};
-
-	const getCursorAccessToken = async (): Promise<string | undefined> => {
-		const dbPath = getCursorAuthDbPath();
-		const file = Bun.file(dbPath);
-		if (!(await file.exists())) return undefined;
-
-		try {
-			const db = new Database(dbPath, { readonly: true });
-			try {
-				const row = db
-					.query('select value from ItemTable where key = ?')
-					.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
-				const token = decodeSqliteValue(row?.value);
-				if (token) return token;
-
-				const fallback = db
-					.query('select value from cursorDiskKV where key = ?')
-					.get('cursorAuth/accessToken') as { value?: unknown } | undefined;
-				return decodeSqliteValue(fallback?.value);
-			} finally {
-				db.close();
-			}
-		} catch {
-			return undefined;
-		}
-	};
-
-	const getCursorApiKey = async (): Promise<string | undefined> => {
-		const apiKey = process.env.CURSOR_API_KEY;
-		if (apiKey && apiKey.trim().length > 0) return apiKey.trim();
-		return getCursorAccessToken();
 	};
 
 	// Auth schema matching OpenCode's format
@@ -181,7 +111,6 @@ export namespace Auth {
 	 */
 	export async function isAuthenticated(providerId: string): Promise<boolean> {
 		if (providerId === 'openrouter' && getOpenRouterApiKey()) return true;
-		if (providerId === 'cursor' && (await getCursorApiKey())) return true;
 		const auth = await getCredentials(providerId);
 		return auth !== undefined;
 	}
@@ -193,10 +122,6 @@ export namespace Auth {
 	export async function getApiKey(providerId: string): Promise<string | undefined> {
 		if (providerId === 'openrouter') {
 			const envKey = getOpenRouterApiKey();
-			if (envKey) return envKey;
-		}
-		if (providerId === 'cursor') {
-			const envKey = await getCursorApiKey();
 			if (envKey) return envKey;
 		}
 
@@ -231,10 +156,6 @@ export namespace Auth {
 
 		if (getOpenRouterApiKey()) {
 			providers.add('openrouter');
-		}
-		const cursorKey = await getCursorApiKey();
-		if (cursorKey) {
-			providers.add('cursor');
 		}
 		if (authData['openrouter.ai'] || authData['openrouter-ai']) {
 			providers.add('openrouter');

@@ -47,25 +47,21 @@
 
 ### Implementation TODOs (P2)
 
-- [x] #131 add Cursor /ask provider integration and docs
 - [x] #129 add hide-thinking flag/config for CLI and UI outputs
 - [x] #94 add official btca opencode tool/plugin + docs
 - [x] #91 add clean output mode to suppress reasoning/tool traces
 - [x] #63 add resume flow for existing chat sessions
 
-1. #131 Add Cursor CLI /ask mode
-   - Add provider integration + docs and CLI connection flow.
-
-2. #129 Option to hide thinking
+1. #129 Option to hide thinking
    - Add CLI/config flag to suppress reasoning output (default on).
 
-3. #94 btca opencode tool/plugin
+2. #94 btca opencode tool/plugin
    - Provide an official tool/plugin file + docs.
 
-4. #91 Filter reasoning + tool-call traces (sub-agent mode)
+3. #91 Filter reasoning + tool-call traces (sub-agent mode)
    - Add a clean output mode that hides reasoning + tool call logs.
 
-5. #63 Resume a session started with btca chat
+4. #63 Resume a session started with btca chat
    - Add `btca chat --thread <id>` and a thread list picker.
 
 ## Deferred/Close

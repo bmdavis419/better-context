@@ -850,7 +850,7 @@ const initCommand = new Command('init')
 // MCP Config Templates
 // ─────────────────────────────────────────────────────────────────────────────
 
-type McpAgent = 'opencode' | 'claude' | 'cursor';
+type McpAgent = 'opencode' | 'claude';
 
 const MCP_API_KEY_URL = 'https://btca.dev/app/settings?tab=mcp';
 
@@ -876,17 +876,6 @@ function getMcpConfig(agent: McpAgent, apiKey: string): object | string {
 			// Return shell command string for Claude Code
 			return `claude mcp add --transport http better-context ${mcpUrl} \\
   --header "Authorization: Bearer ${apiKey}"`;
-		case 'cursor':
-			return {
-				mcpServers: {
-					'better-context': {
-						url: mcpUrl,
-						headers: {
-							Authorization: `Bearer ${apiKey}`
-						}
-					}
-				}
-			};
 	}
 }
 
@@ -896,8 +885,6 @@ function getMcpInstructions(agent: McpAgent): string {
 			return `Add this to your ${bold('opencode.json')} file:`;
 		case 'claude':
 			return `Run this command to add the MCP server:`;
-		case 'cursor':
-			return `Add this to your ${bold('.cursor/mcp.json')} file:`;
 	}
 }
 
@@ -906,7 +893,7 @@ function getMcpInstructions(agent: McpAgent): string {
  */
 const mcpCommand = new Command('mcp')
 	.description('Output MCP configuration for your AI agent')
-	.argument('[agent]', 'Agent type: opencode, claude, or cursor')
+	.argument('[agent]', 'Agent type: opencode or claude')
 	.action(async (agent?: string) => {
 		const result = await Result.tryPromise(async () => {
 			const auth = await loadAuth();
@@ -921,9 +908,9 @@ const mcpCommand = new Command('mcp')
 
 			if (agent) {
 				const normalized = agent.toLowerCase();
-				if (normalized !== 'opencode' && normalized !== 'claude' && normalized !== 'cursor') {
+				if (normalized !== 'opencode' && normalized !== 'claude') {
 					console.error(red(`Invalid agent: ${agent}`));
-					console.error('Valid options: opencode, claude, cursor');
+					console.error('Valid options: opencode, claude');
 					process.exit(1);
 				}
 				selectedAgent = normalized as McpAgent;
@@ -932,7 +919,6 @@ const mcpCommand = new Command('mcp')
 				console.log('\nSelect your AI agent:\n');
 				console.log('  1) OpenCode');
 				console.log('  2) Claude Code');
-				console.log('  3) Cursor');
 				console.log('');
 
 				const rl = createRl();
@@ -948,8 +934,6 @@ const mcpCommand = new Command('mcp')
 					selectedAgent = 'opencode';
 				} else if (num === 2) {
 					selectedAgent = 'claude';
-				} else if (num === 3) {
-					selectedAgent = 'cursor';
 				} else {
 					console.error(red('Invalid selection.'));
 					process.exit(1);

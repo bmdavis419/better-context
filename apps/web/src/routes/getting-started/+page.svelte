@@ -27,9 +27,6 @@
 	const SETUP_PROMPT =
 		SETUP_PROMPT_RAW.split('## Detailed Instructions')[1]?.split('---')[1]?.trim() ?? '';
 
-	// Cursor Rule setup command
-	const CURSOR_RULE_CMD = `mkdir -p .cursor/rules && curl -fsSL "https://btca.dev/rule" -o .cursor/rules/better_context.mdc && echo "Rule file created."`;
-
 	// Track completed steps
 	let completedSteps = $state<Set<number>>(new Set());
 
@@ -227,9 +224,8 @@
 		<div class="mt-4 ml-14">
 			<p class="max-w-2xl text-sm bc-prose">
 				Copy this prompt and paste it into your AI coding agent (like
-				<a href="https://opencode.ai" target="_blank" rel="noreferrer">OpenCode</a>, Cursor, or
-				similar). The agent will scan your dependencies, suggest resources, and create a
-				project-specific config.
+				<a href="https://opencode.ai" target="_blank" rel="noreferrer">OpenCode</a> or similar). The agent
+				will scan your dependencies, suggest resources, and create a project-specific config.
 			</p>
 
 			<!-- Setup Prompt -->
@@ -285,32 +281,6 @@
 						>
 					</li>
 				</ul>
-			</div>
-
-			<!-- Cursor Rule Setup -->
-			<div class="mt-6 bc-card bc-ring p-5">
-				<div class="flex items-center justify-between gap-3 mb-3">
-					<div class="text-sm font-semibold">Cursor Rule Setup (optional)</div>
-					<CopyButton text={CURSOR_RULE_CMD} label="Copy command" />
-				</div>
-				<p class="text-sm bc-prose mb-3">
-					If you're using Cursor, run this command to install the btca rule file. This teaches your
-					AI agent how to use btca correctly.
-				</p>
-				<div class="bc-codeFrame">
-					<div class="p-4">
-						{#if shikiStore.highlighter}
-							{@html shikiStore.highlighter.codeToHtml(CURSOR_RULE_CMD, {
-								theme: shikiTheme,
-								lang: 'bash',
-								rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-							})}
-						{:else}
-							<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CURSOR_RULE_CMD}</code
-								></pre>
-						{/if}
-					</div>
-				</div>
 			</div>
 		</div>
 	</section>
