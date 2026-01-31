@@ -12,6 +12,21 @@ const targets = [
 	'bun-windows-x64'
 ] as const;
 
+const parseTargets = () => {
+	const raw = process.env.BTCA_TARGETS?.trim();
+	if (!raw) return targets;
+	const requested = raw
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+	const unknown = requested.filter((entry) => !targets.includes(entry as (typeof targets)[number]));
+	if (unknown.length) {
+		console.error(`[btca] Unknown build targets: ${unknown.join(', ')}`);
+		process.exit(1);
+	}
+	return targets.filter((target) => requested.includes(target));
+};
+
 const outputNames: Record<(typeof targets)[number], string> = {
 	'bun-darwin-arm64': 'btca-darwin-arm64',
 	'bun-darwin-x64': 'btca-darwin-x64',
@@ -35,7 +50,7 @@ async function main() {
 		.catch(() => false);
 	await $`mkdir -p dist`;
 
-	for (const target of targets) {
+	for (const target of parseTargets()) {
 		const outfile = `dist/${outputNames[target]}`;
 		console.log(`Building ${target} -> ${outfile} (v${VERSION})`);
 		const result = await Bun.build({
