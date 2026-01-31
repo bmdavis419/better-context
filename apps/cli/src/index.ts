@@ -7,6 +7,7 @@ import { initCommand } from './commands/init.ts';
 import { removeCommand } from './commands/remove.ts';
 import { remoteCommand } from './commands/remote.ts';
 import { serveCommand } from './commands/serve.ts';
+import { mcpCommand } from './commands/mcp.ts';
 import { launchTui } from './commands/tui.ts';
 import { launchRepl } from './commands/repl.ts';
 import packageJson from '../package.json';
@@ -43,6 +44,9 @@ program.addCommand(initCommand);
 // Utility commands
 program.addCommand(clearCommand);
 program.addCommand(serveCommand);
+
+// Local MCP helper command
+program.addCommand(mcpCommand);
 
 // Remote mode commands
 program.addCommand(remoteCommand);

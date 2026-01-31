@@ -72,6 +72,9 @@
 		"hono": "^4.7.11",
 		"just-bash": "^2.7.0",
 		"opencode-ai": "^1.1.36",
+		"tmcp": "^1.19.0",
+		"@tmcp/transport-http": "^0.8.4",
+		"@tmcp/adapter-zod": "^0.1.7",
 		"zod": "^3.25.76"
 	}
 }

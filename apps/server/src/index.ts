@@ -2,6 +2,10 @@ import { Hono } from 'hono';
 import type { Context as HonoContext, Next } from 'hono';
 import { z } from 'zod';
 
+import { McpServer } from 'tmcp';
+import { HttpTransport } from '@tmcp/transport-http';
+import { ZodJsonSchemaAdapter } from '@tmcp/adapter-zod';
+
 import { Agent } from './agent/service.ts';
 import { Collections } from './collections/service.ts';
 import { getCollectionKey } from './collections/types.ts';
@@ -169,8 +173,12 @@ const createApp = (deps: {
 	resources: Resources.Service;
 	collections: Collections.Service;
 	agent: Agent.Service;
+	enableMcp?: boolean;
+	mcpToken?: string;
 }) => {
 	const { config, collections, agent } = deps;
+	const enableMcp = deps.enableMcp ?? false;
+	const mcpToken = deps.mcpToken;
 
 	const app = new Hono()
 		// ─────────────────────────────────────────────────────────────────────
@@ -219,6 +227,149 @@ const createApp = (deps: {
 				service: 'btca-server',
 				version: '0.0.1'
 			});
+		})
+
+		// MCP endpoint (optional)
+		.all('/mcp', async (c: HonoContext) => {
+			if (!enableMcp) {
+				return c.json({ error: 'MCP is disabled' }, 404);
+			}
+
+			if (mcpToken) {
+				const authHeader = c.req.header('Authorization');
+				if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== mcpToken) {
+					return c.json({ error: 'Unauthorized' }, 401);
+				}
+			}
+
+			// Create the MCP server lazily (only when endpoint is hit)
+			const mcpServer = new McpServer<any, { ok: true }>(
+				{
+					name: 'better-context',
+					version: '1.0.0',
+					description: 'Better Context MCP Server (local)'
+				},
+				{
+					adapter: new ZodJsonSchemaAdapter(),
+					capabilities: { tools: { listChanged: false } }
+				}
+			);
+
+			mcpServer.tool(
+				{
+					name: 'listResources',
+					description:
+						'List all available resources from the local btca.config.jsonc. Call this first to see what resources you can query.'
+				},
+				async () => {
+					const resources = config.resources.map((r) => {
+						if (r.type === 'git') {
+							return {
+								type: 'git',
+								name: r.name,
+								url: r.url,
+								branch: r.branch,
+								searchPath: r.searchPath ?? null,
+								searchPaths: r.searchPaths ?? null,
+								specialNotes: r.specialNotes ?? null
+							};
+						}
+						return {
+							type: 'local',
+							name: r.name,
+							path: r.path,
+							specialNotes: r.specialNotes ?? null
+						};
+					});
+
+					return {
+						content: [{ type: 'text' as const, text: JSON.stringify(resources, null, 2) }]
+					};
+				}
+			);
+
+			const askSchema = z.object({
+				question: z.string().describe('The question to ask about the resources'),
+				resources: z
+					.array(z.string())
+					.optional()
+					.describe('Optional array of resource names to query (defaults to all)')
+			});
+
+			mcpServer.tool(
+				{
+					name: 'ask',
+					description:
+						'Ask a question about specific resources using the local btca server. Use listResources to discover available resources.',
+					schema: askSchema
+				},
+				async ({ question, resources }) => {
+					const resourceNames =
+						resources && resources.length > 0 ? resources : config.resources.map((r) => r.name);
+
+					const collection = await collections.load({ resourceNames, quiet: true });
+					const result = await agent.ask({ collection, question });
+
+					return {
+						content: [{ type: 'text' as const, text: result.answer }]
+					};
+				}
+			);
+
+			const addResourceSchema = z.object({
+				urlOrPath: z
+					.string()
+					.describe('GitHub repo URL (https://github.com/owner/repo) or local filesystem path'),
+				name: z.string().describe('Resource name'),
+				branch: z.string().optional().describe('Git branch (default: main)'),
+				searchPath: z.string().optional().describe('Subdirectory to focus on'),
+				searchPaths: z.array(z.string()).optional().describe('Multiple subdirectories to focus on'),
+				notes: z.string().optional().describe('Special notes for the agent')
+			});
+
+			mcpServer.tool(
+				{
+					name: 'addResource',
+					description:
+						'Add a resource to btca.config.jsonc (git repository or local directory).',
+					schema: addResourceSchema
+				},
+				async ({ urlOrPath, name, branch, searchPath, searchPaths, notes }) => {
+					const isUrl = /^https?:\/\//.test(urlOrPath);
+
+					if (isUrl) {
+						const normalizedUrl = normalizeGitHubUrl(urlOrPath);
+						const resource = {
+							type: 'git' as const,
+							name,
+							url: normalizedUrl,
+							branch: branch ?? 'main',
+							...(searchPath && { searchPath }),
+							...(searchPaths && { searchPaths }),
+							...(notes && { specialNotes: notes })
+						};
+						const added = await config.addResource(resource);
+						return {
+							content: [{ type: 'text' as const, text: JSON.stringify(added, null, 2) }]
+						};
+					}
+
+					const resource = {
+						type: 'local' as const,
+						name,
+						path: urlOrPath,
+						...(notes && { specialNotes: notes })
+					};
+					const added = await config.addResource(resource);
+					return {
+						content: [{ type: 'text' as const, text: JSON.stringify(added, null, 2) }]
+					};
+				}
+			);
+
+			const transport = new HttpTransport(mcpServer, { path: '/mcp' });
+			const response = await transport.respond(c.req.raw, { ok: true });
+			return response ?? c.json({ error: 'Not Found' }, 404);
 		})
 
 		// GET /config
@@ -484,6 +635,10 @@ export interface ServerInstance {
 export interface StartServerOptions {
 	port?: number;
 	quiet?: boolean;
+	/** Enable MCP (Model Context Protocol) endpoint at /mcp */
+	enableMcp?: boolean;
+	/** Optional Bearer token required to access /mcp when MCP is enabled */
+	mcpToken?: string;
 }
 
 /**
@@ -512,7 +667,14 @@ export const startServer = async (options: StartServerOptions = {}): Promise<Ser
 	const collections = Collections.create({ config, resources });
 	const agent = Agent.create(config);
 
-	const app = createApp({ config, resources, collections, agent });
+	const app = createApp({
+	config,
+	resources,
+	collections,
+	agent,
+	enableMcp: options.enableMcp ?? false,
+	mcpToken: options.mcpToken
+});
 
 	const server = Bun.serve({
 		port: requestedPort,
@@ -541,7 +703,7 @@ export type { BtcaStreamEvent, BtcaStreamMetaEvent } from './stream/types.ts';
 // Auto-start when run directly (not imported)
 const isMainModule = import.meta.main;
 if (isMainModule) {
-	const server = await startServer({ port: PORT });
+	const server = await startServer({ port: PORT, enableMcp: true });
 	const shutdown = () => {
 		Metrics.info('server.shutdown', { reason: 'signal' });
 		server.stop();

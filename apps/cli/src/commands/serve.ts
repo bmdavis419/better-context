@@ -22,12 +22,18 @@ function formatError(error: unknown): string {
 export const serveCommand = new Command('serve')
 	.description('Start the btca server and listen for requests')
 	.option('-p, --port <port>', 'Port to listen on (default: 8080)')
-	.action(async (options: { port?: string }) => {
+	.option('--mcp', 'Enable MCP (Model Context Protocol) endpoint at /mcp')
+	.option('--mcp-token <token>', 'Require Bearer token for the /mcp endpoint')
+	.action(async (options: { port?: string; mcp?: boolean; mcpToken?: string }) => {
 		const port = options.port ? parseInt(options.port, 10) : DEFAULT_PORT;
 
 		try {
 			console.log(`Starting btca server on port ${port}...`);
-			const server = await startServer({ port });
+			const server = await startServer({
+				port,
+				enableMcp: options.mcp ?? false,
+				mcpToken: options.mcpToken
+			});
 			console.log(`btca server running at ${server.url}`);
 			console.log('Press Ctrl+C to stop');
 
