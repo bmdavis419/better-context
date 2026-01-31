@@ -113,10 +113,14 @@ export namespace Agent {
 			super(`Provider "${args.providerId}" is not connected`);
 			this.providerId = args.providerId;
 			this.connectedProviders = args.connectedProviders;
+			const baseHint =
+				args.providerId === 'openrouter'
+					? 'Set OPENROUTER_API_KEY to authenticate OpenRouter.'
+					: CommonHints.RUN_AUTH;
 			if (args.connectedProviders.length > 0) {
-				this.hint = `${CommonHints.RUN_AUTH} Connected providers: ${args.connectedProviders.join(', ')}.`;
+				this.hint = `${baseHint} Connected providers: ${args.connectedProviders.join(', ')}.`;
 			} else {
-				this.hint = `${CommonHints.RUN_AUTH} No providers are currently connected.`;
+				this.hint = `${baseHint} No providers are currently connected.`;
 			}
 		}
 	}

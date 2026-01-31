@@ -29,7 +29,9 @@ export namespace Model {
 
 		constructor(providerId: string) {
 			super(
-				`Provider "${providerId}" is not authenticated. Run 'opencode auth login' to authenticate.`
+				providerId === 'openrouter'
+					? `Provider "${providerId}" is not authenticated. Set OPENROUTER_API_KEY to authenticate.`
+					: `Provider "${providerId}" is not authenticated. Run 'opencode auth login' to authenticate.`
 			);
 			this.providerId = providerId;
 		}

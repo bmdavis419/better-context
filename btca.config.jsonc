@@ -125,6 +125,6 @@
 			"specialNotes": "Daytona TypeScript SDK. Use for sandbox creation, management, and API reference."
 		}
 	],
-	"model": "claude-haiku-4-5",
-	"provider": "opencode"
+	"model": "anthropic/claude-haiku-4.5",
+	"provider": "openrouter"
 }

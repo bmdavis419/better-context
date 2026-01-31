@@ -157,6 +157,10 @@ branch = "main"
 
 - `PORT`: Server port (default: 8080)
 - `OPENCODE_API_KEY`: OpenCode AI API key (required)
+- `OPENROUTER_API_KEY`: OpenRouter API key (required when provider is `openrouter`)
+- `OPENROUTER_BASE_URL`: Override OpenRouter base URL (optional)
+- `OPENROUTER_HTTP_REFERER`: Optional OpenRouter header for rankings
+- `OPENROUTER_X_TITLE`: Optional OpenRouter header for rankings
 
 ## TypeScript Types
 
