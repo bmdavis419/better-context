@@ -144,6 +144,11 @@ function processStreamEvent(
 	chunkOrder: string[],
 	onChunkUpdate: (update: ChunkUpdate) => void
 ): void {
+	const streamOptions = globalThis.__BTCA_STREAM_OPTIONS__ ?? {
+		showThinking: true,
+		showTools: true
+	};
+
 	switch (event.type) {
 		case 'text.delta': {
 			// Accumulate text deltas into a single text chunk
@@ -162,6 +167,7 @@ function processStreamEvent(
 		}
 
 		case 'reasoning.delta': {
+			if (!streamOptions.showThinking) return;
 			// Accumulate reasoning deltas
 			const reasoningChunkId = '__reasoning__';
 			const existing = chunksById.get(reasoningChunkId);
@@ -178,6 +184,7 @@ function processStreamEvent(
 		}
 
 		case 'tool.updated': {
+			if (!streamOptions.showTools) return;
 			const existing = chunksById.get(event.callID);
 			const state =
 				event.state.status === 'pending'

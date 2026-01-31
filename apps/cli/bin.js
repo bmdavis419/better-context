@@ -33,10 +33,17 @@ const binPath = path.join(__dirname, 'dist', binaryName);
 const binFile = Bun.file(binPath);
 
 if (!(await binFile.exists())) {
-	console.error(
-		`[btca] Prebuilt binary not found for ${PLATFORM_ARCH}. ` +
-			'Try reinstalling, or open an issue if the problem persists.'
-	);
+	const glob = new Bun.Glob('dist/*');
+	const entries = [];
+	for await (const entry of glob.scan({ cwd: __dirname })) {
+		entries.push(entry.replace(/^dist\//, ''));
+	}
+	const available = entries.length
+		? `Available binaries: ${entries.join(', ')}`
+		: 'No binaries found in dist/.';
+	console.error(`[btca] Prebuilt binary not found for ${PLATFORM_ARCH} (${binaryName}).`);
+	console.error(`[btca] ${available}`);
+	console.error('[btca] Try reinstalling, or open an issue if the problem persists.');
 	process.exit(1);
 }
 

@@ -46,6 +46,9 @@ Options:
 
 - `-r, --resource <name...>` - Resources to search (can specify multiple)
 - `-q, --question <text>` - Question to ask (required)
+- `--no-thinking` - Hide reasoning output
+- `--no-tools` - Hide tool-call traces
+- `--sub-agent` - Emit clean output (no reasoning or tool traces)
 
 Examples:
 
@@ -92,6 +95,24 @@ btca uses a config file at `~/.config/btca/btca.config.jsonc`. Manage configurat
 btca config model --provider opencode --model claude-haiku-4-5
 ```
 
+#### Cursor CLI Provider
+
+To use Cursor's CLI /ask mode:
+
+```bash
+cursor-agent login
+# or set CURSOR_API_KEY in your environment
+
+btca connect
+# choose "Cursor CLI (ask mode)" when prompted
+```
+
+You can also set it directly:
+
+```bash
+btca config model --provider cursor --model <cursor-model-id>
+```
+
 ### List Resources
 
 ```bash
@@ -134,6 +155,16 @@ btca --server http://localhost:3000
 # Specify port for auto-started server
 btca --port 3001
 ```
+
+## OpenCode MCP Plugin
+
+Download the official OpenCode MCP config template and add your API key:
+
+```bash
+curl -fsSL https://btca.dev/opencode-mcp.json -o opencode.json
+```
+
+Then replace `YOUR_API_KEY` with your MCP API key (see `btca remote mcp` or the web dashboard).
 
 ## TUI Commands
 

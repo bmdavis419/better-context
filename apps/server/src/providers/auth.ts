@@ -18,6 +18,11 @@ export namespace Auth {
 		return apiKey && apiKey.trim().length > 0 ? apiKey.trim() : undefined;
 	};
 
+	const getCursorApiKey = () => {
+		const apiKey = process.env.CURSOR_API_KEY;
+		return apiKey && apiKey.trim().length > 0 ? apiKey.trim() : undefined;
+	};
+
 	// Auth schema matching OpenCode's format
 	const ApiKeyAuthSchema = z.object({
 		type: z.literal('api'),
@@ -111,6 +116,7 @@ export namespace Auth {
 	 */
 	export async function isAuthenticated(providerId: string): Promise<boolean> {
 		if (providerId === 'openrouter' && getOpenRouterApiKey()) return true;
+		if (providerId === 'cursor' && getCursorApiKey()) return true;
 		const auth = await getCredentials(providerId);
 		return auth !== undefined;
 	}
@@ -122,6 +128,10 @@ export namespace Auth {
 	export async function getApiKey(providerId: string): Promise<string | undefined> {
 		if (providerId === 'openrouter') {
 			const envKey = getOpenRouterApiKey();
+			if (envKey) return envKey;
+		}
+		if (providerId === 'cursor') {
+			const envKey = getCursorApiKey();
 			if (envKey) return envKey;
 		}
 
@@ -156,6 +166,9 @@ export namespace Auth {
 
 		if (getOpenRouterApiKey()) {
 			providers.add('openrouter');
+		}
+		if (getCursorApiKey()) {
+			providers.add('cursor');
 		}
 		if (authData['openrouter.ai'] || authData['openrouter-ai']) {
 			providers.add('openrouter');

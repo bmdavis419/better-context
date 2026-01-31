@@ -6,6 +6,15 @@
 - Each stack adds a small TODO checklist for its section.
 
 ## P0/P1 Fix Now
+### Implementation TODOs (P0/P1)
+- [x] #140 add structured error reporting and surface instance start errors with retry
+- [x] #101 verify linux-arm64 artifact is published; add prepublish artifact check
+- [x] #135/#121 refine @mention parsing to ignore non-resource @ tokens; close dup
+- [x] #138 detect WSL and use clip.exe for clipboard
+- [x] #90 normalize Windows paths (WSL drive mapping) before validation
+- [x] #124 strip echoed prompt during streaming to avoid UI flash
+- [x] #136 remove hover translateY flicker (use shadow/overlay)
+
 1) #140 Web Instance unable to start (P0)
    - Add structured error reporting in `apps/web/src/convex/instances/actions.ts` and surface a clear UI error + retry.
    - Improve logging around Daytona sandbox start and btca health checks to isolate root cause.
@@ -32,6 +41,13 @@
    - Replace hover translateY with shadow/outline, or add overlay to avoid hover target shift.
 
 ## P2 Plan Soon
+### Implementation TODOs (P2)
+- [x] #131 add Cursor /ask provider integration and docs
+- [x] #129 add hide-thinking flag/config for CLI and UI outputs
+- [x] #94 add official btca opencode tool/plugin + docs
+- [x] #91 add clean output mode to suppress reasoning/tool traces
+- [x] #63 add resume flow for existing chat sessions
+
 1) #131 Add Cursor CLI /ask mode
    - Add provider integration + docs and CLI connection flow.
 
@@ -48,11 +64,17 @@
    - Add `btca chat --thread <id>` and a thread list picker.
 
 ## Deferred/Close
+### Deferred/Close Notes
+- [x] #93 document deferral rationale and revisit after permissions model is defined
+- [x] #97 verify rewrite covers tool toggles, then close with pointer to new config
+
 1) #93 Opt-in: allow btca to read files outside the collection
    - Defer due to security/permissions complexity.
+   - Rationale: needs scoped consent + audit trail before allowing reads outside configured resources.
 
 2) #97 Config options to enable/disable custom tools
    - Close after verifying rewrite already provides this.
+   - Verified: rewrite uses `btca.config.jsonc` with fixed tool surface; no custom tool toggles needed.
 
 ## Acceptance / checks
 - Run: `bun run check:all`

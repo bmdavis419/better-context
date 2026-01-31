@@ -28,7 +28,10 @@ const program = new Command()
 	.option(
 		'--no-tui',
 		'Use simple REPL mode instead of TUI (useful for Windows or minimal terminals)'
-	);
+	)
+	.option('--no-thinking', 'Hide reasoning output in REPL mode')
+	.option('--no-tools', 'Hide tool-call traces in REPL mode')
+	.option('--sub-agent', 'Emit clean output (no reasoning/tool traces) in REPL mode');
 
 // Resource management commands
 program.addCommand(addCommand);
@@ -49,23 +52,32 @@ program.addCommand(serveCommand);
 program.addCommand(remoteCommand);
 
 // Default action (no subcommand) → launch TUI or REPL
-program.action(async (options: { server?: string; port?: number; tui?: boolean }) => {
-	const result = await Result.tryPromise(async () => {
-		// --no-tui sets tui to false
-		if (options.tui === false) {
-			await launchRepl(options);
-		} else {
-			await launchTui(options);
-		}
-	});
+program.action(
+	async (options: {
+		server?: string;
+		port?: number;
+		tui?: boolean;
+		thinking?: boolean;
+		tools?: boolean;
+		subAgent?: boolean;
+	}) => {
+		const result = await Result.tryPromise(async () => {
+			// --no-tui sets tui to false
+			if (options.tui === false) {
+				await launchRepl(options);
+			} else {
+				await launchTui(options);
+			}
+		});
 
-	if (Result.isError(result)) {
-		console.error(
-			'Error:',
-			result.error instanceof Error ? result.error.message : String(result.error)
-		);
-		process.exit(1);
+		if (Result.isError(result)) {
+			console.error(
+				'Error:',
+				result.error instanceof Error ? result.error.message : String(result.error)
+			);
+			process.exit(1);
+		}
 	}
-});
+);
 
 program.parse();

@@ -189,12 +189,14 @@
 		font-size: 13px;
 		letter-spacing: 0.02em;
 		background: transparent;
-		transition: background 120ms ease;
+		transition:
+			background 120ms ease,
+			box-shadow 120ms ease;
 	}
 
 	.bc-navLink:hover {
 		background: color-mix(in oklab, hsl(var(--bc-surface)) 55%, transparent);
-		transform: translateY(-1px);
+		box-shadow: 0 1px 0 color-mix(in oklab, hsl(var(--bc-border)) 80%, transparent);
 	}
 
 	.bc-chip {
@@ -209,13 +211,14 @@
 		text-decoration: none;
 		transition:
 			background 120ms ease,
-			border-color 120ms ease;
+			border-color 120ms ease,
+			box-shadow 120ms ease;
 	}
 
 	.bc-chip:hover {
 		border-color: hsl(var(--bc-fg));
 		background: hsl(var(--bc-surface-2));
-		transform: translateY(-1px);
+		box-shadow: 0 1px 0 color-mix(in oklab, hsl(var(--bc-border)) 80%, transparent);
 	}
 
 	.bc-card {
@@ -370,15 +373,15 @@
 
 	.bc-cardHover {
 		transition:
-			transform 220ms ease,
+			box-shadow 220ms ease,
 			border-color 220ms ease,
 			background 220ms ease;
 	}
 
 	.bc-cardHover:hover {
-		transform: translateY(-3px);
 		border-color: color-mix(in oklab, hsl(var(--bc-accent-2)) 30%, hsl(var(--bc-border)));
 		background: color-mix(in oklab, hsl(var(--bc-surface)) 82%, transparent);
+		box-shadow: 0 12px 24px -18px hsl(var(--bc-shadow) / 0.35);
 	}
 
 	.bc-btn {
@@ -446,13 +449,14 @@
 		color: hsl(var(--bc-fg));
 		transition:
 			background 120ms ease,
-			border-color 120ms ease;
+			border-color 120ms ease,
+			box-shadow 120ms ease;
 	}
 
 	.bc-iconBtn:hover {
-		transform: translateY(-1px);
 		border-color: color-mix(in oklab, hsl(var(--bc-accent-2)) 30%, hsl(var(--bc-border)));
 		background: color-mix(in oklab, hsl(var(--bc-surface)) 88%, transparent);
+		box-shadow: 0 1px 0 color-mix(in oklab, hsl(var(--bc-border)) 80%, transparent);
 	}
 
 	.bc-copied {

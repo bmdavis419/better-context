@@ -36,6 +36,7 @@ export namespace StreamService {
 
 		// Track accumulated text and tool state
 		let accumulatedText = '';
+		let emittedText = '';
 		const toolsByCallId = new Map<string, Omit<BtcaStreamToolUpdatedEvent, 'type'>>();
 		let textEvents = 0;
 		let toolEvents = 0;
@@ -61,11 +62,16 @@ export namespace StreamService {
 									textEvents += 1;
 									accumulatedText += event.text;
 
-									const msg: BtcaStreamTextDeltaEvent = {
-										type: 'text.delta',
-										delta: event.text
-									};
-									emit(controller, msg);
+									const nextText = stripUserQuestionFromStart(accumulatedText, coreQuestion);
+									const delta = nextText.slice(emittedText.length);
+									if (delta) {
+										emittedText = nextText;
+										const msg: BtcaStreamTextDeltaEvent = {
+											type: 'text.delta',
+											delta
+										};
+										emit(controller, msg);
+									}
 									break;
 								}
 
@@ -123,7 +129,8 @@ export namespace StreamService {
 									const tools = Array.from(toolsByCallId.values());
 
 									// Strip the echoed user question from the final text
-									let finalText = stripUserQuestionFromStart(accumulatedText, coreQuestion);
+									const finalText = stripUserQuestionFromStart(accumulatedText, coreQuestion);
+									emittedText = finalText;
 
 									Metrics.info('stream.done', {
 										collectionKey: args.meta.collection.key,
