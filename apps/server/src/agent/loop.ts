@@ -131,8 +131,14 @@ export namespace AgentLoop {
 			maxSteps = 40
 		} = options;
 
+		const systemPrompt = buildSystemPrompt(agentInstructions);
+		const sessionId = crypto.randomUUID();
+
 		// Get the model
-		const model = await Model.getModel(providerId, modelId);
+		const model = await Model.getModel(providerId, modelId, {
+			providerOptions:
+				providerId === 'openai' ? { instructions: systemPrompt, sessionId } : undefined
+		});
 
 		// Get initial context
 		const initialContext = await getInitialContext(collectionPath, vfsId);
@@ -155,9 +161,13 @@ export namespace AgentLoop {
 		// Run streamText with tool execution
 		const result = streamText({
 			model,
-			system: buildSystemPrompt(agentInstructions),
+			system: systemPrompt,
 			messages,
 			tools,
+			providerOptions:
+				providerId === 'openai'
+					? { openai: { instructions: systemPrompt, store: false } }
+					: undefined,
 			stopWhen: stepCountIs(maxSteps)
 		});
 
@@ -226,8 +236,14 @@ export namespace AgentLoop {
 			maxSteps = 40
 		} = options;
 
+		const systemPrompt = buildSystemPrompt(agentInstructions);
+		const sessionId = crypto.randomUUID();
+
 		// Get the model
-		const model = await Model.getModel(providerId, modelId);
+		const model = await Model.getModel(providerId, modelId, {
+			providerOptions:
+				providerId === 'openai' ? { instructions: systemPrompt, sessionId } : undefined
+		});
 
 		// Get initial context
 		const initialContext = await getInitialContext(collectionPath, vfsId);
@@ -246,9 +262,13 @@ export namespace AgentLoop {
 		// Run streamText with tool execution
 		const result = streamText({
 			model,
-			system: buildSystemPrompt(agentInstructions),
+			system: systemPrompt,
 			messages,
 			tools,
+			providerOptions:
+				providerId === 'openai'
+					? { openai: { instructions: systemPrompt, store: false } }
+					: undefined,
 			stopWhen: stepCountIs(maxSteps)
 		});
 

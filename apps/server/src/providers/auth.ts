@@ -13,9 +13,30 @@ import { z } from 'zod';
 import { Result } from 'better-result';
 
 export namespace Auth {
-	const getOpenRouterApiKey = () => {
-		const apiKey = process.env.OPENROUTER_API_KEY;
-		return apiKey && apiKey.trim().length > 0 ? apiKey.trim() : undefined;
+	export type AuthType = 'api' | 'oauth' | 'wellknown';
+
+	export type AuthStatus =
+		| { status: 'ok'; authType: AuthType; apiKey?: string; accountId?: string }
+		| { status: 'missing' }
+		| { status: 'invalid'; authType: AuthType };
+
+	const PROVIDER_AUTH_TYPES: Record<string, readonly AuthType[]> = {
+		opencode: ['api'],
+		openrouter: ['api'],
+		openai: ['oauth'],
+		anthropic: ['api'],
+		google: ['api', 'oauth']
+	};
+
+	const readEnv = (key: string) => {
+		const value = process.env[key];
+		return value && value.trim().length > 0 ? value.trim() : undefined;
+	};
+
+	const getEnvApiKey = (providerId: string) => {
+		if (providerId === 'openrouter') return readEnv('OPENROUTER_API_KEY');
+		if (providerId === 'opencode') return readEnv('OPENCODE_API_KEY');
+		return undefined;
 	};
 
 	// Auth schema matching OpenCode's format
@@ -28,7 +49,8 @@ export namespace Auth {
 		type: z.literal('oauth'),
 		access: z.string(),
 		refresh: z.string(),
-		expires: z.number()
+		expires: z.number(),
+		accountId: z.string().optional()
 	});
 
 	const WellKnownAuthSchema = z.object({
@@ -106,13 +128,52 @@ export namespace Auth {
 		return authData[providerId];
 	}
 
+	export async function getAuthStatus(providerId: string): Promise<AuthStatus> {
+		const allowedTypes = PROVIDER_AUTH_TYPES[providerId];
+		if (!allowedTypes) return { status: 'missing' };
+
+		const envKey = getEnvApiKey(providerId);
+		if (envKey) {
+			return allowedTypes.includes('api')
+				? { status: 'ok', authType: 'api', apiKey: envKey }
+				: { status: 'invalid', authType: 'api' };
+		}
+
+		const auth = await getCredentials(providerId);
+		if (!auth) return { status: 'missing' };
+
+		if (!allowedTypes.includes(auth.type)) {
+			return { status: 'invalid', authType: auth.type };
+		}
+
+		const apiKey = auth.type === 'api' ? auth.key : auth.type === 'oauth' ? auth.access : undefined;
+		const accountId = auth.type === 'oauth' ? auth.accountId : undefined;
+		return { status: 'ok', authType: auth.type, apiKey, accountId };
+	}
+
+	export const getProviderAuthHint = (providerId: string) => {
+		switch (providerId) {
+			case 'openai':
+				return 'Run "opencode auth --provider openai" and complete OAuth.';
+			case 'anthropic':
+				return 'Run "opencode auth --provider anthropic" and enter an API key.';
+			case 'google':
+				return 'Run "opencode auth --provider google" and enter an API key or OAuth.';
+			case 'openrouter':
+				return 'Set OPENROUTER_API_KEY or run "opencode auth --provider openrouter".';
+			case 'opencode':
+				return 'Set OPENCODE_API_KEY or run "opencode auth --provider opencode".';
+			default:
+				return 'Run "opencode auth --provider <provider>" to configure credentials.';
+		}
+	};
+
 	/**
 	 * Check if a provider is authenticated
 	 */
 	export async function isAuthenticated(providerId: string): Promise<boolean> {
-		if (providerId === 'openrouter' && getOpenRouterApiKey()) return true;
-		const auth = await getCredentials(providerId);
-		return auth !== undefined;
+		const status = await getAuthStatus(providerId);
+		return status.status === 'ok';
 	}
 
 	/**
@@ -120,24 +181,9 @@ export namespace Auth {
 	 * Returns undefined if not authenticated or no key available
 	 */
 	export async function getApiKey(providerId: string): Promise<string | undefined> {
-		if (providerId === 'openrouter') {
-			const envKey = getOpenRouterApiKey();
-			if (envKey) return envKey;
-		}
-
-		const auth = await getCredentials(providerId);
-		if (!auth) return undefined;
-
-		if (auth.type === 'api') {
-			return auth.key;
-		}
-
-		if (auth.type === 'oauth') {
-			return auth.access;
-		}
-
-		// wellknown auth doesn't have an API key
-		return undefined;
+		const status = await getAuthStatus(providerId);
+		if (status.status !== 'ok') return undefined;
+		return status.apiKey;
 	}
 
 	/**
@@ -148,19 +194,21 @@ export namespace Auth {
 	}
 
 	/**
+	 * Update stored credentials for a provider
+	 */
+	export async function setCredentials(providerId: string, info: AuthInfo): Promise<void> {
+		const filepath = getAuthFilePath();
+		const existing = await readAuthFile();
+		const next = { ...existing, [providerId]: info };
+		await Bun.write(filepath, JSON.stringify(next, null, 2), { mode: 0o600 });
+	}
+
+	/**
 	 * Get the list of all authenticated provider IDs
 	 */
 	export async function getAuthenticatedProviders(): Promise<string[]> {
-		const authData = await readAuthFile();
-		const providers = new Set(Object.keys(authData));
-
-		if (getOpenRouterApiKey()) {
-			providers.add('openrouter');
-		}
-		if (authData['openrouter.ai'] || authData['openrouter-ai']) {
-			providers.add('openrouter');
-		}
-
-		return Array.from(providers);
+		const providers = Object.keys(PROVIDER_AUTH_TYPES);
+		const statuses = await Promise.all(providers.map((provider) => getAuthStatus(provider)));
+		return providers.filter((_, index) => statuses[index]?.status === 'ok');
 	}
 }

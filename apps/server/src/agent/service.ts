@@ -11,7 +11,7 @@ import {
 import { Result } from 'better-result';
 
 import { Config } from '../config/index.ts';
-import { CommonHints, type TaggedErrorOptions } from '../errors.ts';
+import { type TaggedErrorOptions } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
 import { Auth, getSupportedProviders } from '../providers/index.ts';
 import type { CollectionResult } from '../collections/types.ts';
@@ -79,7 +79,9 @@ export namespace Agent {
 			super(`Invalid provider: "${args.providerId}"`);
 			this.providerId = args.providerId;
 			this.availableProviders = args.availableProviders;
-			this.hint = `Available providers: ${args.availableProviders.join(', ')}. Update your config with a valid provider.`;
+			this.hint = `Available providers: ${args.availableProviders.join(
+				', '
+			)}. Update your config with a valid provider. Open an issue to request this provider: https://github.com/davis7dotsh/better-context/issues.`;
 		}
 	}
 
@@ -113,10 +115,7 @@ export namespace Agent {
 			super(`Provider "${args.providerId}" is not connected`);
 			this.providerId = args.providerId;
 			this.connectedProviders = args.connectedProviders;
-			const baseHint =
-				args.providerId === 'openrouter'
-					? 'Set OPENROUTER_API_KEY to authenticate OpenRouter.'
-					: CommonHints.RUN_AUTH;
+			const baseHint = Auth.getProviderAuthHint(args.providerId);
 			if (args.connectedProviders.length > 0) {
 				this.hint = `${baseHint} Connected providers: ${args.connectedProviders.join(', ')}.`;
 			} else {

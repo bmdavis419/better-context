@@ -16,24 +16,39 @@ export namespace Model {
 	export class ProviderNotFoundError extends Error {
 		readonly _tag = 'ProviderNotFoundError';
 		readonly providerId: string;
+		readonly hint: string;
 
 		constructor(providerId: string) {
 			super(`Provider "${providerId}" is not supported`);
 			this.providerId = providerId;
+			this.hint =
+				'Open an issue to request this provider: https://github.com/davis7dotsh/better-context/issues.';
 		}
 	}
 
 	export class ProviderNotAuthenticatedError extends Error {
 		readonly _tag = 'ProviderNotAuthenticatedError';
 		readonly providerId: string;
+		readonly hint: string;
 
 		constructor(providerId: string) {
-			super(
-				providerId === 'openrouter'
-					? `Provider "${providerId}" is not authenticated. Set OPENROUTER_API_KEY to authenticate.`
-					: `Provider "${providerId}" is not authenticated. Run 'opencode auth login' to authenticate.`
-			);
+			super(`Provider "${providerId}" is not authenticated.`);
 			this.providerId = providerId;
+			this.hint = Auth.getProviderAuthHint(providerId);
+		}
+	}
+
+	export class ProviderAuthTypeError extends Error {
+		readonly _tag = 'ProviderAuthTypeError';
+		readonly providerId: string;
+		readonly authType: string;
+		readonly hint: string;
+
+		constructor(args: { providerId: string; authType: string }) {
+			super(`Provider "${args.providerId}" does not support "${args.authType}" auth.`);
+			this.providerId = args.providerId;
+			this.authType = args.authType;
+			this.hint = Auth.getProviderAuthHint(args.providerId);
 		}
 	}
 
@@ -72,22 +87,24 @@ export namespace Model {
 
 		// Get authentication
 		let apiKey: string | undefined;
+		let accountId: string | undefined;
 
 		if (!options.skipAuth) {
-			// Special handling for 'opencode' provider - check env var first
-			if (normalizedProviderId === 'opencode') {
-				apiKey = process.env.OPENCODE_API_KEY || (await Auth.getApiKey(normalizedProviderId));
-			} else {
-				apiKey = await Auth.getApiKey(normalizedProviderId);
-				if (!apiKey) {
-					throw new ProviderNotAuthenticatedError(providerId);
-				}
+			const status = await Auth.getAuthStatus(normalizedProviderId);
+			if (status.status === 'missing') {
+				throw new ProviderNotAuthenticatedError(providerId);
 			}
+			if (status.status === 'invalid') {
+				throw new ProviderAuthTypeError({ providerId, authType: status.authType });
+			}
+			apiKey = status.apiKey;
+			accountId = status.accountId;
 		}
 
 		// Build provider options
 		const providerOptions: ProviderOptions = {
-			...options.providerOptions
+			...options.providerOptions,
+			...(accountId ? { accountId } : {})
 		};
 
 		if (apiKey) {
@@ -109,11 +126,6 @@ export namespace Model {
 
 		if (!isProviderSupported(normalizedProviderId)) {
 			return false;
-		}
-
-		// Special case: opencode gateway is always available
-		if (normalizedProviderId === 'opencode') {
-			return true;
 		}
 
 		return Auth.isAuthenticated(normalizedProviderId);

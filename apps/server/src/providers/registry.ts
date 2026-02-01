@@ -2,31 +2,22 @@
  * Provider Registry
  * Maps provider IDs to their AI SDK factory functions
  */
-import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createAzure } from '@ai-sdk/azure';
-import { createCerebras } from '@ai-sdk/cerebras';
-import { createCohere } from '@ai-sdk/cohere';
-import { createDeepInfra } from '@ai-sdk/deepinfra';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createVertex } from '@ai-sdk/google-vertex';
-import { createGroq } from '@ai-sdk/groq';
-import { createMistral } from '@ai-sdk/mistral';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { createPerplexity } from '@ai-sdk/perplexity';
-import { createTogetherAI } from '@ai-sdk/togetherai';
-import { createXai } from '@ai-sdk/xai';
 
 import { createOpenCodeZen } from './opencode.ts';
+import { createOpenAICodex } from './openai.ts';
 import { createOpenRouter } from './openrouter.ts';
 
 // Type for provider factory options
 export type ProviderOptions = {
 	apiKey?: string;
+	accountId?: string;
 	baseURL?: string;
 	headers?: Record<string, string>;
 	name?: string; // Required for openai-compatible
+	instructions?: string;
+	sessionId?: string;
 };
 
 // Type for a provider factory function
@@ -44,57 +35,26 @@ export const PROVIDER_REGISTRY: Record<string, ProviderFactory> = {
 	anthropic: createAnthropic as ProviderFactory,
 
 	// OpenAI
-	openai: createOpenAI as ProviderFactory,
+	openai: createOpenAICodex as ProviderFactory,
 	// Google
 	google: createGoogleGenerativeAI as ProviderFactory,
-	'google-vertex': createVertex as ProviderFactory,
 
-	// Amazon
-	'amazon-bedrock': createAmazonBedrock as ProviderFactory,
-
-	// Azure
-	azure: createAzure as ProviderFactory,
-
-	// Other providers
-	groq: createGroq as ProviderFactory,
-	mistral: createMistral as ProviderFactory,
-	xai: createXai as ProviderFactory,
-	cohere: createCohere as ProviderFactory,
-	deepinfra: createDeepInfra as ProviderFactory,
-	cerebras: createCerebras as ProviderFactory,
-	perplexity: createPerplexity as ProviderFactory,
-	togetherai: createTogetherAI as ProviderFactory,
-
-	// OpenAI-compatible providers (for custom endpoints)
-	openrouter: createOpenRouter as ProviderFactory,
-	'openai-compatible': createOpenAICompatible as ProviderFactory
-};
-
-// Provider aliases for common naming variations
-export const PROVIDER_ALIASES: Record<string, string> = {
-	claude: 'anthropic',
-	'gpt-4': 'openai',
-	'gpt-4o': 'openai',
-	gemini: 'google',
-	vertex: 'google-vertex',
-	bedrock: 'amazon-bedrock',
-	grok: 'xai',
-	together: 'togetherai'
+	// OpenRouter (OpenAI-compatible gateway)
+	openrouter: createOpenRouter as ProviderFactory
 };
 
 /**
  * Check if a provider is supported
  */
 export function isProviderSupported(providerId: string): boolean {
-	const normalized = PROVIDER_ALIASES[providerId] || providerId;
-	return normalized in PROVIDER_REGISTRY;
+	return providerId in PROVIDER_REGISTRY;
 }
 
 /**
  * Get the normalized provider ID
  */
 export function normalizeProviderId(providerId: string): string {
-	return PROVIDER_ALIASES[providerId] || providerId;
+	return providerId;
 }
 
 /**

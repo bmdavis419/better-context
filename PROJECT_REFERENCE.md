@@ -562,6 +562,26 @@ Location: Project root or `~/.config/btca/btca.config.jsonc` (global)
 }
 ```
 
+**Supported Providers (Local Mode):**
+
+- `opencode` — API key required
+- `openrouter` — API key required
+- `openai` — OAuth only
+- `google` — API key or OAuth
+- `anthropic` — API key required
+
+Authenticate with OpenCode:
+
+```bash
+opencode auth --provider <provider>
+```
+
+If a provider is missing, open an issue to request support:
+
+```
+https://github.com/davis7dotsh/better-context/issues
+```
+
 **Config Merging:**
 
 - Global config loaded first

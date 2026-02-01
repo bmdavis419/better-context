@@ -153,10 +153,33 @@ url = "https://github.com/user/repo"
 branch = "main"
 ```
 
+## Supported Providers
+
+BTCA supports the following providers only:
+
+- `opencode` — API key required
+- `openrouter` — API key required
+- `openai` — OAuth only
+- `google` — API key or OAuth
+- `anthropic` — API key required
+
+Authenticate providers via OpenCode:
+
+```bash
+opencode auth --provider <provider>
+```
+
+## Authentication Notes
+
+- OpenCode and OpenRouter can use environment variables or OpenCode auth.
+- OpenAI requires OAuth (API keys are not supported).
+- Anthropic requires an API key.
+- Google supports API key or OAuth.
+
 ## Environment Variables
 
 - `PORT`: Server port (default: 8080)
-- `OPENCODE_API_KEY`: OpenCode AI API key (required)
+- `OPENCODE_API_KEY`: OpenCode API key (required when provider is `opencode`)
 - `OPENROUTER_API_KEY`: OpenRouter API key (required when provider is `openrouter`)
 - `OPENROUTER_BASE_URL`: Override OpenRouter base URL (optional)
 - `OPENROUTER_HTTP_REFERER`: Optional OpenRouter header for rankings
@@ -184,7 +207,7 @@ import type { BtcaStreamEvent, BtcaStreamMetaEvent } from 'btca-server/stream/ty
 ## Requirements
 
 - **Bun**: >= 1.1.0 (this package is designed specifically for Bun runtime)
-- **OpenCode AI API Key**: Required for AI functionality
+- **OpenCode API Key**: Required when using the `opencode` provider
 
 ## License
 

@@ -84,7 +84,10 @@ function formatError(error: unknown): string {
 // Model subcommand
 const modelCommand = new Command('model')
 	.description('Set the AI model and provider')
-	.requiredOption('-p, --provider <provider>', 'Provider ID (e.g., "opencode", "anthropic")')
+	.requiredOption(
+		'-p, --provider <provider>',
+		'Provider ID (opencode, openrouter, openai, google, anthropic)'
+	)
 	.requiredOption('-m, --model <model>', 'Model ID (e.g., "claude-haiku-4-5")')
 	.action(async (options, command) => {
 		const globalOpts = command.parent?.parent?.opts() as

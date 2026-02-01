@@ -56,6 +56,7 @@
 		"solid-js": "^1.9.10"
 	},
 	"dependencies": {
+		"@inquirer/select": "^5.0.4",
 		"better-result": "^2.6.0"
 	}
 }

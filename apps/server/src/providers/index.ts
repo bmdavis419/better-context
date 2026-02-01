@@ -6,7 +6,6 @@ export { Auth } from './auth.ts';
 export { Model } from './model.ts';
 export {
 	PROVIDER_REGISTRY,
-	PROVIDER_ALIASES,
 	isProviderSupported,
 	normalizeProviderId,
 	getProviderFactory,

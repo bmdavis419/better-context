@@ -5,6 +5,7 @@ import { askCommand } from './commands/ask.ts';
 import { chatCommand } from './commands/chat.ts';
 import { clearCommand } from './commands/clear.ts';
 import { connectCommand } from './commands/connect.ts';
+import { disconnectCommand } from './commands/disconnect.ts';
 import { initCommand } from './commands/init.ts';
 import { removeCommand } from './commands/remove.ts';
 import { remoteCommand } from './commands/remote.ts';
@@ -44,6 +45,7 @@ program.addCommand(chatCommand);
 
 // Configuration commands
 program.addCommand(connectCommand);
+program.addCommand(disconnectCommand);
 program.addCommand(initCommand);
 
 // Utility commands

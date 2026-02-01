@@ -106,3 +106,16 @@ All scripts use Turborepo for caching. Run from the repository root.
 | `btca-sandbox`          | `apps/sandbox`         | Sandbox environment          |
 | `@btca/shared`          | `packages/shared`      | Shared utilities             |
 | `@btca/analytics-proxy` | `apps/analytics-proxy` | PostHog analytics proxy      |
+
+## model recs...
+
+**openai**
+
+- "gpt-5.2-codex"
+
+**opencode**
+
+- "claude-sonnet-4-5"
+- "claude-haiku-4-5"
+- "gemini-3-flash"
+- "minimax-m2.1"

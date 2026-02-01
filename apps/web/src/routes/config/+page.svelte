@@ -45,6 +45,54 @@ Available resources: svelte, effect`;
 		`btca config model -p ${provider} -m ${model}`;
 
 	const RESOURCE_ADD_CMD = `btca config resources add -n effect -t git -u https://github.com/Effect-TS/effect -b main`;
+
+	const PROVIDER_AUTH = [
+		{
+			id: 'opencode',
+			title: 'OpenCode Zen',
+			authType: 'API key',
+			description: 'Use an OpenCode Zen API key to access curated models.',
+			link: 'https://opencode.ai/zen',
+			linkLabel: 'Get OpenCode Zen API key',
+			steps: ['Run btca connect', 'Select OpenCode Zen', 'Paste your API key']
+		},
+		{
+			id: 'openrouter',
+			title: 'OpenRouter',
+			authType: 'API key',
+			description: 'Use an OpenRouter API key for OpenRouter-hosted models.',
+			link: 'https://openrouter.ai/settings/keys',
+			linkLabel: 'Get OpenRouter API key',
+			steps: ['Run btca connect', 'Select OpenRouter', 'Paste your API key']
+		},
+		{
+			id: 'openai',
+			title: 'OpenAI',
+			authType: 'OAuth (ChatGPT subscription)',
+			description: 'Sign in with OAuth; btca reuses your existing ChatGPT subscription.',
+			link: 'https://chatgpt.com',
+			linkLabel: 'Open ChatGPT',
+			steps: ['Run btca connect', 'Select OpenAI', 'Complete the browser sign-in']
+		},
+		{
+			id: 'google',
+			title: 'Google',
+			authType: 'API key',
+			description: 'Use a Google AI Studio API key for Gemini models.',
+			link: 'https://aistudio.google.com/api-keys',
+			linkLabel: 'Get Google API key',
+			steps: ['Run btca connect', 'Select Google', 'Paste your API key']
+		},
+		{
+			id: 'anthropic',
+			title: 'Anthropic',
+			authType: 'API key',
+			description: 'Use an Anthropic API key for Claude models.',
+			link: 'https://platform.claude.com/dashboard',
+			linkLabel: 'Get Anthropic API key',
+			steps: ['Run btca connect', 'Select Anthropic', 'Paste your API key']
+		}
+	];
 </script>
 
 <section class="flex flex-col gap-14">
@@ -98,14 +146,12 @@ Available resources: svelte, effect`;
 		</div>
 
 		<p class="mt-2 max-w-2xl text-sm bc-prose">
-			btca uses the OpenCode SDK under the hood, so any model that works with OpenCode works with
-			btca. Set your model via CLI or edit the config file directly.
+			btca supports five providers: OpenCode, OpenRouter, OpenAI, Google, and Anthropic. Choose a
+			model via CLI or edit the config file directly.
 		</p>
 		<p class="mt-2 max-w-2xl text-sm bc-prose">
-			Providers require credentials configured in OpenCode. Run <code class="bc-inlineCode"
-				>opencode auth</code
-			>
-			to connect a provider, or edit your OpenCode config directly.
+			Run <code class="bc-inlineCode">btca connect</code> to authenticate a provider and pick from the
+			curated models below.
 		</p>
 
 		<div class="mt-4 flex flex-col gap-4">
@@ -157,6 +203,54 @@ Available resources: svelte, effect`;
 				</div>
 			{/each}
 		</div>
+	</section>
+
+	<section id="provider-auth" class="scroll-mt-28">
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Provider auth</span>
+		</div>
+
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			Supported providers are limited to OpenCode, OpenRouter, OpenAI, Google, and Anthropic.
+		</p>
+
+		<div class="mt-4 grid gap-4 md:grid-cols-2">
+			{#each PROVIDER_AUTH as provider}
+				<div class="bc-card bc-ring p-5">
+					<div class="flex flex-wrap items-center gap-2">
+						<div class="text-sm font-semibold">{provider.title}</div>
+						<span class="bc-badge">{provider.authType}</span>
+					</div>
+					<p class="mt-2 text-sm bc-prose">{provider.description}</p>
+					<ul class="mt-3 list-disc pl-5 text-xs text-[hsl(var(--bc-muted))]">
+						{#each provider.steps as step}
+							<li>{step}</li>
+						{/each}
+					</ul>
+					<a
+						href={provider.link}
+						target="_blank"
+						rel="noreferrer"
+						class="mt-3 inline-flex items-center gap-1 text-sm text-[hsl(var(--bc-accent))]"
+					>
+						<span>{provider.linkLabel}</span>
+					</a>
+				</div>
+			{/each}
+		</div>
+
+		<p class="mt-4 text-xs bc-prose">
+			Want another provider? <a
+				href="https://github.com/davis7dotsh/better-context/issues"
+				target="_blank"
+				rel="noreferrer"
+				class="text-[hsl(var(--bc-accent))]"
+			>
+				Open an issue
+			</a>
+			to request it.
+		</p>
 	</section>
 
 	<section id="resources" class="scroll-mt-28">

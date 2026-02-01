@@ -626,7 +626,7 @@ export namespace Config {
 					const available = getSupportedProviders();
 					throw new ConfigError({
 						message: `Provider "${provider}" is not supported`,
-						hint: `Available providers: ${available.join(', ')}.`
+						hint: `Available providers: ${available.join(', ')}. Open an issue to request this provider: https://github.com/davis7dotsh/better-context/issues.`
 					});
 				}
 				const mutableConfig = getMutableConfig();

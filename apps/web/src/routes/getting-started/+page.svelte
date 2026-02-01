@@ -190,8 +190,8 @@
 			</div>
 
 			<p class="mt-4 text-sm bc-prose">
-				See <a href="/config#models" class="text-[color:hsl(var(--bc-accent))]">all models</a> for other
-				options like Anthropic, OpenAI, and more.
+				See <a href="/config#models" class="text-[color:hsl(var(--bc-accent))]">all models</a> for Anthropic,
+				OpenAI, Google, OpenRouter, and OpenCode options.
 			</p>
 		</div>
 	</section>
