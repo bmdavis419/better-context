@@ -16,6 +16,10 @@
 		newProjectName = '';
 	}
 
+	function handleBackdropClick(event: MouseEvent) {
+		if (event.currentTarget === event.target) closeModal();
+	}
+
 	async function createProject() {
 		if (!newProjectName.trim()) return;
 		isCreating = true;
@@ -34,15 +38,10 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		onclick={closeModal}
+		onclick={handleBackdropClick}
 		onkeydown={(e) => e.key === 'Escape' && closeModal()}
 	>
-		<div
-			class="bc-card w-full max-w-md p-6"
-			role="document"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
+		<div class="bc-card w-full max-w-md p-6" role="document">
 			<h2 class="mb-4 text-lg font-semibold">Create New Project</h2>
 
 			<form

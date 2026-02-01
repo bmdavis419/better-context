@@ -192,8 +192,8 @@ After completing the setup, show me:
 3. **AGENTS.md status** (created or updated, with which mode)
 4. **Example commands** specific to my project's resources
 5. **Next steps**:
-   - "Resources will be cloned to `~/.local/share/btca/resources/` on first use"
-   - "Use `btca clear` to remove cached git repositories if needed"
+   - "Run `btca connect` to authenticate a provider and pick a default model"
+   - "Resources will be cloned to `${dataDirectory}/resources` on first use"
 
 ---
 

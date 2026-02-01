@@ -1,4 +1,4 @@
-import { createContext, onDestroy, onMount } from 'svelte';
+import { createContext, onMount } from 'svelte';
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import bash from '@shikijs/langs/bash';
@@ -6,21 +6,37 @@ import json from '@shikijs/langs/json';
 import darkPlus from '@shikijs/themes/dark-plus';
 import lightPlus from '@shikijs/themes/light-plus';
 
-class ShikiStore {
-	private highlighterPromise = createHighlighterCore({
-		langs: [bash, json],
-		themes: [darkPlus, lightPlus],
-		engine: createJavaScriptRegexEngine()
-	});
+let highlighterPromise: Promise<HighlighterCore> | null = null;
+let highlighterInstance: HighlighterCore | null = null;
+let generation = 0;
 
+const getCoreHighlighter = () => {
+	if (!highlighterPromise) {
+		generation += 1;
+		const current = generation;
+		highlighterPromise = createHighlighterCore({
+			langs: [bash, json],
+			themes: [darkPlus, lightPlus],
+			engine: createJavaScriptRegexEngine()
+		}).then((highlighter) => {
+			if (current !== generation) {
+				highlighter.dispose();
+				return highlighter;
+			}
+			highlighterInstance = highlighter;
+			return highlighter;
+		});
+	}
+
+	return highlighterPromise;
+};
+
+class ShikiStore {
 	highlighter = $state<HighlighterCore | null>(null);
 
 	constructor() {
 		onMount(async () => {
-			this.highlighter = await this.highlighterPromise;
-		});
-		onDestroy(() => {
-			this.highlighter?.dispose();
+			this.highlighter = await getCoreHighlighter();
 		});
 	}
 }
@@ -38,4 +54,12 @@ export const getShikiStore = () => {
 export const setShikiStore = () => {
 	const newStore = new ShikiStore();
 	return internalSet(newStore);
+};
+
+export const disposeShikiStoreHighlighter = () => {
+	if (!highlighterPromise && !highlighterInstance) return;
+	generation += 1;
+	highlighterInstance?.dispose();
+	highlighterInstance = null;
+	highlighterPromise = null;
 };

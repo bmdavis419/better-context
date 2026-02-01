@@ -415,6 +415,7 @@
 					type="button"
 					class="bc-muted hover:text-[hsl(var(--bc-text))]"
 					onclick={closeConfigureModal}
+					aria-label="Close MCP configuration"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

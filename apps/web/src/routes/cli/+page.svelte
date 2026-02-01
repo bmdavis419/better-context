@@ -1,12 +1,14 @@
 <script lang="ts">
+	import { BLESSED_MODELS } from '@btca/shared';
 	import CopyButton from '$lib/CopyButton.svelte';
+	import SETUP_PROMPT_RAW from '$lib/assets/docs/SETUP_PROMPT.md?raw';
 	import { getShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
-	import SETUP_PROMPT_RAW from '$lib/assets/docs/SETUP_PROMPT.md?raw';
 
-	const INSTALL_CMD = 'bun add -g btca opencode-ai';
+	const INSTALL_CMD = 'bun add -g btca';
+	const CONNECT_CMD = 'btca connect';
 	const RESOURCE_ADD_CMD =
-		'btca config resources add --name convex --type git --url https://github.com/get-convex/convex-js --branch main';
+		'btca add https://github.com/get-convex/convex-js --name convex --branch main';
 	const QUICK_START_CMD =
 		'btca ask --resource convex --question "How do I create a Convex mutation and use it in a React app?"';
 
@@ -77,7 +79,7 @@
 	<section class="flex flex-col gap-4">
 		<div class="bc-card bc-ring p-5">
 			<div class="text-sm font-semibold">Step 1 · Install</div>
-			<p class="mt-2 text-sm bc-prose">Install btca and the OpenCode SDK globally.</p>
+			<p class="mt-2 text-sm bc-prose">Install btca globally (Bun required).</p>
 			<div class="mt-4 bc-codeFrame">
 				<div class="flex items-center justify-between gap-3 p-4">
 					<div class="min-w-0 flex-1 overflow-x-auto">
@@ -98,7 +100,29 @@
 		</div>
 
 		<div class="bc-card bc-ring p-5">
-			<div class="text-sm font-semibold">Step 2 · Add a resource</div>
+			<div class="text-sm font-semibold">Step 2 · Connect a provider</div>
+			<p class="mt-2 text-sm bc-prose">Authenticate and pick a default model.</p>
+			<div class="mt-4 bc-codeFrame">
+				<div class="flex items-center justify-between gap-3 p-4">
+					<div class="min-w-0 flex-1 overflow-x-auto">
+						{#if shikiStore.highlighter}
+							{@html shikiStore.highlighter.codeToHtml(CONNECT_CMD, {
+								theme: shikiTheme,
+								lang: 'bash',
+								rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+							})}
+						{:else}
+							<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CONNECT_CMD}</code
+								></pre>
+						{/if}
+					</div>
+					<CopyButton text={CONNECT_CMD} label="Copy connect command" />
+				</div>
+			</div>
+		</div>
+
+		<div class="bc-card bc-ring p-5">
+			<div class="text-sm font-semibold">Step 3 · Add a resource</div>
 			<p class="mt-2 text-sm bc-prose">
 				Add the Convex JS repo as your first resource.
 				<a href="https://github.com/get-convex/convex-js" target="_blank" rel="noreferrer"
@@ -125,7 +149,7 @@
 		</div>
 
 		<div class="bc-card bc-ring p-5">
-			<div class="text-sm font-semibold">Step 3 · Ask a question</div>
+			<div class="text-sm font-semibold">Step 4 · Ask a question</div>
 			<p class="mt-2 text-sm bc-prose">Use the resource to see a real answer.</p>
 			<div class="mt-4 bc-codeFrame">
 				<div class="flex items-center justify-between gap-3 p-4">
@@ -144,6 +168,70 @@
 					<CopyButton text={QUICK_START_CMD} label="Copy quick start command" />
 				</div>
 			</div>
+		</div>
+	</section>
+
+	<section id="models" class="scroll-mt-28">
+		<div class="bc-kicker">
+			<span class="bc-kickerDot"></span>
+			<span>Models</span>
+		</div>
+
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			btca supports five providers: OpenCode, OpenRouter, OpenAI, Google, and Anthropic. Choose a
+			model via <code class="bc-inlineCode">btca connect</code> or edit the config file directly.
+		</p>
+		<p class="mt-2 max-w-2xl text-sm bc-prose">
+			Run <code class="bc-inlineCode">btca connect</code> to authenticate a provider and pick from the
+			curated models below.
+		</p>
+
+		<div class="mt-4 bc-card bc-ring p-5">
+			<div class="flex items-center justify-between gap-3">
+				<div class="text-sm font-semibold">Connect a provider</div>
+				<CopyButton text={CONNECT_CMD} label="Copy connect command" />
+			</div>
+			<div class="mt-3 bc-codeFrame">
+				<div class="flex items-center justify-between gap-3 p-4">
+					<div class="min-w-0 flex-1 overflow-x-auto">
+						{#if shikiStore.highlighter}
+							{@html shikiStore.highlighter.codeToHtml(CONNECT_CMD, {
+								theme: shikiTheme,
+								lang: 'bash',
+								rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+							})}
+						{:else}
+							<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CONNECT_CMD}</code
+								></pre>
+						{/if}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="mt-6 grid gap-4 lg:grid-cols-2">
+			{#each BLESSED_MODELS as model}
+				<div class="bc-card bc-ring bc-cardHover p-5">
+					<div class="flex flex-wrap items-center gap-2">
+						<code class="bc-tag">{model.model}</code>
+						<span class="bc-badge">{model.provider}</span>
+						{#if model.isDefault}
+							<span class="bc-badge bc-badgeAccent">Default</span>
+						{/if}
+					</div>
+
+					<p class="mt-2 text-sm bc-prose">{model.description}</p>
+
+					<a
+						href={model.providerSetupUrl}
+						target="_blank"
+						rel="noreferrer"
+						class="mt-3 inline-block text-sm text-[hsl(var(--bc-accent))]"
+					>
+						Provider setup instructions
+					</a>
+				</div>
+			{/each}
 		</div>
 	</section>
 

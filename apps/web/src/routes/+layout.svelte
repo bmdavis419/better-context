@@ -5,15 +5,28 @@
 	import { Bot, Github, Menu, Moon, Sun, X } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { browser } from '$app/environment';
-	import { setShikiStore } from '$lib/stores/ShikiStore.svelte';
+	import { disposeShikiStoreHighlighter, setShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { initAnalytics } from '$lib/stores/analytics.svelte';
+	import { disposeChatHighlighter } from '../lib/shiki/chatHighlighter.ts';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
 
+	const teardownShiki = () => {
+		disposeShikiStoreHighlighter();
+		disposeChatHighlighter();
+	};
+
 	onMount(() => {
 		initAnalytics();
+		window.addEventListener('pagehide', teardownShiki);
+		window.addEventListener('beforeunload', teardownShiki);
+		return () => {
+			window.removeEventListener('pagehide', teardownShiki);
+			window.removeEventListener('beforeunload', teardownShiki);
+			teardownShiki();
+		};
 	});
 
 	const isAppRoute = $derived(page.url.pathname.startsWith('/app'));

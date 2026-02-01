@@ -2,7 +2,6 @@
 	import CopyButton from '$lib/CopyButton.svelte';
 	import { getShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
-	import { BLESSED_MODELS } from '@btca/shared';
 
 	const shikiStore = getShikiStore();
 	const themeStore = getThemeStore();
@@ -40,9 +39,6 @@ Run:
 - btca ask -r <resource> -q "<question>"
 
 Available resources: svelte, effect`;
-
-	const getModelCommand = (provider: string, model: string) =>
-		`btca config model -p ${provider} -m ${model}`;
 
 	const RESOURCE_ADD_CMD = `btca config resources add -n effect -t git -u https://github.com/Effect-TS/effect -b main`;
 
@@ -137,72 +133,6 @@ Available resources: svelte, effect`;
 			On first run, btca creates a default global config with some starter resources. Use
 			<code class="bc-inlineCode">dataDirectory</code> to control where btca stores resources and collections.
 		</p>
-	</section>
-
-	<section id="models" class="scroll-mt-28">
-		<div class="bc-kicker">
-			<span class="bc-kickerDot"></span>
-			<span>Models</span>
-		</div>
-
-		<p class="mt-2 max-w-2xl text-sm bc-prose">
-			btca supports five providers: OpenCode, OpenRouter, OpenAI, Google, and Anthropic. Choose a
-			model via CLI or edit the config file directly.
-		</p>
-		<p class="mt-2 max-w-2xl text-sm bc-prose">
-			Run <code class="bc-inlineCode">btca connect</code> to authenticate a provider and pick from the
-			curated models below.
-		</p>
-
-		<div class="mt-4 flex flex-col gap-4">
-			{#each BLESSED_MODELS as model}
-				<div class="bc-card bc-ring bc-cardHover p-5">
-					<div class="flex flex-wrap items-center gap-2">
-						<code class="bc-tag">{model.model}</code>
-						<span class="bc-badge">{model.provider}</span>
-						{#if model.isDefault}
-							<span class="bc-badge bc-badgeAccent">Default</span>
-						{/if}
-					</div>
-
-					<p class="mt-2 text-sm bc-prose">{model.description}</p>
-
-					<div class="mt-3 bc-codeFrame">
-						<div class="flex items-center justify-between gap-3 p-4">
-							<div class="min-w-0 flex-1 overflow-x-auto">
-								{#if shikiStore.highlighter}
-									{@html shikiStore.highlighter.codeToHtml(
-										getModelCommand(model.provider, model.model),
-										{
-											theme: shikiTheme,
-											lang: 'bash',
-											rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-										}
-									)}
-								{:else}
-									<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code
-											>{getModelCommand(model.provider, model.model)}</code
-										></pre>
-								{/if}
-							</div>
-							<CopyButton
-								text={getModelCommand(model.provider, model.model)}
-								label="Copy command"
-							/>
-						</div>
-					</div>
-
-					<a
-						href={model.providerSetupUrl}
-						target="_blank"
-						rel="noreferrer"
-						class="mt-3 inline-block text-sm text-[hsl(var(--bc-accent))]"
-					>
-						Provider setup instructions
-					</a>
-				</div>
-			{/each}
-		</div>
 	</section>
 
 	<section id="provider-auth" class="scroll-mt-28">

@@ -2,9 +2,9 @@
 	import { ArrowDown, Check, CheckCircle2, Copy, Loader2, RotateCcw } from '@lucide/svelte';
 	import { nanoid } from 'nanoid';
 	import { marked } from 'marked';
-	import { createHighlighter } from 'shiki';
 	import DOMPurify from 'isomorphic-dompurify';
 	import ToolCallSummary from '$lib/components/ToolCallSummary.svelte';
+	import { getChatHighlighter } from '../shiki/chatHighlighter.ts';
 	import type { Message, BtcaChunk, AssistantContent } from '$lib/types';
 
 	// Type guards for AssistantContent (can be string | { type: 'text' } | { type: 'chunks' })
@@ -140,24 +140,7 @@
 		);
 	}
 
-	const shikiHighlighter = createHighlighter({
-		themes: ['dark-plus', 'light-plus'],
-		langs: [
-			'elixir',
-			'typescript',
-			'svelte',
-			'json',
-			'text',
-			'javascript',
-			'html',
-			'css',
-			'bash',
-			'shell',
-			'python',
-			'rust',
-			'go'
-		]
-	});
+	const shikiHighlighter = getChatHighlighter();
 
 	let markdownCache = $state<Record<string, string>>({});
 	const markdownPending = new Set<string>();
@@ -167,7 +150,9 @@
 		if (!lang) return 'text';
 		const langMap: Record<string, string> = {
 			ts: 'typescript',
+			tsx: 'tsx',
 			js: 'javascript',
+			jsx: 'jsx',
 			svelte: 'svelte',
 			json: 'json',
 			elixir: 'elixir',

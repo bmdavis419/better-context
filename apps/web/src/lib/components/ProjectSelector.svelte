@@ -43,6 +43,10 @@
 		isOpen = false;
 		showCreateModal = true;
 	}
+
+	function handleCreateModalBackdropClick(event: MouseEvent) {
+		if (event.currentTarget === event.target) showCreateModal = false;
+	}
 </script>
 
 <svelte:window onclick={handleClickOutside} />
@@ -111,11 +115,11 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		role="dialog"
 		aria-modal="true"
-		onclick={() => (showCreateModal = false)}
+		tabindex="-1"
+		onclick={handleCreateModalBackdropClick}
 		onkeydown={(e) => e.key === 'Escape' && (showCreateModal = false)}
 	>
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<div class="bc-card w-full max-w-md p-6" onclick={(e) => e.stopPropagation()}>
+		<div class="bc-card w-full max-w-md p-6" role="document">
 			<h2 class="mb-4 text-lg font-semibold">Create New Project</h2>
 
 			<form
