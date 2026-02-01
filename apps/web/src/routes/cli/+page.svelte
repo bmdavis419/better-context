@@ -11,6 +11,7 @@
 		'btca add https://github.com/get-convex/convex-js --name convex --branch main';
 	const QUICK_START_CMD =
 		'btca ask --resource convex --question "How do I create a Convex mutation and use it in a React app?"';
+	const CURSOR_RULE_CMD = `mkdir -p .cursor/rules && curl -fsSL "https://btca.dev/rule" -o .cursor/rules/better_context.mdc && echo "Rule file created."`;
 
 	const commands = [
 		{
@@ -240,7 +241,31 @@
 			<span class="bc-kickerDot"></span>
 			<span>Project setup</span>
 		</div>
-		<p class="mt-2 max-w-2xl text-sm bc-prose">
+
+		<div class="mt-2 bc-card bc-ring p-5">
+			<div class="text-sm font-semibold">Add Cursor rules</div>
+			<p class="mt-2 text-sm bc-prose">
+				Use this command to pull the Cursor rules into your project.
+			</p>
+			<div class="mt-4 bc-codeFrame">
+				<div class="flex items-center justify-between gap-3 p-4">
+					<div class="min-w-0 flex-1 overflow-x-auto">
+						{#if shikiStore.highlighter}
+							{@html shikiStore.highlighter.codeToHtml(CURSOR_RULE_CMD, {
+								theme: shikiTheme,
+								lang: 'bash',
+								rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
+							})}
+						{:else}
+							<pre class="m-0 whitespace-pre text-sm leading-relaxed"><code>{CURSOR_RULE_CMD}</code
+								></pre>
+						{/if}
+					</div>
+					<CopyButton text={CURSOR_RULE_CMD} label="Copy Cursor rule command" />
+				</div>
+			</div>
+		</div>
+		<p class="mt-4 max-w-2xl text-sm bc-prose">
 			Copy this prompt into your AI coding agent to generate a tailored
 			<code class="bc-inlineCode">btca.config.jsonc</code> for your repo.
 		</p>
