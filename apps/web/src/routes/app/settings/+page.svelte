@@ -493,15 +493,15 @@ Use the Better Context MCP for documentation questions.
 												>Name</th
 											>
 											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase">ID</th>
-											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase"
-												>Created</th
-											>
-											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase"
-												>Last Used</th
-											>
-											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase"
-												>Usage</th
-											>
+											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase">
+												Created
+											</th>
+											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase">
+												Last Used
+											</th>
+											<th class="bc-muted px-4 py-3 text-left text-xs font-medium uppercase">
+												Usage
+											</th>
 											<th class="px-4 py-3"></th>
 										</tr>
 									</thead>

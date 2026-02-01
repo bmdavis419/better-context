@@ -641,7 +641,7 @@
 		height: 1rem;
 		background: hsl(var(--bc-surface));
 		border: 1px solid hsl(var(--bc-border));
-		border-radius: 0.25rem;
+		border-radius: 0;
 		cursor: pointer;
 		transition: all 0.15s;
 	}

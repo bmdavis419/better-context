@@ -600,7 +600,7 @@
 	.question-card {
 		background: hsl(var(--bc-surface));
 		border: 1px solid hsl(var(--bc-border));
-		border-radius: 8px;
+		border-radius: 0;
 		overflow: hidden;
 		transition: border-color 0.15s;
 	}
@@ -625,7 +625,7 @@
 		justify-content: center;
 		background: hsl(var(--bc-accent) / 0.1);
 		color: hsl(var(--bc-accent));
-		border-radius: 8px;
+		border-radius: 0;
 	}
 
 	.question-text {
@@ -658,7 +658,7 @@
 	.resource-tag {
 		background: hsl(var(--bc-surface-2));
 		padding: 2px 6px;
-		border-radius: 4px;
+		border-radius: 0;
 		font-family: ui-monospace, monospace;
 		font-size: 0.6875rem;
 	}
@@ -693,7 +693,7 @@
 		color: hsl(var(--bc-fg-muted));
 		background: transparent;
 		border: 1px solid transparent;
-		border-radius: 4px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: all 0.15s;
 	}
@@ -712,7 +712,7 @@
 	.answer-content :global(pre) {
 		background: hsl(var(--bc-bg)) !important;
 		border: 1px solid hsl(var(--bc-border));
-		border-radius: 6px;
+		border-radius: 0;
 		padding: 12px;
 		overflow-x: auto;
 		font-size: 0.8125rem;
@@ -758,7 +758,7 @@
 		color: hsl(var(--bc-accent));
 		background: hsl(var(--bc-accent) / 0.1);
 		border: none;
-		border-radius: 4px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: background 0.15s;
 	}
@@ -770,7 +770,7 @@
 	.bc-code {
 		background: hsl(var(--bc-surface-2));
 		padding: 2px 6px;
-		border-radius: 4px;
+		border-radius: 0;
 		font-family: ui-monospace, monospace;
 		font-size: 0.85em;
 	}
