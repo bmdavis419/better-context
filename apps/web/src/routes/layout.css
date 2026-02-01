@@ -313,6 +313,24 @@
 		box-shadow: 0 1px 0 color-mix(in oklab, hsl(var(--bc-border)) 80%, transparent);
 	}
 
+	.bc-chatPattern {
+		background-image:
+			radial-gradient(
+				color-mix(in oklab, hsl(var(--bc-fg)) 7%, transparent) 0.6px,
+				transparent 0.6px
+			),
+			radial-gradient(
+				color-mix(in oklab, hsl(var(--bc-fg)) 4%, transparent) 0.6px,
+				transparent 0.6px
+			);
+		background-size:
+			26px 26px,
+			18px 18px;
+		background-position:
+			0 0,
+			8px 10px;
+	}
+
 	.bc-card {
 		border: 1px solid hsl(var(--bc-border));
 		background: hsl(var(--bc-surface));

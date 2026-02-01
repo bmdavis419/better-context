@@ -21,7 +21,7 @@ async function main(): Promise<void> {
 			// Install bun
 			'curl -fsSL https://bun.sh/install | bash',
 			// Install global packages
-			'/root/.bun/bin/bun add -g btca opencode-ai'
+			'/root/.bun/bin/bun add -g btca'
 		)
 		.env({
 			PATH: '/root/.nvm/versions/node/v24.13.0/bin:/root/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 			resources: {
 				cpu: 2,
 				memory: 4,
-				disk: 10
+				disk: 5
 			}
 		},
 		{ onLogs: (log) => console.log('[snapshot]', log) }

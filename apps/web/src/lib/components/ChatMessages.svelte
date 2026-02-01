@@ -296,7 +296,11 @@
 </script>
 
 <div class="relative min-h-0 flex-1">
-	<div bind:this={scrollContainer} onscroll={handleScroll} class="absolute inset-0 overflow-y-auto">
+	<div
+		bind:this={scrollContainer}
+		onscroll={handleScroll}
+		class="absolute inset-0 overflow-y-auto bc-chatPattern"
+	>
 		<div class="mx-auto flex w-full max-w-5xl flex-col gap-4 p-5">
 			{#each messages as message, index (message.id)}
 				{#if message.role === 'user'}
