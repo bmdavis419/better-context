@@ -92,6 +92,9 @@ jobs:
           name: cli-dist-arm64
           path: apps/cli/dist
 
+      - name: Ensure CLI binaries are executable
+        run: chmod +x apps/cli/dist/btca-* || true
+
       - name: Verify dist artifacts
         run: bun run scripts/verify-dist.ts
         working-directory: apps/cli
