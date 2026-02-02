@@ -220,14 +220,6 @@
 					<a class="bc-chip" href="/pricing">Pricing</a>
 					<a class="bc-chip" href="/resources">Resources</a>
 					<a class="bc-chip" href="/app">Go to App</a>
-					<a
-						class="bc-chip"
-						href="https://github.com/bmdavis419/better-context"
-						target="_blank"
-						rel="noreferrer"
-					>
-						GitHub
-					</a>
 				</div>
 			</div>
 		</footer>

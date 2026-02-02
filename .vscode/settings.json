@@ -1,13 +1,13 @@
 {
-  "typescript.tsdk": "./node_modules/typescript/lib",
-  "files.associations": {
-    "*.css": "tailwindcss"
-  },
-  "typescript.enablePromptUseWorkspaceTsdk": true,
-  "workbench.colorCustomizations": {
-    "titleBar.activeBackground": "#d35400",
-    "titleBar.activeForeground": "#ffffff",
-    "titleBar.inactiveBackground": "#d35400",
-    "titleBar.inactiveForeground": "#ffffffcc"
-  }
+	"typescript.tsdk": "./node_modules/typescript/lib",
+	"files.associations": {
+		"*.css": "tailwindcss"
+	},
+	"typescript.enablePromptUseWorkspaceTsdk": true,
+	"workbench.colorCustomizations": {
+		"titleBar.activeBackground": "#195AAD",
+		"titleBar.activeForeground": "#ffffff",
+		"titleBar.inactiveBackground": "#195AAD",
+		"titleBar.inactiveForeground": "#ffffffcc"
+	}
 }

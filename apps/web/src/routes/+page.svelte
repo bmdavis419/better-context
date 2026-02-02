@@ -1,17 +1,7 @@
 <script lang="ts">
-	import { getShikiStore } from '$lib/stores/ShikiStore.svelte';
-	import { getThemeStore } from '$lib/stores/theme.svelte';
-	import btcaApp from '$lib/assets/btca-app.png';
-
-	const DEMO = `btca ask --resource svelte --question "How does the $state rune work?"
-
-# clones the repo locally
-# searches real files (not docs)
-# answers with citations + snippets`;
-
-	const shikiStore = getShikiStore();
-	const themeStore = getThemeStore();
-	const shikiTheme = $derived(themeStore.theme === 'dark' ? 'dark-plus' : 'light-plus');
+	import cliShowcase from '$lib/assets/cli-showcase.png';
+	import mcpShowcase from '$lib/assets/mcp-showcase.png';
+	import webShowcase from '$lib/assets/web-showcase.png';
 </script>
 
 <svelte:head>
@@ -51,45 +41,43 @@
 		<div class="flex items-center justify-between gap-4 px-5 py-4">
 			<div class="bc-badge bc-badgeAccent">
 				<span class="bc-kickerDot"></span>
-				<span>CLI</span>
+				<span>cli</span>
 			</div>
 			<div class="text-xs font-semibold tracking-[0.16em] uppercase bc-muted">example</div>
 		</div>
 
 		<div class="px-5 pb-5">
-			<div class="bc-codeFrame">
-				<div
-					class="flex items-center justify-between gap-3 border-b border-[color-mix(in_oklab,hsl(var(--bc-border))_60%,transparent)] px-4 py-3"
-				>
-					<div class="flex items-center gap-2">
-						<span class="size-2 bg-[hsl(var(--bc-fg))]"></span>
-						<span class="size-2 bg-[hsl(var(--bc-fg))]"></span>
-						<span class="size-2 bg-[hsl(var(--bc-fg))]"></span>
-					</div>
-					<div class="text-xs bc-muted">btca</div>
-				</div>
-
-				<div class="overflow-x-auto p-4">
-					{#if shikiStore.highlighter}
-						{@html shikiStore.highlighter.codeToHtml(DEMO, {
-							theme: shikiTheme,
-							lang: 'bash',
-							rootStyle: 'background-color: transparent; padding: 0; margin: 0;'
-						})}
-					{:else}
-						<pre class="m-0 whitespace-pre-wrap text-sm leading-relaxed"><code>{DEMO}</code></pre>
-					{/if}
-				</div>
-			</div>
+			<img
+				src={cliShowcase}
+				alt="btca CLI showcase"
+				class="w-full rounded-lg border border-[hsl(var(--bc-border))]"
+				loading="lazy"
+			/>
 		</div>
 	</section>
 
 	<section class="bc-card bc-ring p-5">
-		<div class="text-xs font-semibold uppercase tracking-[0.16em] bc-muted">Web app</div>
+		<div class="bc-badge bc-badgeAccent">
+			<span class="bc-kickerDot"></span>
+			<span>web</span>
+		</div>
 		<img
-			src={btcaApp}
+			src={webShowcase}
 			alt="btca chat interface"
-			class="mt-3 w-full rounded-lg border border-[hsl(var(--bc-border))]"
+			class="mt-4 w-full rounded-lg border border-[hsl(var(--bc-border))]"
+			loading="lazy"
+		/>
+	</section>
+
+	<section class="bc-card bc-ring p-5">
+		<div class="bc-badge bc-badgeAccent">
+			<span class="bc-kickerDot"></span>
+			<span>mcp</span>
+		</div>
+		<img
+			src={mcpShowcase}
+			alt="btca MCP server showcase"
+			class="mt-4 w-full rounded-lg border border-[hsl(var(--bc-border))]"
 			loading="lazy"
 		/>
 	</section>

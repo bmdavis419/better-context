@@ -74,7 +74,7 @@ class InstanceStore {
 	}
 
 	get updateAvailable() {
-		return this.btcaUpdateAvailable || this.opencodeUpdateAvailable;
+		return this.btcaUpdateAvailable;
 	}
 
 	get storageUsedBytes() {

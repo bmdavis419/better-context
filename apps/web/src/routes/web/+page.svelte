@@ -1,5 +1,5 @@
 <script lang="ts">
-	import btcaApp from '$lib/assets/btca-app.png';
+	import webShowcase from '$lib/assets/web-showcase.png';
 </script>
 
 <svelte:head>
@@ -43,7 +43,7 @@
 			<div class="bc-card bc-ring p-5">
 				<div class="text-xs font-semibold uppercase tracking-[0.16em] bc-muted">Chat</div>
 				<img
-					src={btcaApp}
+					src={webShowcase}
 					alt="btca chat interface"
 					class="mt-3 w-full rounded-lg border border-[hsl(var(--bc-border))]"
 					loading="lazy"

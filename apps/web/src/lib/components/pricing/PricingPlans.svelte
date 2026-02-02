@@ -45,7 +45,7 @@
 <div class="flex w-full flex-col gap-10">
 	<section class="bc-card bc-reveal relative overflow-hidden p-10" style="--delay: 40ms">
 		<div
-			class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,116,51,0.18),_transparent_55%)]"
+			class="absolute inset-0 bg-[radial-gradient(circle_at_top,_hsl(var(--bc-accent)/0.22),_transparent_55%)]"
 		></div>
 		<div class="relative z-10 flex flex-col gap-6">
 			<div class="flex items-center gap-3">
