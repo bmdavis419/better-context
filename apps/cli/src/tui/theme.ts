@@ -16,9 +16,9 @@ export const colors = {
 	border: '#262626', // neutral-800
 	borderSubtle: '#404040', // neutral-700
 
-	// Accent (orange)
-	accent: '#f97316', // orange-500
-	accentDark: '#c2410c', // orange-700
+	// Accent (web app primary blue)
+	accent: '#4783eb', // hsl(218 80% 60%)
+	accentDark: '#175acf', // hsl(218 80% 45%)
 
 	// Semantic
 	success: '#22c55e', // green-500

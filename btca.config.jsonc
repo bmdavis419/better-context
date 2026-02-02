@@ -133,6 +133,6 @@
       "branch": "main"
     }
   ],
-  "model": "minimax/minimax-m2.1",
-  "provider": "openrouter"
+  "model": "gemini-3-flash-preview",
+  "provider": "google"
 }
