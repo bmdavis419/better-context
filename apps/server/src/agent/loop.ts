@@ -5,6 +5,7 @@
 import { streamText, tool, stepCountIs, type ModelMessage } from 'ai';
 
 import { Model } from '../providers/index.ts';
+import type { ProviderOptions } from '../providers/registry.ts';
 import { ReadTool, GrepTool, GlobTool, ListTool } from '../tools/index.ts';
 
 export namespace AgentLoop {
@@ -30,6 +31,7 @@ export namespace AgentLoop {
 		agentInstructions: string;
 		question: string;
 		maxSteps?: number;
+		providerOptions?: Partial<ProviderOptions>;
 	};
 
 	// Result type
@@ -135,10 +137,15 @@ export namespace AgentLoop {
 		const systemPrompt = buildSystemPrompt(agentInstructions);
 		const sessionId = crypto.randomUUID();
 
+		const mergedProviderOptions =
+			providerId === 'openai'
+				? { ...options.providerOptions, instructions: systemPrompt, sessionId }
+				: options.providerOptions;
+
 		// Get the model
 		const model = await Model.getModel(providerId, modelId, {
-			providerOptions:
-				providerId === 'openai' ? { instructions: systemPrompt, sessionId } : undefined
+			providerOptions: mergedProviderOptions,
+			allowMissingAuth: providerId === 'openai-compat'
 		});
 
 		// Get initial context
@@ -244,10 +251,15 @@ export namespace AgentLoop {
 		const systemPrompt = buildSystemPrompt(agentInstructions);
 		const sessionId = crypto.randomUUID();
 
+		const mergedProviderOptions =
+			providerId === 'openai'
+				? { ...options.providerOptions, instructions: systemPrompt, sessionId }
+				: options.providerOptions;
+
 		// Get the model
 		const model = await Model.getModel(providerId, modelId, {
-			providerOptions:
-				providerId === 'openai' ? { instructions: systemPrompt, sessionId } : undefined
+			providerOptions: mergedProviderOptions,
+			allowMissingAuth: providerId === 'openai-compat'
 		});
 
 		// Get initial context

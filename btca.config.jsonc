@@ -133,6 +133,12 @@
       "branch": "main"
     }
   ],
-  "model": "minimax/minimax-m2.1",
-  "provider": "openrouter"
+  "model": "zai-org/glm-4.7-flash",
+  "provider": "openai-compat",
+  "providerOptions": {
+    "openai-compat": {
+      "baseURL": "http://twotokens-blue:1234/v1",
+      "name": "lmstudio"
+    }
+  }
 }

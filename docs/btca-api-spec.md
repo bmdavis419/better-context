@@ -47,6 +47,7 @@ Supported providers:
 - `opencode` — API key
 - `openrouter` — API key
 - `openai` — OAuth (no API keys)
+- `openai-compat` — optional API key (requires baseURL + name in config)
 - `anthropic` — API key
 - `google` — API key or OAuth
 
@@ -60,6 +61,7 @@ Environment variable overrides:
 **`btca connect`**:
 
 - If provider is `openai`, runs local OAuth flow (PKCE) and writes tokens into OpenCode auth.
+- If provider is `openai-compat`, prompts for base URL, provider name, model ID, and optional API key.
 - If provider is `opencode`, `openrouter`, `anthropic`, or `google`, prompts for API key and writes into OpenCode auth.
 - If provider is not handled directly, falls back to `opencode auth --provider <provider>`.
 
@@ -110,6 +112,12 @@ Example:
 	"provider": "opencode",
 	"model": "claude-haiku-4-5",
 	"dataDirectory": ".btca",
+	"providerOptions": {
+		"openai-compat": {
+			"baseURL": "http://localhost:1234/v1",
+			"name": "lmstudio"
+		}
+	},
 	"resources": [
 		{
 			"type": "git",

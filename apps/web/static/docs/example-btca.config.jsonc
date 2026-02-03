@@ -39,5 +39,11 @@
   // AI model configuration
   "model": "claude-haiku-4-5",
   "provider": "opencode",
+  "providerOptions": {
+    "openai-compat": {
+      "baseURL": "http://localhost:1234/v1",
+      "name": "lmstudio"
+    }
+  },
   "providerTimeoutMs": 300000
 }

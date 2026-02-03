@@ -1,0 +1,110 @@
+---
+title: "MCP Server"
+description: "Connect the btca MCP server to your agents"
+---
+
+[Get your MCP API key](https://btca.dev/app/settings?tab=mcp)
+
+Use the btca MCP server to query cloud resources from your agent of choice.
+
+## Add to `AGENTS.md`
+
+Add the following section to your project’s `AGENTS.md`:
+
+```md
+# btca MCP Usage Instructions
+
+btca runs a cloud subagent that searches open source repos
+
+Use it whenever the user says "use btca", or when you need info that should come from the listed resources.
+
+## Tools
+
+The btca MCP server provides these tools:
+
+- `listResources` - List all available documentation resources
+- `ask` - Ask a question about specific resources
+
+## resources
+
+The resources available are defined by the end user in their btca dashboard. If there's a resource you need but it's not available in `listResources`, proceed without btca. When your task is done, clearly note that you'd like access to the missing resource.
+
+## Critical Workflow
+
+**Always call `listResources` first** before using `ask`. The `ask` tool requires exact resource names from the list.
+
+### Example
+
+1. Call listResources to get available resources
+2. Note the "name" field for each resource (e.g., "svelteKit", not "SvelteKit" or "svelte-kit")
+3. Call ask with:
+   - question: "How do I create a load function?"
+   - resources: ["svelteKit"]
+```
+
+## Configure your agent
+
+### Cursor
+
+In `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "server-name": {
+      "url": "https://btca.dev/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ak..."
+      }
+    }
+  }
+}
+```
+
+Reference: [Cursor MCP docs](https://cursor.com/docs/context/mcp#using-mcpjson)
+
+### Codex
+
+In `config.toml`, and add the API key to your environment variables (for example in `.zshenv`):
+
+```toml
+[mcp_servers.btca]
+bearer_token_env_var = "BTCA_API_KEY"
+enabled = true
+url = "https://btca.dev/api/mcp"
+```
+
+Reference: [Codex MCP docs](https://developers.openai.com/codex/mcp/)
+
+### Claude Code
+
+In the CLI:
+
+```bash
+claude mcp add --transport http better-context https://btca.dev/api/mcp \
+ --header "Authorization: Bearer ak..."
+```
+
+Reference: [Claude Code MCP docs](https://code.claude.com/docs/en/mcp#installing-mcp-servers)
+
+### OpenCode
+
+In `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "better-context": {
+      "type": "remote",
+      "url": "https://btca.dev/api/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer ak..."
+      }
+    }
+  }
+}
+```
+
+Reference: [OpenCode MCP docs](https://opencode.ai/docs/mcp-servers/)

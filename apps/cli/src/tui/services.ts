@@ -10,6 +10,7 @@ import {
 	updateModel as updateModelClient,
 	addResource as addResourceClient,
 	removeResource as removeResourceClient,
+	type ProviderOptionsInput,
 	type ResourceInput
 } from '../client/index.ts';
 import { parseSSEStream } from '../client/stream.ts';
@@ -130,9 +131,13 @@ export const services = {
 	/**
 	 * Update model configuration
 	 */
-	updateModel: async (provider: string, model: string): Promise<ModelUpdateResult> => {
+	updateModel: async (
+		provider: string,
+		model: string,
+		providerOptions?: ProviderOptionsInput
+	): Promise<ModelUpdateResult> => {
 		const serverUrl = getServerUrl();
-		return updateModelClient(serverUrl, provider, model);
+		return updateModelClient(serverUrl, provider, model, providerOptions);
 	},
 
 	/**

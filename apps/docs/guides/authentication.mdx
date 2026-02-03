@@ -1,0 +1,63 @@
+---
+title: "Authentication"
+description: "Connect providers locally and link your cloud API key"
+---
+
+## Local provider auth (btca-server)
+
+BTCA reads credentials from OpenCode's auth storage:
+
+- macOS/Linux: `~/.local/share/opencode/auth.json`
+- Windows: `%APPDATA%/opencode/auth.json`
+
+Supported providers:
+
+- `opencode` (API key)
+- `openrouter` (API key)
+- `openai` (OAuth, no API keys)
+- `anthropic` (API key)
+- `google` (API key or OAuth)
+
+Environment variable overrides:
+
+- `OPENCODE_API_KEY` (for provider `opencode`)
+- `OPENROUTER_API_KEY` (for provider `openrouter`)
+
+### Connect or disconnect
+
+```bash
+btca connect
+btca disconnect
+```
+
+`btca connect` performs OAuth for `openai`, prompts for API keys when required, and
+falls back to `opencode auth --provider <provider>` for other providers.
+
+## Cloud auth (btca remote)
+
+Remote commands require an API key stored at:
+
+```
+~/.config/btca/remote-auth.json
+```
+
+Example:
+
+```json
+{
+  "apiKey": "btca_xxxxxxxxxxxx",
+  "linkedAt": 1706000000000
+}
+```
+
+Use the CLI to link:
+
+```bash
+btca remote link
+```
+
+All cloud requests send:
+
+```
+Authorization: Bearer <apiKey>
+```

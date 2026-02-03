@@ -4,7 +4,7 @@
 		{
 			question: 'Do I have to pay for the CLI?',
 			answer:
-				"No! The CLI can be used through one of 6 different providers, it's completely bring your own model."
+				"No! The CLI can be used through one of 7 different providers, it's completely bring your own model."
 		},
 		{
 			question: 'How do I cancel my subscription?',

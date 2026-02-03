@@ -1,0 +1,194 @@
+---
+title: "CLI Reference"
+description: "All btca commands and what each one does"
+---
+
+## Global options
+
+These options apply to local CLI commands.
+
+| Option | Description |
+| --- | --- |
+| `--server <url>` | Use an existing server (health checked). |
+| `--port <port>` | Port for an auto-started server. |
+| `--no-tui` | Use REPL instead of TUI. |
+| `--no-thinking` | Hide reasoning output (REPL and `ask`). |
+| `--no-tools` | Hide tool traces (REPL and `ask`). |
+| `--sub-agent` | Clean output (no reasoning or tool traces). |
+
+## `btca`
+
+Launches the TUI by default. Use `--no-tui` for the REPL.
+
+REPL commands:
+
+- `/help` shows help.
+- `/resources` lists resources.
+- `/clear` clears session resources.
+- `/quit` or `/exit` exits.
+
+The REPL supports `@resource` mentions.
+
+## `btca add [url-or-path]`
+
+Adds a git repo or local directory resource.
+
+Options:
+
+- `-g, --global` sets the flag, but target resolution still depends on whether a project config exists.
+- `-n, --name <name>` sets a resource name.
+- `-b, --branch <branch>` sets a branch (default `main`).
+- `-s, --search-path <path...>` sets one or more search paths.
+- `--notes <notes>` sets special notes.
+- `-t, --type <git|local>` forces the resource type.
+
+Behavior: If no argument is provided, the CLI starts an interactive wizard. When `--type` is omitted, it auto-detects URL vs path. GitHub URLs are normalized to the base repo. Local paths are resolved to absolute paths.
+
+## `btca remove [name]`
+
+Removes a resource by name. If omitted, it opens an interactive picker.
+
+Options:
+
+- `-g, --global` sets the flag, but is not a strict global override.
+
+## `btca resources`
+
+Lists all configured resources.
+
+## `btca ask`
+
+Asks a one-shot question with streaming output.
+
+Options:
+
+- `-q, --question <text>` is required.
+- `-r, --resource <name...>` can be repeated.
+- `--no-thinking`, `--no-tools`, `--sub-agent` control output detail.
+
+Behavior: `@resource` mentions are resolved and merged with `-r` flags. Mentions are stripped from the query text before sending. If no resources are provided, it uses all configured resources. Uses the `/question/stream` SSE endpoint.
+
+## `btca connect`
+
+Configures provider and model.
+
+Options:
+
+- `-g, --global` targets the global config if no project config exists.
+- `-p, --provider <id>` sets the provider.
+- `-m, --model <id>` sets the model.
+
+Behavior: When provider and model are provided, it updates the config directly. Otherwise, it walks an interactive provider selection (connected providers first), then model selection. If auth is required, it prompts for credentials.
+
+## `btca disconnect`
+
+Disconnects provider credentials.
+
+Options:
+
+- `-p, --provider <id>` selects a provider to disconnect.
+
+Behavior: If omitted, it opens an interactive picker.
+
+## `btca init`
+
+Project setup wizard.
+
+Options:
+
+- `-f, --force` overwrites existing config.
+
+Behavior: Prompts for setup type: MCP (remote) or CLI (local). The MCP path validates an API key if needed, creates `btca.remote.config.jsonc`, and writes `.claude/skills/btca-remote/SKILL.md`. The CLI path creates `btca.config.jsonc`, handles `.btca/` and `.gitignore`, and writes `.claude/skills/btca-local/SKILL.md`.
+
+## `btca clear`
+
+Clears all locally cloned resources.
+
+## `btca serve`
+
+Starts the local server.
+
+Options:
+
+- `-p, --port <port>` sets the port (default `8080`).
+
+## Remote commands (`btca remote`)
+
+All remote commands require an API key linked with `btca remote link`.
+
+### `btca remote link`
+
+Authenticates with the BTCA cloud API.
+
+Options:
+
+- `--key <apiKey>` provides the API key directly.
+
+Behavior: If `--key` is omitted, it prompts for a key and validates it by calling MCP `listResources`.
+
+### `btca remote unlink`
+
+Removes the stored API key.
+
+### `btca remote status`
+
+Shows sandbox state, plan, version, and current project info.
+
+### `btca remote wake`
+
+Pre-warms the sandbox and returns when ready.
+
+### `btca remote add [url]`
+
+Adds a git resource to local remote config and syncs to the cloud.
+
+Options:
+
+- `-n, --name <name>` sets a resource name.
+- `-b, --branch <branch>` sets a branch.
+- `-s, --search-path <path...>` sets one or more search paths.
+- `--notes <notes>` sets special notes.
+
+Behavior: Creates local config if missing and prompts for a project name. GitHub URLs are normalized. Syncs to cloud and warns if the sync fails.
+
+### `btca remote sync`
+
+Syncs local remote config with the cloud.
+
+Options:
+
+- `--force` overwrites cloud config on conflicts.
+
+Behavior: Detects conflicts when a resource name exists with different settings.
+
+### `btca remote ask`
+
+Asks a question via the cloud sandbox.
+
+Options:
+
+- `-q, --question <text>` is required.
+- `-r, --resource <name...>` can be repeated.
+
+Behavior: Validates resources by calling `listResources`. If none are specified, it uses all available resources.
+
+### `btca remote grab <threadId>`
+
+Fetches the full thread transcript.
+
+Options:
+
+- `--json` outputs JSON.
+- `--markdown` outputs Markdown (default).
+
+### `btca remote init`
+
+Creates `btca.remote.config.jsonc`.
+
+Options:
+
+- `-p, --project <name>` sets the project name.
+
+### `btca remote mcp [agent]`
+
+Outputs an MCP configuration snippet. Supported agents are `opencode` (JSON config block) and `claude` (Claude Code CLI command).

@@ -52,11 +52,25 @@ export namespace Model {
 		}
 	}
 
+	export class ProviderOptionsError extends Error {
+		readonly _tag = 'ProviderOptionsError';
+		readonly providerId: string;
+		readonly hint: string;
+
+		constructor(args: { providerId: string; message: string; hint: string }) {
+			super(args.message);
+			this.providerId = args.providerId;
+			this.hint = args.hint;
+		}
+	}
+
 	export type ModelOptions = {
 		/** Additional provider options */
 		providerOptions?: Partial<ProviderOptions>;
 		/** Skip authentication check (useful for providers with wellknown auth) */
 		skipAuth?: boolean;
+		/** Allow missing auth for providers that can be used without credentials */
+		allowMissingAuth?: boolean;
 	};
 
 	/**
@@ -92,13 +106,17 @@ export namespace Model {
 		if (!options.skipAuth) {
 			const status = await Auth.getAuthStatus(normalizedProviderId);
 			if (status.status === 'missing') {
-				throw new ProviderNotAuthenticatedError(providerId);
+				if (!options.allowMissingAuth) {
+					throw new ProviderNotAuthenticatedError(providerId);
+				}
 			}
 			if (status.status === 'invalid') {
 				throw new ProviderAuthTypeError({ providerId, authType: status.authType });
 			}
-			apiKey = status.apiKey;
-			accountId = status.accountId;
+			if (status.status === 'ok') {
+				apiKey = status.apiKey;
+				accountId = status.accountId;
+			}
 		}
 
 		// Build provider options
@@ -109,6 +127,20 @@ export namespace Model {
 
 		if (apiKey) {
 			providerOptions.apiKey = apiKey;
+		}
+
+		if (normalizedProviderId === 'openai-compat') {
+			const baseURL = providerOptions.baseURL?.trim();
+			const name = providerOptions.name?.trim();
+			if (!baseURL || !name) {
+				throw new ProviderOptionsError({
+					providerId: normalizedProviderId,
+					message: 'openai-compat requires baseURL and name',
+					hint: 'Run "btca connect -p openai-compat" to configure baseURL and name.'
+				});
+			}
+			providerOptions.baseURL = baseURL;
+			providerOptions.name = name;
 		}
 
 		// Create the provider and get the model

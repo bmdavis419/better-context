@@ -91,7 +91,13 @@ const UpdateModelRequestSchema = z.object({
 		.string()
 		.min(1, 'Model name cannot be empty')
 		.max(LIMITS.MODEL_NAME_MAX)
-		.regex(SAFE_NAME_REGEX, 'Invalid model name format')
+		.regex(SAFE_NAME_REGEX, 'Invalid model name format'),
+	providerOptions: z
+		.object({
+			baseURL: z.string().optional(),
+			name: z.string().optional()
+		})
+		.optional()
 });
 
 /**
@@ -212,7 +218,8 @@ const createApp = (deps: {
 				tag === 'ConfigError' ||
 				tag === 'InvalidProviderError' ||
 				tag === 'InvalidModelError' ||
-				tag === 'ProviderNotConnectedError'
+				tag === 'ProviderNotConnectedError' ||
+				tag === 'ProviderOptionsError'
 					? 400
 					: 500;
 			return c.json({ error: message, tag, ...(hint && { hint }) }, status);
@@ -372,7 +379,11 @@ const createApp = (deps: {
 		// PUT /config/model - Update model configuration
 		.put('/config/model', async (c: HonoContext) => {
 			const decoded = await decodeJson(c.req.raw, UpdateModelRequestSchema);
-			const result = await config.updateModel(decoded.provider, decoded.model);
+			const result = await config.updateModel(
+				decoded.provider,
+				decoded.model,
+				decoded.providerOptions
+			);
 			return c.json(result);
 		})
 

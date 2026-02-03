@@ -1,0 +1,360 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BTCA Cloud API",
+    "version": "2.0.0",
+    "description": "Remote API used by btca remote and MCP tools."
+  },
+  "servers": [
+    {
+      "url": "https://btca.dev"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/mcp": {
+      "post": {
+        "summary": "MCP JSON-RPC endpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JsonRpcRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool call response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/McpToolCallResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/status": {
+      "get": {
+        "summary": "Get current sandbox status",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sandbox status",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliStatusResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/wake": {
+      "post": {
+        "summary": "Warm up the sandbox",
+        "responses": {
+          "200": {
+            "description": "Server URL",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliWakeResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/threads/{threadId}": {
+      "get": {
+        "summary": "Fetch a thread transcript",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread transcript",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliThreadResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/threads": {
+      "get": {
+        "summary": "List threads",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threads list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliThreadsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/questions": {
+      "get": {
+        "summary": "List questions",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Questions list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliQuestionsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cli/projects": {
+      "get": {
+        "summary": "List projects",
+        "responses": {
+          "200": {
+            "description": "Projects list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CliProjectsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CloudError" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "JsonRpcRequest": {
+        "type": "object",
+        "required": ["jsonrpc", "id", "method", "params"],
+        "properties": {
+          "jsonrpc": { "const": "2.0" },
+          "id": {
+            "oneOf": [
+              { "type": "integer" },
+              { "type": "string" }
+            ]
+          },
+          "method": { "type": "string" },
+          "params": { "$ref": "#/components/schemas/McpToolCallParams" }
+        }
+      },
+      "McpToolCallParams": {
+        "type": "object",
+        "required": ["name", "arguments"],
+        "properties": {
+          "name": { "type": "string" },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "project": { "type": "string" }
+        }
+      },
+      "McpContentItem": {
+        "type": "object",
+        "required": ["type", "text"],
+        "properties": {
+          "type": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      },
+      "McpToolCallResult": {
+        "type": "object",
+        "required": ["content", "isError"],
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/McpContentItem" }
+          },
+          "isError": { "type": "boolean" }
+        }
+      },
+      "McpToolCallResponse": {
+        "type": "object",
+        "required": ["result"],
+        "properties": {
+          "result": { "$ref": "#/components/schemas/McpToolCallResult" }
+        }
+      },
+      "GenericObject": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CliStatusResponse": {
+        "type": "object",
+        "required": ["instance"],
+        "properties": {
+          "instance": { "$ref": "#/components/schemas/GenericObject" },
+          "project": { "$ref": "#/components/schemas/GenericObject" }
+        }
+      },
+      "CliWakeResponse": {
+        "type": "object",
+        "required": ["serverUrl"],
+        "properties": {
+          "serverUrl": { "type": "string" }
+        }
+      },
+      "CliThreadResponse": {
+        "type": "object",
+        "required": ["thread", "messages"],
+        "properties": {
+          "thread": { "$ref": "#/components/schemas/GenericObject" },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GenericObject" }
+          }
+        }
+      },
+      "CliThreadsResponse": {
+        "type": "object",
+        "required": ["threads"],
+        "properties": {
+          "threads": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GenericObject" }
+          }
+        }
+      },
+      "CliQuestionsResponse": {
+        "type": "object",
+        "required": ["questions"],
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GenericObject" }
+          }
+        }
+      },
+      "CliProjectsResponse": {
+        "type": "object",
+        "required": ["projects"],
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GenericObject" }
+          }
+        }
+      },
+      "CloudError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

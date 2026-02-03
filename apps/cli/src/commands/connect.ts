@@ -191,12 +191,26 @@ async function runBtcaAuth(providerId: string): Promise<boolean> {
 	return runOpencodeAuth(providerId);
 }
 
+const promptOpenAICompatSetup = async (options: { includeModel?: boolean } = {}) => {
+	const includeModel = options.includeModel ?? true;
+	const rl = createRl();
+	try {
+		const baseURL = await promptInput(rl, 'Base URL');
+		const name = await promptInput(rl, 'Provider name');
+		const modelId = includeModel ? await promptInput(rl, 'Model ID') : '';
+		const apiKey = await promptInput(rl, 'API key (optional)');
+		return { baseURL, name, modelId, apiKey };
+	} finally {
+		rl.close();
+	}
+};
+
 export const connectCommand = new Command('connect')
 	.description('Configure the AI provider and model')
 	.option('-g, --global', 'Save to global config instead of project config')
 	.option(
 		'-p, --provider <id>',
-		'Provider ID (opencode, openrouter, openai, google, anthropic, github-copilot)'
+		'Provider ID (opencode, openrouter, openai, openai-compat, google, anthropic, github-copilot)'
 	)
 	.option('-m, --model <id>', 'Model ID (e.g., "claude-haiku-4-5")')
 	.action(async (options: { global?: boolean; provider?: string; model?: string }, command) => {
@@ -214,6 +228,28 @@ export const connectCommand = new Command('connect')
 
 			// If both provider and model specified via flags, just set them
 			if (options.provider && options.model) {
+				if (options.provider === 'openai-compat') {
+					const { baseURL, name, apiKey } = await promptOpenAICompatSetup({
+						includeModel: false
+					});
+					if (!baseURL || !name) {
+						console.error('Error: Base URL and provider name are required.');
+						server.stop();
+						process.exit(1);
+					}
+					if (apiKey) {
+						await saveProviderApiKey(options.provider, apiKey);
+						console.log(`${options.provider} API key saved.`);
+					}
+					const result = await updateModel(server.url, options.provider, options.model, {
+						baseURL,
+						name
+					});
+					console.log(`Model updated: ${result.provider}/${result.model}`);
+					server.stop();
+					return;
+				}
+
 				const result = await updateModel(server.url, options.provider, options.model);
 				console.log(`Model updated: ${result.provider}/${result.model}`);
 
@@ -269,6 +305,32 @@ export const connectCommand = new Command('connect')
 					server.stop();
 					process.exit(1);
 				}
+			}
+
+			if (provider === 'openai-compat') {
+				const modelDocs = PROVIDER_MODEL_DOCS[provider];
+				if (modelDocs) {
+					console.log(`\n${modelDocs.label}: ${modelDocs.url}`);
+				}
+
+				const { baseURL, name, modelId, apiKey } = await promptOpenAICompatSetup();
+
+				if (!baseURL || !name || !modelId) {
+					console.error('Error: Base URL, provider name, and model ID are required.');
+					server.stop();
+					process.exit(1);
+				}
+
+				if (apiKey) {
+					await saveProviderApiKey(provider, apiKey);
+					console.log(`${provider} API key saved.`);
+				}
+
+				const result = await updateModel(server.url, provider, modelId, { baseURL, name });
+				console.log(`\nModel configured: ${result.provider}/${result.model}`);
+				console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
+				server.stop();
+				return;
 			}
 
 			let model: string;

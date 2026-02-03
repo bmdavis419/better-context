@@ -65,6 +65,10 @@ export type WizardStep =
 	| 'api-key'
 	| 'model'
 	| 'model-input'
+	| 'compat-base-url'
+	| 'compat-name'
+	| 'compat-model'
+	| 'compat-api-key'
 	| null;
 
 export interface Command {
