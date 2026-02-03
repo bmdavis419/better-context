@@ -12,6 +12,7 @@ import {
 	CURATED_MODELS,
 	PROVIDER_AUTH_GUIDANCE,
 	PROVIDER_INFO,
+	PROVIDER_MODEL_DOCS,
 	PROVIDER_SETUP_LINKS
 } from '../connect/constants.ts';
 
@@ -272,26 +273,36 @@ export const connectCommand = new Command('connect')
 
 			let model: string;
 			const curated = CURATED_MODELS[provider] ?? [];
+			const modelDocs = PROVIDER_MODEL_DOCS[provider];
 
-			if (curated.length === 1) {
-				model = curated[0]!.id;
-				console.log(`\nUsing model: ${curated[0]!.label} (${model})`);
-			} else if (curated.length > 1) {
-				model = await promptSelect(
-					'Select a model:',
-					curated.map((m) => ({ label: m.label, value: m.id }))
-				);
+			if (modelDocs) {
+				console.log(`\n${modelDocs.label}: ${modelDocs.url}`);
+			}
+
+			if (curated.length > 0) {
+				const options = [
+					...curated.map((m) => ({ label: m.label, value: m.id })),
+					{ label: 'Custom model ID...', value: '__custom__' }
+				];
+				const selection = await promptSelect('Select a model:', options);
+				if (selection === '__custom__') {
+					const rl = createRl();
+					model = await promptInput(rl, 'Enter model ID');
+					rl.close();
+				} else {
+					model = selection;
+				}
 			} else {
 				console.log(`\nCurated models for ${provider} are coming soon.`);
 				const rl = createRl();
 				model = await promptInput(rl, 'Enter model ID');
 				rl.close();
+			}
 
-				if (!model) {
-					console.error('Error: Model ID is required.');
-					server.stop();
-					process.exit(1);
-				}
+			if (!model) {
+				console.error('Error: Model ID is required.');
+				server.stop();
+				process.exit(1);
 			}
 
 			// Update the model

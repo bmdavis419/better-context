@@ -8,7 +8,7 @@ import {
 	type Component,
 	type Setter
 } from 'solid-js';
-import { useKeyboard } from '@opentui/solid';
+import { useKeyboard, usePaste } from '@opentui/solid';
 import { Result } from 'better-result';
 import { spawn } from 'bun';
 
@@ -23,6 +23,7 @@ import {
 	CURATED_MODELS,
 	PROVIDER_AUTH_GUIDANCE,
 	PROVIDER_INFO,
+	PROVIDER_MODEL_DOCS,
 	PROVIDER_SETUP_LINKS
 } from '../../connect/constants.ts';
 import type { WizardStep } from '../types.ts';
@@ -38,6 +39,7 @@ type ProviderOption = {
 type ModelOption = {
 	id: string;
 	label: string;
+	kind: 'curated' | 'custom';
 };
 
 interface ConnectWizardProps {
@@ -60,6 +62,14 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	const [error, setError] = createSignal<string | null>(null);
 	const [statusMessage, setStatusMessage] = createSignal('');
 	const [busy, setBusy] = createSignal(false);
+
+	const customModelOption: ModelOption = {
+		id: '__custom__',
+		label: 'Custom model ID...',
+		kind: 'custom'
+	};
+
+	const sanitizePaste = (text: string) => text.replace(/[\r\n]+/g, '').trim();
 
 	const setStepSafe = (nextStep: ConnectStep) => {
 		setError(null);
@@ -109,6 +119,16 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	const authLink = createMemo(() => {
 		const providerId = selectedProviderId();
 		return PROVIDER_SETUP_LINKS[providerId];
+	});
+
+	const modelDocsLink = createMemo(() => {
+		const providerId = selectedProviderId();
+		return PROVIDER_MODEL_DOCS[providerId];
+	});
+
+	const showModelDocsLink = createMemo(() => {
+		const currentStep = step();
+		return (currentStep === 'model' || currentStep === 'model-input') && Boolean(modelDocsLink());
 	});
 
 	const loadProviders = async () => {
@@ -241,14 +261,17 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 
 	const proceedToModelSelection = async (providerId: string) => {
 		const curated = CURATED_MODELS[providerId] ?? [];
-		if (curated.length === 1) {
-			await updateModel(providerId, curated[0]!.id);
-			return;
-		}
-
-		if (curated.length > 1) {
-			setModelOptions(curated);
-			setSelectedModelIndex(0);
+		if (curated.length > 0) {
+			const options: ModelOption[] = [
+				...curated.map((model) => ({ ...model, kind: 'curated' as const })),
+				customModelOption
+			];
+			const currentModel = config.selectedModel();
+			const currentIndex = options.findIndex(
+				(option) => option.kind === 'curated' && option.id === currentModel
+			);
+			setModelOptions(options);
+			setSelectedModelIndex(currentIndex >= 0 ? currentIndex : 0);
 			setStepSafe('model');
 			return;
 		}
@@ -324,12 +347,13 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	};
 
 	useKeyboard((key) => {
+		const currentStep = step();
 		if (key.name === 'escape') {
 			props.onClose();
 			return;
 		}
 
-		if (step() === 'provider') {
+		if (currentStep === 'provider') {
 			switch (key.name) {
 				case 'up':
 					setSelectedProviderIndex((idx) =>
@@ -343,9 +367,10 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 					void handleProviderSelect();
 					break;
 			}
+			return;
 		}
 
-		if (step() === 'model') {
+		if (currentStep === 'model') {
 			switch (key.name) {
 				case 'up':
 					setSelectedModelIndex((idx) =>
@@ -358,12 +383,26 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 				case 'return': {
 					const selected = modelOptions()[selectedModelIndex()];
 					if (selected) {
+						if (selected.kind === 'custom') {
+							setWizardInput('');
+							setStepSafe('model-input');
+							return;
+						}
 						void updateModel(selectedProviderId(), selected.id);
 					}
 					break;
 				}
 			}
 		}
+	});
+
+	usePaste((text) => {
+		const currentStep = step();
+		if (currentStep !== 'api-key' && currentStep !== 'model-input') return;
+		const sanitized = sanitizePaste(text.text);
+		if (!sanitized) return;
+		setWizardInput((prev) => `${prev}${sanitized}`);
+		setError(null);
 	});
 
 	const renderProviderList = () => (
@@ -398,7 +437,9 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 							content={model.label}
 							style={{ width: 32 }}
 						/>
-						<text fg={colors.textSubtle} content={` ${model.id}`} />
+						<Show when={model.kind === 'curated'}>
+							<text fg={colors.textSubtle} content={` ${model.id}`} />
+						</Show>
 					</box>
 				);
 			}}
@@ -424,6 +465,12 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			<text fg={colors.textSubtle} content={` ${hint()}`} />
 			<Show when={authLink()}>
 				<text fg={colors.textSubtle} content={` ${authLink()!.label}: ${authLink()!.url}`} />
+			</Show>
+			<Show when={showModelDocsLink()}>
+				<text
+					fg={colors.textSubtle}
+					content={` ${modelDocsLink()!.label}: ${modelDocsLink()!.url}`}
+				/>
 			</Show>
 			<Show when={statusMessage().length > 0}>
 				<text fg={colors.textMuted} content={` ${statusMessage()}`} />

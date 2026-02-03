@@ -45,9 +45,24 @@ export const PROVIDER_AUTH_GUIDANCE: Record<string, string> = {
 	opencode: 'OpenCode uses API keys: paste your API key to continue.'
 };
 
+export const PROVIDER_MODEL_DOCS: Record<string, { label: string; url: string }> = {
+	openai: { label: 'Model docs', url: 'https://platform.openai.com/docs/models' },
+	anthropic: {
+		label: 'Model docs',
+		url: 'https://platform.claude.com/docs/en/about-claude/models/overview'
+	},
+	opencode: { label: 'Model docs', url: 'https://opencode.ai/docs/zen/#endpoints' },
+	openrouter: { label: 'Model docs', url: 'https://openrouter.ai/models' },
+	google: { label: 'Model docs', url: 'https://ai.google.dev/gemini-api/docs' },
+	'github-copilot': {
+		label: 'Model docs',
+		url: 'https://docs.github.com/en/rest/models?apiVersion=2022-11-28'
+	}
+};
+
 export const PROVIDER_SETUP_LINKS: Record<string, { label: string; url: string }> = {
 	opencode: { label: 'Get OpenCode Zen API key', url: 'https://opencode.ai/zen' },
-	openrouter: { label: 'Get OpenRouter API key', url: 'https://openrouter.ai/settings/keys' },
+	openrouter: { label: 'Get OpenRouter API key', url: 'https://openrouter.ai/models' },
 	google: { label: 'Get Google API key', url: 'https://aistudio.google.com/api-keys' },
 	anthropic: { label: 'Get Anthropic API key', url: 'https://platform.claude.com/dashboard' }
 };

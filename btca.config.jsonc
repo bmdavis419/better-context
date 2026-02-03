@@ -133,6 +133,6 @@
       "branch": "main"
     }
   ],
-  "model": "claude-haiku-4.5",
-  "provider": "github-copilot"
+  "model": "minimax/minimax-m2.1",
+  "provider": "openrouter"
 }
