@@ -1,14 +1,13 @@
 # dependencies (bun install)
 node_modules
 
-*.mov
-
-launch/
 
 # output
 out
 dist
 *.tgz
+
+launch/
 
 .btca
 

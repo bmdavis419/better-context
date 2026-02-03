@@ -133,6 +133,6 @@
       "branch": "main"
     }
   ],
-  "model": "gemini-3-flash-preview",
-  "provider": "google"
+  "model": "claude-haiku-4-5",
+  "provider": "opencode"
 }

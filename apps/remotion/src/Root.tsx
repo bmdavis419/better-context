@@ -5,10 +5,15 @@ import { LaunchVideo, launchVideoDefaultProps } from './compositions/LaunchVideo
 import type { LaunchVideoProps } from './types.ts';
 
 const calculateMetadata: CalculateMetadataFunction<LaunchVideoProps> = ({ props }) => {
-	const transitions = Math.max(props.clips.length, 0);
+	// Total transitions: intro->clip1, clip1->clip2, ..., clipN->outro
+	const numTransitions = props.clips.length + 1;
+
 	const clipsTotal = props.clips.reduce((sum, clip) => sum + clip.durationInFrames, 0);
 	const total =
-		clipsTotal + props.featureDurationInFrames - transitions * props.transitionDurationInFrames;
+		props.introDurationInFrames +
+		clipsTotal +
+		props.outroDurationInFrames -
+		numTransitions * props.transitionDurationInFrames;
 
 	return {
 		durationInFrames: Math.max(total, 1),

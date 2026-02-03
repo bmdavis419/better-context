@@ -7,12 +7,12 @@ export type ClipConfig = {
 	durationInFrames: number;
 	trimStartInFrames?: number;
 	trimEndInFrames?: number;
+	playbackRate?: number;
 };
 
 export type LaunchVideoProps = {
 	clips: ClipConfig[];
-	features: string[];
-	featureTitle: string;
-	featureDurationInFrames: number;
+	introDurationInFrames: number;
+	outroDurationInFrames: number;
 	transitionDurationInFrames: number;
 };
