@@ -1,0 +1,10 @@
+---
+title: "Update provider model"
+openapi: "PUT /config/model"
+---
+
+Updates the active provider and model.
+
+For `openai-compat`, include `providerOptions` with `baseURL` and `name` so the server can
+construct the OpenAI-compatible provider. The `model` field remains required and is used as the
+model ID when sending requests.

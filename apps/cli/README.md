@@ -87,6 +87,21 @@ btca uses a config file at `~/.config/btca/btca.config.jsonc`. Manage configurat
 btca connect --provider opencode --model claude-haiku-4-5
 ```
 
+#### OpenAI-compatible providers
+
+To use an OpenAI-compatible server (e.g., LM Studio), run:
+
+```bash
+btca connect --provider openai-compat
+```
+
+You will be prompted for:
+
+- Base URL: the root URL of your OpenAI-compatible server.
+- Provider name: the AI SDK provider identifier.
+- Model ID: the model to use for requests (stored as `model` in `btca.config.jsonc`).
+- API key (optional): only if your server requires authentication.
+
 ### List Resources
 
 ```bash

@@ -1,0 +1,73 @@
+---
+title: "Authentication"
+description: "Connect providers locally and link your cloud API key"
+---
+
+## Local provider auth (btca-server)
+
+BTCA reads credentials from OpenCode's auth storage:
+
+- macOS/Linux: `~/.local/share/opencode/auth.json`
+- Windows: `%APPDATA%/opencode/auth.json`
+
+Supported providers:
+
+- `opencode` (API key)
+- `openrouter` (API key)
+- `openai` (OAuth, no API keys)
+- `openai-compat` (optional API key)
+- `anthropic` (API key)
+- `google` (API key or OAuth)
+
+Environment variable overrides:
+
+- `OPENCODE_API_KEY` (for provider `opencode`)
+- `OPENROUTER_API_KEY` (for provider `openrouter`)
+
+### Connect or disconnect
+
+```bash
+btca connect
+btca disconnect
+```
+
+`btca connect` performs OAuth for `openai`, prompts for API keys when required, and
+falls back to `opencode auth --provider <provider>` for other providers.
+
+For `openai-compat`, `btca connect` also collects the required provider details:
+
+- **Base URL** (required): the root URL of your OpenAI-compatible server. The AI SDK appends its own
+  endpoint paths, so btca must know the base URL to send requests to the correct host.
+- **Provider name** (required): the identifier the AI SDK uses to namespace requests for this
+  OpenAI-compatible provider.
+- **Model ID** (required): the model to use for requests; stored in `btca.config.jsonc` as `model`.
+- **API key** (optional): only if your server requires authentication; stored in OpenCode auth.
+
+## Cloud auth (btca remote)
+
+Remote commands require an API key stored at:
+
+```
+~/.config/btca/remote-auth.json
+```
+
+Example:
+
+```json
+{
+  "apiKey": "btca_xxxxxxxxxxxx",
+  "linkedAt": 1706000000000
+}
+```
+
+Use the CLI to link:
+
+```bash
+btca remote link
+```
+
+All cloud requests send:
+
+```
+Authorization: Bearer <apiKey>
+```

@@ -29,6 +29,24 @@
 			"description": "Timeout in milliseconds for provider requests (optional)",
 			"default": 300000
 		},
+		"providerOptions": {
+			"type": "object",
+			"description": "Per-provider options (e.g., baseURL and name for openai-compat)",
+			"additionalProperties": {
+				"type": "object",
+				"properties": {
+					"baseURL": {
+						"type": "string",
+						"description": "Base URL for the provider"
+					},
+					"name": {
+						"type": "string",
+						"description": "Provider name for the AI SDK"
+					}
+				},
+				"additionalProperties": false
+			}
+		},
 		"resources": {
 			"type": "array",
 			"description": "List of resources (documentation repositories or local directories) to use for context",

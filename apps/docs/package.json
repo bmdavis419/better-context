@@ -1,0 +1,11 @@
+{
+	"name": "@btca/docs",
+	"private": true,
+	"scripts": {
+		"dev": "mint dev"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"prettier": "^3.8.1"
+	}
+}

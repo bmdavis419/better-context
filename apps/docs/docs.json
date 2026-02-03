@@ -1,0 +1,113 @@
+{
+	"$schema": "https://mintlify.com/docs.json",
+	"theme": "linden",
+	"name": "btca",
+	"colors": {
+		"primary": "#255099",
+		"light": "#8CA7E6",
+		"dark": "#1B3F7A"
+	},
+	"fonts": {
+		"heading": {
+			"family": "Geist",
+			"source": "/fonts/Geist-Variable.woff2",
+			"format": "woff2",
+			"weight": 600
+		},
+		"body": {
+			"family": "Geist",
+			"source": "/fonts/Geist-Variable.woff2",
+			"format": "woff2",
+			"weight": 400
+		}
+	},
+	"openapi": ["/api-reference/openapi.local.json", "/api-reference/openapi.cloud.json"],
+	"favicon": "/favicon.svg",
+	"navigation": {
+		"tabs": [
+			{
+				"tab": "Guides",
+				"groups": [
+					{
+						"group": "Getting started",
+						"pages": [
+							"index",
+							"guides/quickstart",
+							"guides/cli-reference",
+							"guides/authentication",
+							"guides/configuration",
+							"guides/mcp"
+						]
+					}
+				]
+			},
+			{
+				"tab": "API reference",
+				"groups": [
+					{
+						"group": "Overview",
+						"pages": ["api-reference/introduction"]
+					},
+					{
+						"group": "Local server API",
+						"pages": [
+							"api-reference/local/health",
+							"api-reference/local/config",
+							"api-reference/local/resources",
+							"api-reference/local/providers",
+							"api-reference/local/reload-config",
+							"api-reference/local/question",
+							"api-reference/local/question-stream",
+							"api-reference/local/config-model",
+							"api-reference/local/config-resources",
+							"api-reference/local/config-resources-delete",
+							"api-reference/local/clear"
+						]
+					},
+					{
+						"group": "Cloud API",
+						"pages": [
+							"api-reference/cloud/mcp",
+							"api-reference/cloud/status",
+							"api-reference/cloud/wake",
+							"api-reference/cloud/thread",
+							"api-reference/cloud/threads",
+							"api-reference/cloud/questions",
+							"api-reference/cloud/projects"
+						]
+					}
+				]
+			}
+		]
+	},
+	"logo": {
+		"light": "/logo/light.svg",
+		"dark": "/logo/dark.svg"
+	},
+	"navbar": {
+		"links": [
+			{
+				"label": "GitHub",
+				"href": "https://github.com/davis7dotsh/better-context"
+			},
+			{
+				"label": "X",
+				"href": "https://x.com/davis7"
+			}
+		],
+		"primary": {
+			"type": "button",
+			"label": "Go to App",
+			"href": "https://btca.dev/app"
+		}
+	},
+	"contextual": {
+		"options": ["copy", "view", "chatgpt", "claude", "perplexity", "mcp", "cursor", "vscode"]
+	},
+	"footer": {
+		"socials": {
+			"x": "https://x.com/davis7",
+			"github": "https://github.com/davis7dotsh/better-context"
+		}
+	}
+}

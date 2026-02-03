@@ -8,7 +8,7 @@ import {
 	type Component,
 	type Setter
 } from 'solid-js';
-import { useKeyboard } from '@opentui/solid';
+import { useKeyboard, usePaste } from '@opentui/solid';
 import { Result } from 'better-result';
 import { spawn } from 'bun';
 
@@ -23,11 +23,22 @@ import {
 	CURATED_MODELS,
 	PROVIDER_AUTH_GUIDANCE,
 	PROVIDER_INFO,
+	PROVIDER_MODEL_DOCS,
 	PROVIDER_SETUP_LINKS
 } from '../../connect/constants.ts';
 import type { WizardStep } from '../types.ts';
 
-type ConnectStep = 'loading' | 'provider' | 'auth' | 'api-key' | 'model' | 'model-input';
+type ConnectStep =
+	| 'loading'
+	| 'provider'
+	| 'auth'
+	| 'api-key'
+	| 'model'
+	| 'model-input'
+	| 'compat-base-url'
+	| 'compat-name'
+	| 'compat-model'
+	| 'compat-api-key';
 
 type ProviderOption = {
 	id: string;
@@ -38,6 +49,7 @@ type ProviderOption = {
 type ModelOption = {
 	id: string;
 	label: string;
+	kind: 'curated' | 'custom';
 };
 
 interface ConnectWizardProps {
@@ -57,9 +69,20 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	const [selectedModelIndex, setSelectedModelIndex] = createSignal(0);
 	const [selectedProviderId, setSelectedProviderId] = createSignal('');
 	const [wizardInput, setWizardInput] = createSignal('');
+	const [compatBaseUrl, setCompatBaseUrl] = createSignal('');
+	const [compatName, setCompatName] = createSignal('');
+	const [compatModelId, setCompatModelId] = createSignal('');
 	const [error, setError] = createSignal<string | null>(null);
 	const [statusMessage, setStatusMessage] = createSignal('');
 	const [busy, setBusy] = createSignal(false);
+
+	const customModelOption: ModelOption = {
+		id: '__custom__',
+		label: 'Custom model ID...',
+		kind: 'custom'
+	};
+
+	const sanitizePaste = (text: string) => text.replace(/[\r\n]+/g, '').trim();
 
 	const setStepSafe = (nextStep: ConnectStep) => {
 		setError(null);
@@ -86,6 +109,14 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 				return 'Connect - Select Model';
 			case 'model-input':
 				return 'Connect - Model ID';
+			case 'compat-base-url':
+				return 'Connect - Base URL';
+			case 'compat-name':
+				return 'Connect - Provider Name';
+			case 'compat-model':
+				return 'Connect - Model ID';
+			case 'compat-api-key':
+				return 'Connect - API Key (Optional)';
 		}
 	});
 
@@ -103,12 +134,40 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 		if (step() === 'model-input') {
 			return 'Enter a model ID for this provider.';
 		}
+		if (step() === 'compat-base-url') {
+			return 'Enter the base URL for your OpenAI-compatible provider.';
+		}
+		if (step() === 'compat-name') {
+			return 'Enter the provider name (used by the AI SDK).';
+		}
+		if (step() === 'compat-model') {
+			return 'Enter the model ID to use.';
+		}
+		if (step() === 'compat-api-key') {
+			return 'Enter an API key if required (optional).';
+		}
 		return 'Use arrow keys to navigate, Enter to select, Esc to cancel';
 	});
 
 	const authLink = createMemo(() => {
 		const providerId = selectedProviderId();
 		return PROVIDER_SETUP_LINKS[providerId];
+	});
+
+	const modelDocsLink = createMemo(() => {
+		const providerId = selectedProviderId();
+		return PROVIDER_MODEL_DOCS[providerId];
+	});
+
+	const showModelDocsLink = createMemo(() => {
+		const currentStep = step();
+		return (
+			(currentStep === 'model' ||
+				currentStep === 'model-input' ||
+				currentStep === 'compat-base-url' ||
+				currentStep === 'compat-model') &&
+			Boolean(modelDocsLink())
+		);
 	});
 
 	const loadProviders = async () => {
@@ -241,14 +300,17 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 
 	const proceedToModelSelection = async (providerId: string) => {
 		const curated = CURATED_MODELS[providerId] ?? [];
-		if (curated.length === 1) {
-			await updateModel(providerId, curated[0]!.id);
-			return;
-		}
-
-		if (curated.length > 1) {
-			setModelOptions(curated);
-			setSelectedModelIndex(0);
+		if (curated.length > 0) {
+			const options: ModelOption[] = [
+				...curated.map((model) => ({ ...model, kind: 'curated' as const })),
+				customModelOption
+			];
+			const currentModel = config.selectedModel();
+			const currentIndex = options.findIndex(
+				(option) => option.kind === 'curated' && option.id === currentModel
+			);
+			setModelOptions(options);
+			setSelectedModelIndex(currentIndex >= 0 ? currentIndex : 0);
 			setStepSafe('model');
 			return;
 		}
@@ -257,10 +319,16 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 		setStepSafe('model-input');
 	};
 
-	const updateModel = async (providerId: string, modelId: string) => {
+	const updateModel = async (
+		providerId: string,
+		modelId: string,
+		providerOptions?: { baseURL?: string; name?: string }
+	) => {
 		if (!providerId || !modelId || busy()) return;
 		setBusy(true);
-		const result = await Result.tryPromise(() => services.updateModel(providerId, modelId));
+		const result = await Result.tryPromise(() =>
+			services.updateModel(providerId, modelId, providerOptions)
+		);
 		setBusy(false);
 		if (result.isErr()) {
 			const message = formatError(result.error);
@@ -274,11 +342,84 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 		props.onClose();
 	};
 
+	const startCompatSetup = () => {
+		setCompatBaseUrl('');
+		setCompatName('');
+		setCompatModelId('');
+		setWizardInput('');
+		setStepSafe('compat-base-url');
+	};
+
+	const handleCompatSubmit = async () => {
+		if (busy()) return;
+		const value = wizardInput().trim();
+		const currentStep = step();
+
+		if (currentStep === 'compat-base-url') {
+			if (!value) {
+				setError('Base URL is required.');
+				return;
+			}
+			setCompatBaseUrl(value);
+			setWizardInput('');
+			setStepSafe('compat-name');
+			return;
+		}
+
+		if (currentStep === 'compat-name') {
+			if (!value) {
+				setError('Provider name is required.');
+				return;
+			}
+			setCompatName(value);
+			setWizardInput('');
+			setStepSafe('compat-model');
+			return;
+		}
+
+		if (currentStep === 'compat-model') {
+			if (!value) {
+				setError('Model ID is required.');
+				return;
+			}
+			setCompatModelId(value);
+			setWizardInput('');
+			setStepSafe('compat-api-key');
+			return;
+		}
+
+		if (currentStep === 'compat-api-key') {
+			const providerId = selectedProviderId();
+			if (value) {
+				setBusy(true);
+				const result = await Result.tryPromise(() => saveProviderApiKey(providerId, value));
+				setBusy(false);
+				if (result.isErr()) {
+					const message = formatError(result.error);
+					setError(message);
+					messages.addSystemMessage(`Error: ${message}`);
+					return;
+				}
+				messages.addSystemMessage(`${providerId} API key saved.`);
+			}
+
+			await updateModel(providerId, compatModelId(), {
+				baseURL: compatBaseUrl(),
+				name: compatName()
+			});
+		}
+	};
+
 	const handleProviderSelect = async () => {
 		if (busy()) return;
 		const provider = providerOptions()[selectedProviderIndex()];
 		if (!provider) return;
 		setSelectedProviderId(provider.id);
+
+		if (provider.id === 'openai-compat') {
+			startCompatSetup();
+			return;
+		}
 
 		const isConnected = connectedProviders().includes(provider.id);
 		const info = PROVIDER_INFO[provider.id];
@@ -324,12 +465,13 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	};
 
 	useKeyboard((key) => {
+		const currentStep = step();
 		if (key.name === 'escape') {
 			props.onClose();
 			return;
 		}
 
-		if (step() === 'provider') {
+		if (currentStep === 'provider') {
 			switch (key.name) {
 				case 'up':
 					setSelectedProviderIndex((idx) =>
@@ -343,9 +485,10 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 					void handleProviderSelect();
 					break;
 			}
+			return;
 		}
 
-		if (step() === 'model') {
+		if (currentStep === 'model') {
 			switch (key.name) {
 				case 'up':
 					setSelectedModelIndex((idx) =>
@@ -358,12 +501,34 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 				case 'return': {
 					const selected = modelOptions()[selectedModelIndex()];
 					if (selected) {
+						if (selected.kind === 'custom') {
+							setWizardInput('');
+							setStepSafe('model-input');
+							return;
+						}
 						void updateModel(selectedProviderId(), selected.id);
 					}
 					break;
 				}
 			}
 		}
+	});
+
+	usePaste((text) => {
+		const currentStep = step();
+		if (
+			currentStep !== 'api-key' &&
+			currentStep !== 'model-input' &&
+			currentStep !== 'compat-base-url' &&
+			currentStep !== 'compat-name' &&
+			currentStep !== 'compat-model' &&
+			currentStep !== 'compat-api-key'
+		)
+			return;
+		const sanitized = sanitizePaste(text.text);
+		if (!sanitized) return;
+		setWizardInput((prev) => `${prev}${sanitized}`);
+		setError(null);
 	});
 
 	const renderProviderList = () => (
@@ -398,12 +563,41 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 							content={model.label}
 							style={{ width: 32 }}
 						/>
-						<text fg={colors.textSubtle} content={` ${model.id}`} />
+						<Show when={model.kind === 'curated'}>
+							<text fg={colors.textSubtle} content={` ${model.id}`} />
+						</Show>
 					</box>
 				);
 			}}
 		</For>
 	);
+
+	const isInputStep = () =>
+		step() === 'api-key' ||
+		step() === 'model-input' ||
+		step() === 'compat-base-url' ||
+		step() === 'compat-name' ||
+		step() === 'compat-model' ||
+		step() === 'compat-api-key';
+
+	const inputPlaceholder = () => {
+		switch (step()) {
+			case 'api-key':
+				return 'API key';
+			case 'model-input':
+				return 'model-id';
+			case 'compat-base-url':
+				return 'base-url';
+			case 'compat-name':
+				return 'provider-name';
+			case 'compat-model':
+				return 'model-id';
+			case 'compat-api-key':
+				return 'api-key (optional)';
+			default:
+				return '';
+		}
+	};
 
 	return (
 		<box
@@ -425,6 +619,12 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			<Show when={authLink()}>
 				<text fg={colors.textSubtle} content={` ${authLink()!.label}: ${authLink()!.url}`} />
 			</Show>
+			<Show when={showModelDocsLink()}>
+				<text
+					fg={colors.textSubtle}
+					content={` ${modelDocsLink()!.label}: ${modelDocsLink()!.url}`}
+				/>
+			</Show>
 			<Show when={statusMessage().length > 0}>
 				<text fg={colors.textMuted} content={` ${statusMessage()}`} />
 			</Show>
@@ -436,9 +636,9 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			<Show when={step() === 'provider'}>{renderProviderList()}</Show>
 			<Show when={step() === 'model'}>{renderModelList()}</Show>
 
-			<Show when={step() === 'api-key' || step() === 'model-input'}>
+			<Show when={isInputStep()}>
 				<input
-					placeholder={step() === 'api-key' ? 'API key' : 'model-id'}
+					placeholder={inputPlaceholder()}
 					placeholderColor={colors.textSubtle}
 					textColor={colors.text}
 					value={wizardInput()}
@@ -451,7 +651,11 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 							void handleApiKeySubmit();
 							return;
 						}
-						void handleModelSubmit();
+						if (step() === 'model-input') {
+							void handleModelSubmit();
+							return;
+						}
+						void handleCompatSubmit();
 					}}
 					focused
 					style={{ width: '100%' }}

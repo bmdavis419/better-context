@@ -18,7 +18,7 @@ All details reflect the current repo state.
 ### CLI (global)
 
 ```bash
-bun add -g btca opencode-ai
+bun add -g btca
 ```
 
 ### Server library
@@ -47,6 +47,7 @@ Supported providers:
 - `opencode` — API key
 - `openrouter` — API key
 - `openai` — OAuth (no API keys)
+- `openai-compat` — optional API key (requires baseURL + name in config)
 - `anthropic` — API key
 - `google` — API key or OAuth
 
@@ -60,8 +61,16 @@ Environment variable overrides:
 **`btca connect`**:
 
 - If provider is `openai`, runs local OAuth flow (PKCE) and writes tokens into OpenCode auth.
+- If provider is `openai-compat`, prompts for base URL, provider name, model ID, and optional API key.
 - If provider is `opencode`, `openrouter`, `anthropic`, or `google`, prompts for API key and writes into OpenCode auth.
 - If provider is not handled directly, falls back to `opencode auth --provider <provider>`.
+
+**OpenAI-compatible provider inputs (and why):**
+
+- `baseURL` (required): the root URL for your OpenAI-compatible server (e.g., LM Studio, Ollama, local gateway). The AI SDK appends its own endpoint paths to this base URL.
+- `name` (required): provider identifier used by the AI SDK to namespace requests and model bindings.
+- `model id` (required): stored in `btca.config.jsonc` as the `model` field and used for all requests to select the model on your server.
+- `api key` (optional): only needed if your server requires auth; stored in OpenCode auth and sent as a bearer token.
 
 **`btca disconnect`**:
 
@@ -79,8 +88,8 @@ Structure:
 
 ```json
 {
-	"apiKey": "btca_xxxxxxxxxxxx",
-	"linkedAt": 1706000000000
+  "apiKey": "btca_xxxxxxxxxxxx",
+  "linkedAt": 1706000000000
 }
 ```
 
@@ -106,25 +115,31 @@ Example:
 
 ```jsonc
 {
-	"$schema": "https://btca.dev/btca.schema.json",
-	"provider": "opencode",
-	"model": "claude-haiku-4-5",
-	"dataDirectory": ".btca",
-	"resources": [
-		{
-			"type": "git",
-			"name": "svelte",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"specialNotes": "Focus on docs content"
-		},
-		{
-			"type": "local",
-			"name": "internal-docs",
-			"path": "/abs/path/docs"
-		}
-	]
+  "$schema": "https://btca.dev/btca.schema.json",
+  "provider": "opencode",
+  "model": "claude-haiku-4-5",
+  "dataDirectory": ".btca",
+  "providerOptions": {
+    "openai-compat": {
+      "baseURL": "http://localhost:1234/v1",
+      "name": "lmstudio"
+    }
+  },
+  "resources": [
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Focus on docs content",
+    },
+    {
+      "type": "local",
+      "name": "internal-docs",
+      "path": "/abs/path/docs",
+    },
+  ],
 }
 ```
 
@@ -149,19 +164,19 @@ Example:
 
 ```jsonc
 {
-	"$schema": "https://btca.dev/btca.remote.schema.json",
-	"project": "my-project",
-	"model": "claude-sonnet",
-	"resources": [
-		{
-			"type": "git",
-			"name": "svelte",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"specialNotes": "Focus on docs"
-		}
-	]
+  "$schema": "https://btca.dev/btca.remote.schema.json",
+  "project": "my-project",
+  "model": "claude-sonnet",
+  "resources": [
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Focus on docs",
+    },
+  ],
 }
 ```
 
@@ -439,11 +454,11 @@ Response:
 
 ```json
 {
-	"provider": "opencode",
-	"model": "claude-haiku-4-5",
-	"providerTimeoutMs": 300000,
-	"resourcesDirectory": "/abs/path/resources",
-	"resourceCount": 3
+  "provider": "opencode",
+  "model": "claude-haiku-4-5",
+  "providerTimeoutMs": 300000,
+  "resourcesDirectory": "/abs/path/resources",
+  "resourceCount": 3
 }
 ```
 
@@ -455,23 +470,23 @@ Response:
 
 ```json
 {
-	"resources": [
-		{
-			"name": "svelte",
-			"type": "git",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"searchPaths": null,
-			"specialNotes": "..."
-		},
-		{
-			"name": "internal-docs",
-			"type": "local",
-			"path": "/abs/path/docs",
-			"specialNotes": null
-		}
-	]
+  "resources": [
+    {
+      "name": "svelte",
+      "type": "git",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "searchPaths": null,
+      "specialNotes": "..."
+    },
+    {
+      "name": "internal-docs",
+      "type": "local",
+      "path": "/abs/path/docs",
+      "specialNotes": null
+    }
+  ]
 }
 ```
 
@@ -483,11 +498,11 @@ Response:
 
 ```json
 {
-	"all": [
-		{ "id": "opencode", "models": {} },
-		{ "id": "openrouter", "models": {} }
-	],
-	"connected": ["opencode"]
+  "all": [
+    { "id": "opencode", "models": {} },
+    { "id": "openrouter", "models": {} }
+  ],
+  "connected": ["opencode"]
 }
 ```
 
@@ -509,9 +524,9 @@ Request:
 
 ```json
 {
-	"question": "How do I create a store?",
-	"resources": ["svelte"],
-	"quiet": true
+  "question": "How do I create a store?",
+  "resources": ["svelte"],
+  "quiet": true
 }
 ```
 
@@ -519,10 +534,10 @@ Response:
 
 ```json
 {
-	"answer": "...",
-	"model": { "provider": "opencode", "model": "claude-haiku-4-5" },
-	"resources": ["svelte"],
-	"collection": { "key": "svelte", "path": "/abs/path/collection" }
+  "answer": "...",
+  "model": { "provider": "opencode", "model": "claude-haiku-4-5" },
+  "resources": ["svelte"],
+  "collection": { "key": "svelte", "path": "/abs/path/collection" }
 }
 ```
 
@@ -558,12 +573,12 @@ Request (git):
 
 ```json
 {
-	"type": "git",
-	"name": "hono",
-	"url": "https://github.com/honojs/website",
-	"branch": "main",
-	"searchPath": "docs",
-	"specialNotes": "Focus on docs"
+  "type": "git",
+  "name": "hono",
+  "url": "https://github.com/honojs/website",
+  "branch": "main",
+  "searchPath": "docs",
+  "specialNotes": "Focus on docs"
 }
 ```
 
@@ -625,10 +640,10 @@ Event types:
 
 ```json
 {
-	"type": "meta",
-	"model": { "provider": "opencode", "model": "claude-haiku-4-5" },
-	"resources": ["svelte"],
-	"collection": { "key": "svelte", "path": "/abs/path/collection" }
+  "type": "meta",
+  "model": { "provider": "opencode", "model": "claude-haiku-4-5" },
+  "resources": ["svelte"],
+  "collection": { "key": "svelte", "path": "/abs/path/collection" }
 }
 ```
 
@@ -636,10 +651,10 @@ Event types:
 
 ```json
 {
-	"type": "tool.updated",
-	"callID": "tool-1",
-	"tool": "read",
-	"state": { "status": "running", "input": { "path": "README.md" } }
+  "type": "tool.updated",
+  "callID": "tool-1",
+  "tool": "read",
+  "state": { "status": "running", "input": { "path": "README.md" } }
 }
 ```
 
@@ -647,16 +662,20 @@ Event types:
 
 ```json
 {
-	"type": "done",
-	"text": "final answer",
-	"reasoning": "full reasoning",
-	"tools": [
-		{
-			"callID": "tool-1",
-			"tool": "read",
-			"state": { "status": "completed", "input": { "path": "README.md" }, "output": "..." }
-		}
-	]
+  "type": "done",
+  "text": "final answer",
+  "reasoning": "full reasoning",
+  "tools": [
+    {
+      "callID": "tool-1",
+      "tool": "read",
+      "state": {
+        "status": "completed",
+        "input": { "path": "README.md" },
+        "output": "..."
+      }
+    }
+  ]
 }
 ```
 
@@ -737,13 +756,17 @@ Example payload:
 
 ```json
 {
-	"jsonrpc": "2.0",
-	"id": 1700000000000,
-	"method": "tools/call",
-	"params": {
-		"name": "ask",
-		"arguments": { "question": "...", "resources": ["svelte"], "project": "default" }
-	}
+  "jsonrpc": "2.0",
+  "id": 1700000000000,
+  "method": "tools/call",
+  "params": {
+    "name": "ask",
+    "arguments": {
+      "question": "...",
+      "resources": ["svelte"],
+      "project": "default"
+    }
+  }
 }
 ```
 
@@ -751,10 +774,10 @@ Response shape:
 
 ```json
 {
-	"result": {
-		"content": [{ "type": "text", "text": "..." }],
-		"isError": false
-	}
+  "result": {
+    "content": [{ "type": "text", "text": "..." }],
+    "isError": false
+  }
 }
 ```
 

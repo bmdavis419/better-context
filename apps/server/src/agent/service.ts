@@ -127,7 +127,8 @@ export namespace Agent {
 
 			// Validate provider is authenticated
 			const isAuthed = await Auth.isAuthenticated(config.provider);
-			if (!isAuthed && config.provider !== 'opencode') {
+			const requiresAuth = config.provider !== 'opencode' && config.provider !== 'openai-compat';
+			if (!isAuthed && requiresAuth) {
 				const authenticated = await Auth.getAuthenticatedProviders();
 				cleanup();
 				throw new ProviderNotConnectedError({
@@ -145,7 +146,8 @@ export namespace Agent {
 						collectionPath: collection.path,
 						vfsId: collection.vfsId,
 						agentInstructions: collection.agentInstructions,
-						question
+						question,
+						providerOptions: config.getProviderOptions(config.provider)
 					});
 					for await (const event of stream) {
 						yield event;
@@ -179,7 +181,8 @@ export namespace Agent {
 
 			// Validate provider is authenticated
 			const isAuthed = await Auth.isAuthenticated(config.provider);
-			if (!isAuthed && config.provider !== 'opencode') {
+			const requiresAuth = config.provider !== 'opencode' && config.provider !== 'openai-compat';
+			if (!isAuthed && requiresAuth) {
 				const authenticated = await Auth.getAuthenticatedProviders();
 				cleanup();
 				throw new ProviderNotConnectedError({
@@ -195,7 +198,8 @@ export namespace Agent {
 					collectionPath: collection.path,
 					vfsId: collection.vfsId,
 					agentInstructions: collection.agentInstructions,
-					question
+					question,
+					providerOptions: config.getProviderOptions(config.provider)
 				})
 			);
 

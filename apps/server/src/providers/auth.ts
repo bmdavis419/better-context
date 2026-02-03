@@ -25,6 +25,7 @@ export namespace Auth {
 		'github-copilot': ['oauth'],
 		openrouter: ['api'],
 		openai: ['oauth'],
+		'openai-compat': ['api'],
 		anthropic: ['api'],
 		google: ['api', 'oauth']
 	};
@@ -164,6 +165,8 @@ export namespace Auth {
 				return 'Run "btca connect -p github-copilot" and complete device flow OAuth.';
 			case 'openai':
 				return 'Run "opencode auth --provider openai" and complete OAuth.';
+			case 'openai-compat':
+				return 'Set baseURL + name via "btca connect" and optionally add an API key.';
 			case 'anthropic':
 				return 'Run "opencode auth --provider anthropic" and enter an API key.';
 			case 'google':

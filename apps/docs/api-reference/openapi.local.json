@@ -1,0 +1,651 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "BTCA Local Server API",
+    "version": "2.0.0",
+    "description": "Local HTTP API exposed by btca-server."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:{port}",
+      "variables": {
+        "port": {
+          "default": "8080"
+        }
+      }
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Get current config",
+        "responses": {
+          "200": {
+            "description": "Config summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/resources": {
+      "get": {
+        "summary": "List resources",
+        "responses": {
+          "200": {
+            "description": "Configured resources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/providers": {
+      "get": {
+        "summary": "List providers",
+        "responses": {
+          "200": {
+            "description": "Supported and connected providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reload-config": {
+      "post": {
+        "summary": "Reload config from disk",
+        "responses": {
+          "200": {
+            "description": "Reload result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloadConfigResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Config error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/question": {
+      "post": {
+        "summary": "Ask a question (non-streaming)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer and metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/question/stream": {
+      "post": {
+        "summary": "Ask a question (SSE stream)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-sent events stream. Event types: meta, reasoning.delta, text.delta, tool.updated, done, error.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/model": {
+      "put": {
+        "summary": "Update provider and model",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelInfo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/config/resources": {
+      "post": {
+        "summary": "Add a resource",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created resource",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a resource by name",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveResourceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Removal result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveResourceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clear": {
+      "post": {
+        "summary": "Clear cached resource clones",
+        "responses": {
+          "200": {
+            "description": "Clear result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "ok",
+          "service",
+          "version"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "service": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "tag"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          }
+        }
+      },
+      "ConfigSummary": {
+        "type": "object",
+        "required": [
+          "provider",
+          "model",
+          "providerTimeoutMs",
+          "resourcesDirectory",
+          "resourceCount"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "providerTimeoutMs": {
+            "type": "integer"
+          },
+          "resourcesDirectory": {
+            "type": "string"
+          },
+          "resourceCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "Provider": {
+        "type": "object",
+        "required": [
+          "id",
+          "models"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "models": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ProviderList": {
+        "type": "object",
+        "required": [
+          "all",
+          "connected"
+        ],
+        "properties": {
+          "all": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provider"
+            }
+          },
+          "connected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+    "ModelInfo": {
+      "type": "object",
+      "required": [
+        "provider",
+        "model"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "providerOptions": {
+          "type": "object",
+          "description": "Per-provider options (e.g., baseURL and name for openai-compat)",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "baseURL": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+      "Resource": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GitResource"
+          },
+          {
+            "$ref": "#/components/schemas/LocalResource"
+          }
+        ]
+      },
+      "GitResource": {
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "url",
+          "branch"
+        ],
+        "properties": {
+          "type": {
+            "const": "git"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "searchPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "searchPaths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "specialNotes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LocalResource": {
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "path"
+        ],
+        "properties": {
+          "type": {
+            "const": "local"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "specialNotes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ResourceList": {
+        "type": "object",
+        "required": [
+          "resources"
+        ],
+        "properties": {
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            }
+          }
+        }
+      },
+      "ReloadConfigResponse": {
+        "type": "object",
+        "required": [
+          "ok",
+          "resources"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "QuestionRequest": {
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quiet": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CollectionInfo": {
+        "type": "object",
+        "required": [
+          "key",
+          "path"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "QuestionResponse": {
+        "type": "object",
+        "required": [
+          "answer",
+          "model",
+          "resources",
+          "collection"
+        ],
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelInfo"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "collection": {
+            "$ref": "#/components/schemas/CollectionInfo"
+          }
+        }
+      },
+      "ResourceCreate": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GitResource"
+          },
+          {
+            "$ref": "#/components/schemas/LocalResource"
+          }
+        ]
+      },
+      "RemoveResourceRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RemoveResourceResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "name"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ClearResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

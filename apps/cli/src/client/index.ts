@@ -138,17 +138,27 @@ export async function askQuestionStream(
 /**
  * Update model configuration
  */
+export type ProviderOptionsInput = {
+	baseURL?: string;
+	name?: string;
+};
+
 export async function updateModel(
 	baseUrl: string,
 	provider: string,
-	model: string
+	model: string,
+	providerOptions?: ProviderOptionsInput
 ): Promise<{ provider: string; model: string }> {
 	const res = await fetch(`${baseUrl}/config/model`, {
 		method: 'PUT',
 		headers: {
 			'Content-Type': 'application/json'
 		},
-		body: JSON.stringify({ provider, model })
+		body: JSON.stringify({
+			provider,
+			model,
+			...(providerOptions ? { providerOptions } : {})
+		})
 	});
 
 	if (!res.ok) {

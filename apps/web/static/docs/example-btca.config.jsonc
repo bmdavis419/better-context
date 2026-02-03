@@ -39,5 +39,14 @@
   // AI model configuration
   "model": "claude-haiku-4-5",
   "provider": "opencode",
+  "providerOptions": {
+    // OpenAI-compatible providers (e.g., LM Studio)
+    "openai-compat": {
+      // Base URL of your OpenAI-compatible server
+      "baseURL": "http://localhost:1234/v1",
+      // Provider name used by the AI SDK
+      "name": "lmstudio"
+    }
+  },
   "providerTimeoutMs": 300000
 }

@@ -5,6 +5,10 @@
 - **ONLY use `bun`** - never npm/yarn
 - **NEVER run dev/build commands** (`bun dev`, `bun build`)
 
+## Source of Truth
+
+When working on this project, apps/docs is the documentation for the server and cli. Make sure when changing something about how an endpoint or command works, you update the documentation in apps/docs. And if you change something that makes it different from the docs, ask me about it. This does not apply to apps/web or apps/sandbox.
+
 ## Commands
 
 ### Root Commands

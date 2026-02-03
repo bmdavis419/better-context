@@ -1,0 +1,114 @@
+---
+title: "Configuration"
+description: "Local and remote config files, defaults, and validation limits"
+---
+
+## Local config: `btca.config.jsonc`
+
+Locations:
+
+- Project: `./btca.config.jsonc`
+- Global: `~/.config/btca/btca.config.jsonc`
+
+Behavior:
+
+- JSONC is supported (comments and trailing commas).
+- Global is loaded first, project overrides conflicts.
+- If a project config exists, `dataDirectory` resolves relative to the project.
+- Resources are stored in `${dataDirectory}/resources`.
+
+Example:
+
+```jsonc
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  "provider": "opencode",
+  "model": "claude-haiku-4-5",
+  "dataDirectory": ".btca",
+  "providerOptions": {
+    // OpenAI-compatible providers (e.g., LM Studio)
+    "openai-compat": {
+      // Base URL of your OpenAI-compatible server
+      "baseURL": "http://localhost:1234/v1",
+      // Provider name used by the AI SDK
+      "name": "lmstudio"
+    }
+  },
+  "resources": [
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Focus on docs content"
+    }
+  ]
+}
+```
+
+OpenAI-compatible config requirements:
+
+- `providerOptions.openai-compat.baseURL` (required) tells btca where to send requests.
+- `providerOptions.openai-compat.name` (required) is the provider identifier used by the AI SDK.
+- `model` (required) must match a model ID your server exposes.
+- The API key (if required) is stored in OpenCode auth, not in this config.
+
+Defaults if the global config is missing:
+
+- `provider`: `opencode`
+- `model`: `claude-haiku-4-5`
+- `providerTimeoutMs`: `300000`
+- Default resources: `svelte`, `tailwindcss`, `nextjs`
+
+If `dataDirectory` is missing and a legacy `.btca/` exists, the project config is
+migrated to use `.btca`.
+
+## Remote config: `btca.remote.config.jsonc`
+
+Location:
+
+- Project: `./btca.remote.config.jsonc`
+
+Notes:
+
+- Remote supports **git resources only**.
+- Remote model list: `claude-sonnet`, `claude-haiku`, `gpt-4o`, `gpt-4o-mini`.
+
+Example:
+
+```jsonc
+{
+  "$schema": "https://btca.dev/btca.remote.schema.json",
+  "project": "my-project",
+  "model": "claude-sonnet",
+  "resources": [
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPath": "apps/svelte.dev",
+      "specialNotes": "Focus on docs"
+    }
+  ]
+}
+```
+
+## Validation limits
+
+- Resource name: max 64 chars, regex `^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(/[a-zA-Z0-9][a-zA-Z0-9._-]*)*$`, no `..`, no `//`, no trailing `/`
+- Branch: max 128 chars, regex `^[a-zA-Z0-9/_.-]+$`, must not start with `-`
+- Search path: max 256 chars, no `..`, no absolute paths, no newlines
+- Special notes: max 500 chars, no control characters
+- Question length: max 100,000 chars
+- Resources per request: max 20
+- Git URL: HTTPS only, no embedded credentials, no localhost/private IPs
+- GitHub URLs are normalized to the base repo.
+
+## Known gaps
+
+- `--global` flags exist on several commands, but the effective target is determined
+  by whether a project config exists; there is no strict global override.
+- `btca remote add` defaults differ between paths:
+- `btca remote add` defaults differ between paths. Interactive path uses model `claude-haiku`. Non-interactive path uses model `claude-sonnet`.

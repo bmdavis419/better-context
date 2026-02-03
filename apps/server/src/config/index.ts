@@ -50,6 +50,13 @@ export const DEFAULT_RESOURCES: ResourceDefinition[] = [
 	}
 ];
 
+const ProviderOptionsSchema = z.object({
+	baseURL: z.string().optional(),
+	name: z.string().optional()
+});
+
+const ProviderOptionsMapSchema = z.record(z.string(), ProviderOptionsSchema);
+
 const StoredConfigSchema = z.object({
 	$schema: z.string().optional(),
 	dataDirectory: z.string().optional(),
@@ -57,10 +64,13 @@ const StoredConfigSchema = z.object({
 	resources: z.array(ResourceDefinitionSchema),
 	// Provider and model are optional - defaults are applied when loading
 	model: z.string().optional(),
-	provider: z.string().optional()
+	provider: z.string().optional(),
+	providerOptions: ProviderOptionsMapSchema.optional()
 });
 
 type StoredConfig = z.infer<typeof StoredConfigSchema>;
+type ProviderOptionsConfig = z.infer<typeof ProviderOptionsSchema>;
+type ProviderOptionsMap = z.infer<typeof ProviderOptionsMapSchema>;
 
 // Legacy config schemas (btca.json format from old CLI)
 // There are two legacy formats:
@@ -121,8 +131,13 @@ export namespace Config {
 		provider: string;
 		providerTimeoutMs?: number;
 		configPath: string;
+		getProviderOptions: (providerId: string) => ProviderOptionsConfig | undefined;
 		getResource: (name: string) => ResourceDefinition | undefined;
-		updateModel: (provider: string, model: string) => Promise<{ provider: string; model: string }>;
+		updateModel: (
+			provider: string,
+			model: string,
+			providerOptions?: ProviderOptionsConfig
+		) => Promise<{ provider: string; model: string }>;
 		addResource: (resource: ResourceDefinition) => Promise<ResourceDefinition>;
 		removeResource: (name: string) => Promise<void>;
 		clearResources: () => Promise<{ cleared: number }>;
@@ -585,6 +600,28 @@ export namespace Config {
 			return Array.from(resourceMap.values());
 		};
 
+		const mergeProviderOptions = (
+			globalConfigValue: StoredConfig,
+			projectConfigValue: StoredConfig | null
+		): ProviderOptionsMap => {
+			const merged: ProviderOptionsMap = {};
+			const globalOptions = globalConfigValue.providerOptions ?? {};
+			const projectOptions = projectConfigValue?.providerOptions ?? {};
+
+			for (const [providerId, options] of Object.entries(globalOptions)) {
+				merged[providerId] = { ...options };
+			}
+
+			for (const [providerId, options] of Object.entries(projectOptions)) {
+				merged[providerId] = { ...(merged[providerId] ?? {}), ...options };
+			}
+
+			return merged;
+		};
+
+		const getMergedProviderOptions = (): ProviderOptionsMap =>
+			mergeProviderOptions(currentGlobalConfig, currentProjectConfig);
+
 		// Get the config that should be used for model/provider
 		const getActiveConfig = (): StoredConfig => {
 			return currentProjectConfig ?? currentGlobalConfig;
@@ -619,9 +656,14 @@ export namespace Config {
 			get providerTimeoutMs() {
 				return getActiveConfig().providerTimeoutMs;
 			},
+			getProviderOptions: (providerId: string) => getMergedProviderOptions()[providerId],
 			getResource: (name: string) => getMergedResources().find((r) => r.name === name),
 
-			updateModel: async (provider: string, model: string) => {
+			updateModel: async (
+				provider: string,
+				model: string,
+				providerOptions?: ProviderOptionsConfig
+			) => {
 				if (!isProviderSupported(provider)) {
 					const available = getSupportedProviders();
 					throw new ConfigError({
@@ -630,7 +672,37 @@ export namespace Config {
 					});
 				}
 				const mutableConfig = getMutableConfig();
-				const updated = { ...mutableConfig, provider, model };
+				const existingProviderOptions = mutableConfig.providerOptions ?? {};
+				const nextProviderOptions = providerOptions
+					? {
+							...existingProviderOptions,
+							[provider]: {
+								...(existingProviderOptions[provider] ?? {}),
+								...providerOptions
+							}
+						}
+					: existingProviderOptions;
+				const updated = {
+					...mutableConfig,
+					provider,
+					model,
+					...(providerOptions ? { providerOptions: nextProviderOptions } : {})
+				};
+
+				if (provider === 'openai-compat') {
+					const merged = currentProjectConfig
+						? mergeProviderOptions(currentGlobalConfig, updated)
+						: mergeProviderOptions(updated, null);
+					const compat = merged['openai-compat'];
+					const baseURL = compat?.baseURL?.trim();
+					const name = compat?.name?.trim();
+					if (!baseURL || !name) {
+						throw new ConfigError({
+							message: 'openai-compat requires baseURL and name',
+							hint: 'Run "btca connect -p openai-compat" to configure baseURL and name.'
+						});
+					}
+				}
 				setMutableConfig(updated);
 				await saveConfig(configPath, updated);
 				Metrics.info('config.model.updated', { provider, model });
