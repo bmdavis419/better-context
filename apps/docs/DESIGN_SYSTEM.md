@@ -1,7 +1,7 @@
-# BTCA Design System (v1)
+# btca Design System (v1)
 
-This document defines the BTCA visual language and UX opinions. It is meant to
-be a portable reference for the main BTCA product and any related surfaces
+This document defines the btca visual language and UX opinions. It is meant to
+be a portable reference for the main btca product and any related surfaces
 (docs, app, CLI UIs). It favors clarity, density, and a calm technical feel.
 
 ## Brand intent

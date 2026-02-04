@@ -1,6 +1,6 @@
-# BTCA API + CLI Spec (Local + Remote)
+# btca API + CLI Spec (Local + Remote)
 
-This document is an audit‑ready reference for BTCA v2 covering:
+This document is an audit‑ready reference for btca v2 covering:
 
 - Local server HTTP API (btca-server)
 - Local CLI commands (btca)
@@ -37,7 +37,7 @@ bun add btca-server
 
 ### 2.1 Local provider auth (used by btca-server)
 
-BTCA reads credentials from OpenCode’s auth storage:
+btca reads credentials from OpenCode’s auth storage:
 
 - **Linux/macOS**: `~/.local/share/opencode/auth.json`
 - **Windows**: `%APPDATA%/opencode/auth.json`
@@ -330,7 +330,7 @@ All remote commands require authentication via `btca remote link`.
 
 ### 5.1 `btca remote link`
 
-Authenticate with BTCA cloud API.
+Authenticate with btca cloud API.
 
 Options:
 
