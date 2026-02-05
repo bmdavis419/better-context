@@ -57,6 +57,10 @@
 	},
 	"dependencies": {
 		"@inquirer/select": "^5.0.4",
-		"better-result": "^2.6.0"
+		"@tmcp/adapter-zod": "^0.1.7",
+		"@tmcp/transport-stdio": "^0.4.1",
+		"better-result": "^2.6.0",
+		"tmcp": "^1.19.2",
+		"zod": "^4.3.6"
 	}
 }

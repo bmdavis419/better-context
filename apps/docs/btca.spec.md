@@ -326,6 +326,39 @@ Options:
 
 - `-p, --port <port>` (default `8080`)
 
+### 4.13 `btca mcp`
+
+Runs the local MCP server over stdio.
+
+Behavior:
+
+- Starts (or reuses) the local server with quiet logging.
+- Exposes MCP tools over stdin/stdout for local resources.
+
+Tools:
+
+- `listResources`
+- `ask`
+
+### 4.14 `btca mcp local`
+
+Scaffolds MCP configuration for a local stdio server.
+
+Behavior:
+
+- Prompts for an editor (Cursor, OpenCode, Codex, Claude Code).
+- Writes a project config entry for that editor.
+
+### 4.15 `btca mcp remote`
+
+Scaffolds MCP configuration for the remote btca server.
+
+Behavior:
+
+- Prompts for an editor (Cursor, OpenCode, Codex, Claude Code).
+- Writes a project config entry with a stub API key.
+- Prints a link to fetch a real API key.
+
 ## 5. CLI Spec (Remote)
 
 All remote commands require authentication via `btca remote link`.
