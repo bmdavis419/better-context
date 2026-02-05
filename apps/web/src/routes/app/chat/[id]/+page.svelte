@@ -190,7 +190,7 @@
 	}
 
 	function parseMentions(input: string): { resources: string[]; question: string } {
-		const mentionRegex = /@(\w+)/g;
+		const mentionRegex = /@([A-Za-z0-9._/-]+)/g;
 		const resources: string[] = [];
 		let match;
 		while ((match = mentionRegex.exec(input)) !== null) {

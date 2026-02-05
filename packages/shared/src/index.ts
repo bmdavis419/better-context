@@ -4,6 +4,7 @@ export * from './thread.ts';
 // Re-export stream filtering utilities
 export * from './stream-filter.ts';
 export * from './resources.ts';
+export * from './resourceValidation.ts';
 
 type BlessedModel = {
 	provider: string;

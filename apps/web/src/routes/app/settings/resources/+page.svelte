@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GLOBAL_RESOURCES, type GlobalResource } from '@btca/shared';
+	import { GLOBAL_RESOURCES, getResourceNameError, type GlobalResource } from '@btca/shared';
 	import {
 		Loader2,
 		Plus,
@@ -166,6 +166,12 @@
 		if (!auth.instanceId) return;
 		if (!formName.trim() || !formUrl.trim()) {
 			formError = 'Name and URL are required';
+			return;
+		}
+
+		const nameError = getResourceNameError(formName);
+		if (nameError) {
+			formError = nameError;
 			return;
 		}
 
@@ -428,7 +434,10 @@
 								placeholder="e.g., myFramework"
 								bind:value={formName}
 							/>
-							<p class="bc-muted mt-1 text-xs">Used as @mention (e.g., @myFramework)</p>
+							<p class="bc-muted mt-1 text-xs">
+								Used as @mention (e.g., @myFramework). Allowed: letters, numbers, ., _, -, / (no
+								spaces)
+							</p>
 						</div>
 
 						<div>

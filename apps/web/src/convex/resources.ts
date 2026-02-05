@@ -1,4 +1,4 @@
-import { GLOBAL_RESOURCES } from '@btca/shared';
+import { GLOBAL_RESOURCES, getResourceNameError } from '@btca/shared';
 import { v } from 'convex/values';
 import { internalQuery, mutation, query } from './_generated/server';
 
@@ -279,6 +279,10 @@ export const addCustomResource = mutation({
 	returns: v.id('userResources'),
 	handler: async (ctx, args) => {
 		const instance = await getAuthenticatedInstance(ctx);
+		const nameError = getResourceNameError(args.name);
+		if (nameError) {
+			throw new Error(nameError);
+		}
 
 		const resourceId = await ctx.db.insert('userResources', {
 			instanceId: instance._id,
