@@ -33,6 +33,15 @@
       "type": "local",
       "path": "/absolute/path/to/project",
       "specialNotes": "This project's source code for self-reference."
+    },
+    {
+      "name": "mydocs",
+      "type": "website",
+      "url": "https://example.com/docs",
+      "maxPages": 200,
+      "maxDepth": 3,
+      "ttlHours": 24,
+      "specialNotes": "Public docs website indexed into a local searchable snapshot."
     }
   ],
   

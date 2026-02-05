@@ -2,13 +2,21 @@ import { Config } from '../config/index.ts';
 
 import { ResourceError, resourceNameToKey } from './helpers.ts';
 import { loadGitResource } from './impls/git.ts';
+import { loadWebsiteResource } from './impls/website.ts';
 import {
 	isGitResource,
+	isWebsiteResource,
 	type ResourceDefinition,
 	type GitResource,
-	type LocalResource
+	type LocalResource,
+	type WebsiteResource
 } from './schema.ts';
-import type { BtcaFsResource, BtcaGitResourceArgs, BtcaLocalResourceArgs } from './types.ts';
+import type {
+	BtcaFsResource,
+	BtcaGitResourceArgs,
+	BtcaLocalResourceArgs,
+	BtcaWebsiteResourceArgs
+} from './types.ts';
 
 export namespace Resources {
 	export type Service = {
@@ -50,6 +58,22 @@ export namespace Resources {
 		specialAgentInstructions: definition.specialNotes ?? ''
 	});
 
+	const definitionToWebsiteArgs = (
+		definition: WebsiteResource,
+		resourcesDirectory: string,
+		quiet: boolean
+	): BtcaWebsiteResourceArgs => ({
+		type: 'website',
+		name: definition.name,
+		url: definition.url,
+		maxPages: definition.maxPages,
+		maxDepth: definition.maxDepth,
+		ttlHours: definition.ttlHours,
+		resourcesDirectoryPath: resourcesDirectory,
+		specialAgentInstructions: definition.specialNotes ?? '',
+		quiet
+	});
+
 	const loadLocalResource = (args: BtcaLocalResourceArgs): BtcaFsResource => ({
 		_tag: 'fs-based',
 		name: args.name,
@@ -75,9 +99,13 @@ export namespace Resources {
 
 				if (isGitResource(definition)) {
 					return loadGitResource(definitionToGitArgs(definition, config.resourcesDirectory, quiet));
-				} else {
-					return loadLocalResource(definitionToLocalArgs(definition));
 				}
+				if (isWebsiteResource(definition)) {
+					return loadWebsiteResource(
+						definitionToWebsiteArgs(definition, config.resourcesDirectory, quiet)
+					);
+				}
+				return loadLocalResource(definitionToLocalArgs(definition));
 			}
 		};
 	};

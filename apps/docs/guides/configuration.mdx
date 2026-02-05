@@ -42,6 +42,14 @@ Example:
 			"branch": "main",
 			"searchPath": "apps/svelte.dev",
 			"specialNotes": "Focus on docs content"
+		},
+		{
+			"type": "website",
+			"name": "myDocs",
+			"url": "https://example.com/docs",
+			"maxPages": 200,
+			"maxDepth": 3,
+			"ttlHours": 24
 		}
 	]
 }
@@ -104,6 +112,8 @@ Example:
 - Question length: max 100,000 chars
 - Resources per request: max 20
 - Git URL: HTTPS only, no embedded credentials, no localhost/private IPs
+- Website URL: HTTPS only, no embedded credentials, no localhost/private IPs
+- Website defaults: `maxPages=200`, `maxDepth=3`, `ttlHours=24`
 - GitHub URLs are normalized to the base repo.
 
 ## Known gaps

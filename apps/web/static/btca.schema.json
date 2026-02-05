@@ -55,8 +55,11 @@
 					{
 						"$ref": "#/$defs/gitResource"
 					},
-					{
+				{
 						"$ref": "#/$defs/localResource"
+					},
+					{
+						"$ref": "#/$defs/websiteResource"
 					}
 				]
 			},
@@ -133,6 +136,51 @@
 				}
 			},
 			"required": ["type", "name", "path"],
+			"additionalProperties": false
+		},
+		"websiteResource": {
+			"type": "object",
+			"title": "Website Resource",
+			"description": "A website snapshot crawled into a local cache for searching",
+			"properties": {
+				"type": {
+					"type": "string",
+					"const": "website",
+					"description": "Resource type identifier"
+				},
+				"name": {
+					"type": "string",
+					"description": "Unique name for this resource"
+				},
+				"url": {
+					"type": "string",
+					"description": "Website root URL to crawl",
+					"format": "uri"
+				},
+				"maxPages": {
+					"type": "integer",
+					"minimum": 1,
+					"default": 200,
+					"description": "Maximum number of pages to crawl"
+				},
+				"maxDepth": {
+					"type": "integer",
+					"minimum": 0,
+					"default": 3,
+					"description": "Maximum crawl depth from the start URL"
+				},
+				"ttlHours": {
+					"type": "integer",
+					"minimum": 1,
+					"default": 24,
+					"description": "Hours before the cached website snapshot is refreshed"
+				},
+				"specialNotes": {
+					"type": "string",
+					"description": "Additional context or notes about this resource for the AI"
+				}
+			},
+			"required": ["type", "name", "url"],
 			"additionalProperties": false
 		}
 	}

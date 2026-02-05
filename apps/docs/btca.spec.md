@@ -138,6 +138,14 @@ Example:
 			"type": "local",
 			"name": "internal-docs",
 			"path": "/abs/path/docs"
+		},
+		{
+			"type": "website",
+			"name": "public-docs",
+			"url": "https://example.com/docs",
+			"maxPages": 200,
+			"maxDepth": 3,
+			"ttlHours": 24
 		}
 	]
 }
@@ -217,7 +225,7 @@ REPL supports `@resource` mentions.
 
 ### 4.3 `btca add [url-or-path]`
 
-Add a git repo or local directory resource.
+Add a git repo, website, or local directory resource.
 
 Options:
 
@@ -225,14 +233,18 @@ Options:
 - `-n, --name <name>`
 - `-b, --branch <branch>` (default `main`)
 - `-s, --search-path <path...>`
+- `--max-pages <number>` (website, default `200`)
+- `--max-depth <number>` (website, default `3`)
+- `--ttl-hours <number>` (website, default `24`)
 - `--notes <notes>`
-- `-t, --type <git|local>`
+- `-t, --type <git|website|local>`
 
 Behavior:
 
 - If no argument, interactive wizard.
 - If `--type` omitted, auto‑detects URL vs path.
 - Git URLs are normalized to base repo when GitHub.
+- Website resources require an absolute HTTPS URL.
 - Local paths are resolved to absolute paths.
 
 ### 4.4 `btca remove [name]`
@@ -520,6 +532,15 @@ Response:
 			"type": "local",
 			"path": "/abs/path/docs",
 			"specialNotes": null
+		},
+		{
+			"name": "public-docs",
+			"type": "website",
+			"url": "https://example.com/docs",
+			"maxPages": 200,
+			"maxDepth": 3,
+			"ttlHours": 24,
+			"specialNotes": null
 		}
 	]
 }
@@ -621,6 +642,19 @@ Request (local):
 
 ```json
 { "type": "local", "name": "docs", "path": "/abs/path/docs" }
+```
+
+Request (website):
+
+```json
+{
+	"type": "website",
+	"name": "public-docs",
+	"url": "https://example.com/docs",
+	"maxPages": 200,
+	"maxDepth": 3,
+	"ttlHours": 24
+}
 ```
 
 Response: the created resource (GitHub URLs normalized to base repo).
@@ -762,6 +796,13 @@ Git URL validation:
 - No embedded credentials
 - No localhost or private IPs
 - GitHub URLs normalized to base repo
+
+Website URL validation:
+
+- HTTPS only
+- No embedded credentials
+- No localhost or private IPs
+- Defaults: `maxPages=200`, `maxDepth=3`, `ttlHours=24`
 
 ---
 

@@ -25,7 +25,17 @@ interface LocalResource {
 	specialNotes?: string;
 }
 
-type ResourceDefinition = GitResource | LocalResource;
+interface WebsiteResource {
+	type: 'website';
+	name: string;
+	url: string;
+	maxPages?: number;
+	maxDepth?: number;
+	ttlHours?: number;
+	specialNotes?: string;
+}
+
+type ResourceDefinition = GitResource | LocalResource | WebsiteResource;
 
 const isGitResource = (r: ResourceDefinition): r is GitResource => r.type === 'git';
 
@@ -42,7 +52,7 @@ async function selectSingleResource(resources: ResourceDefinition[]): Promise<st
 
 		console.log('\nSelect a resource to remove:\n');
 		resources.forEach((r, idx) => {
-			const location = isGitResource(r) ? r.url : r.path;
+			const location = isGitResource(r) ? r.url : r.type === 'website' ? r.url : r.path;
 			console.log(`  ${idx + 1}. ${r.name} ${dim(`(${location})`)}`);
 		});
 		console.log('');

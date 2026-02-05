@@ -51,7 +51,14 @@ export const LIMITS = {
 	/** Maximum length for questions (includes conversation history when formatted) */
 	QUESTION_MAX: 100_000,
 	/** Maximum number of resources per request */
-	MAX_RESOURCES_PER_REQUEST: 20
+	MAX_RESOURCES_PER_REQUEST: 20,
+	/** Default and maximum controls for website resources */
+	WEBSITE_DEFAULT_MAX_PAGES: 200,
+	WEBSITE_MAX_PAGES_MAX: 5000,
+	WEBSITE_DEFAULT_MAX_DEPTH: 3,
+	WEBSITE_MAX_DEPTH_MAX: 10,
+	WEBSITE_DEFAULT_TTL_HOURS: 24,
+	WEBSITE_TTL_HOURS_MAX: 24 * 30
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────

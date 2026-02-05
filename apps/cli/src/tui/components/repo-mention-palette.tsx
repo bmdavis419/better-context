@@ -130,7 +130,7 @@ export const RepoMentionPalette: Component<RepoMentionPaletteProps> = (props) =>
 				padding: 1
 			}}
 		>
-			<text fg={colors.textMuted} content=" Select repo:" />
+			<text fg={colors.textMuted} content=" Select resource:" />
 			<For each={visibleRange().repos}>
 				{(repo, i) => {
 					const actualIndex = () => visibleRange().start + i();

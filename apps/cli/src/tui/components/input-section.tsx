@@ -90,7 +90,7 @@ export const InputSection: Component = () => {
 
 		// Validate resources - require at least one @mention OR existing thread resources
 		if (parsed.repos.length === 0 && existingResources.length === 0) {
-			messages.addSystemMessage('Use @reponame to add context. Example: @svelte How do I...?');
+			messages.addSystemMessage('Use @resource to add context. Example: @svelte How do I...?');
 			return;
 		}
 		if (!parsed.question.trim()) {
@@ -108,7 +108,7 @@ export const InputSection: Component = () => {
 		}
 		if (invalidRepos.length > 0) {
 			messages.addSystemMessage(
-				`Repo(s) not found: ${invalidRepos.join(', ')}. Configure resources with "btca add".`
+				`Resource(s) not found: ${invalidRepos.join(', ')}. Configure resources with "btca add".`
 			);
 			return;
 		}

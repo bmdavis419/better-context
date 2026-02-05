@@ -38,20 +38,20 @@ export interface ModelUpdateResult {
 
 export const services = {
 	/**
-	 * Get all resources as Repos (only git resources for now)
+	 * Get mentionable resources for the TUI.
 	 */
 	getRepos: async (): Promise<Repo[]> => {
 		const client = createClient(getServerUrl());
 		const { resources } = await getResources(client);
 		return resources
-			.filter((r) => r.type === 'git')
+			.filter((r) => r.type === 'git' || r.type === 'website')
 			.map((r) => ({
 				name: r.name,
 				url: r.url ?? '',
-				branch: r.branch ?? 'main',
+				branch: r.type === 'git' ? (r.branch ?? 'main') : 'website',
 				specialNotes: r.specialNotes ?? undefined,
-				searchPath: r.searchPath ?? undefined,
-				searchPaths: r.searchPaths ?? undefined
+				searchPath: r.type === 'git' ? (r.searchPath ?? undefined) : undefined,
+				searchPaths: r.type === 'git' ? (r.searchPaths ?? undefined) : undefined
 			}));
 	},
 

@@ -11,7 +11,11 @@ import { Context } from './context/index.ts';
 import { getErrorMessage, getErrorTag, getErrorHint } from './errors.ts';
 import { Metrics } from './metrics/index.ts';
 import { Resources } from './resources/service.ts';
-import { GitResourceSchema, LocalResourceSchema } from './resources/schema.ts';
+import {
+	GitResourceSchema,
+	LocalResourceSchema,
+	WebsiteResourceSchema
+} from './resources/schema.ts';
 import { StreamService } from './stream/service.ts';
 import type { BtcaStreamMetaEvent } from './stream/types.ts';
 import { LIMITS, normalizeGitHubUrl } from './validation/index.ts';
@@ -141,9 +145,35 @@ const AddLocalResourceRequestSchema = z.object({
 	specialNotes: LocalResourceSchema.shape.specialNotes
 });
 
+const AddWebsiteResourceRequestSchema = z.object({
+	type: z.literal('website'),
+	name: WebsiteResourceSchema.shape.name,
+	url: WebsiteResourceSchema.shape.url,
+	maxPages: z.coerce
+		.number()
+		.int('maxPages must be an integer')
+		.min(1)
+		.max(LIMITS.WEBSITE_MAX_PAGES_MAX)
+		.optional(),
+	maxDepth: z.coerce
+		.number()
+		.int('maxDepth must be an integer')
+		.min(0)
+		.max(LIMITS.WEBSITE_MAX_DEPTH_MAX)
+		.optional(),
+	ttlHours: z.coerce
+		.number()
+		.int('ttlHours must be an integer')
+		.min(1)
+		.max(LIMITS.WEBSITE_TTL_HOURS_MAX)
+		.optional(),
+	specialNotes: WebsiteResourceSchema.shape.specialNotes
+});
+
 const AddResourceRequestSchema = z.discriminatedUnion('type', [
 	AddGitResourceRequestSchema,
-	AddLocalResourceRequestSchema
+	AddLocalResourceRequestSchema,
+	AddWebsiteResourceRequestSchema
 ]);
 
 const RemoveResourceRequestSchema = z.object({
@@ -263,14 +293,24 @@ const createApp = (deps: {
 							searchPaths: r.searchPaths ?? null,
 							specialNotes: r.specialNotes ?? null
 						};
-					} else {
+					}
+					if (r.type === 'website') {
 						return {
 							name: r.name,
 							type: r.type,
-							path: r.path,
+							url: r.url,
+							maxPages: r.maxPages,
+							maxDepth: r.maxDepth,
+							ttlHours: r.ttlHours,
 							specialNotes: r.specialNotes ?? null
 						};
 					}
+					return {
+						name: r.name,
+						type: r.type,
+						path: r.path,
+						specialNotes: r.specialNotes ?? null
+					};
 				})
 			});
 		})
@@ -407,16 +447,28 @@ const createApp = (deps: {
 				};
 				const added = await config.addResource(resource);
 				return c.json(added, 201);
-			} else {
+			}
+			if (decoded.type === 'website') {
 				const resource = {
-					type: 'local' as const,
+					type: 'website' as const,
 					name: decoded.name,
-					path: decoded.path,
+					url: decoded.url,
+					maxPages: decoded.maxPages ?? LIMITS.WEBSITE_DEFAULT_MAX_PAGES,
+					maxDepth: decoded.maxDepth ?? LIMITS.WEBSITE_DEFAULT_MAX_DEPTH,
+					ttlHours: decoded.ttlHours ?? LIMITS.WEBSITE_DEFAULT_TTL_HOURS,
 					...(decoded.specialNotes && { specialNotes: decoded.specialNotes })
 				};
 				const added = await config.addResource(resource);
 				return c.json(added, 201);
 			}
+			const resource = {
+				type: 'local' as const,
+				name: decoded.name,
+				path: decoded.path,
+				...(decoded.specialNotes && { specialNotes: decoded.specialNotes })
+			};
+			const added = await config.addResource(resource);
+			return c.json(added, 201);
 		})
 
 		// DELETE /config/resources - Remove a resource

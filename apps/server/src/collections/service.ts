@@ -7,7 +7,7 @@ import { Transaction } from '../context/transaction.ts';
 import { CommonHints, getErrorHint, getErrorMessage } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
 import { Resources } from '../resources/service.ts';
-import { isGitResource } from '../resources/schema.ts';
+import { isGitResource, isWebsiteResource } from '../resources/schema.ts';
 import { FS_RESOURCE_SYSTEM_NOTE, type BtcaFsResource } from '../resources/types.ts';
 import { CollectionError, getCollectionKey, type CollectionResult } from './types.ts';
 import { VirtualFs } from '../vfs/virtual-fs.ts';
@@ -150,6 +150,26 @@ export namespace Collections {
 			repoSubPaths: args.resource.repoSubPaths,
 			loadedAt: args.loadedAt
 		};
+		if (isWebsiteResource(args.definition)) {
+			const manifestResult = await Result.tryPromise(() =>
+				Bun.file(path.join(args.resourcePath, '.btca-website-manifest.json')).text()
+			);
+			const crawledAt = manifestResult.match({
+				ok: (content) => {
+					const parsedResult = Result.try(() => JSON.parse(content) as { crawledAt?: string });
+					return parsedResult.match({
+						ok: (parsed) => parsed.crawledAt,
+						err: () => undefined
+					});
+				},
+				err: () => undefined
+			});
+			return {
+				...base,
+				url: args.definition.url,
+				crawledAt
+			};
+		}
 		if (!isGitResource(args.definition)) return base;
 		const commit = await getGitHeadHash(args.resourcePath);
 		return {

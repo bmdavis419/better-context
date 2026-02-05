@@ -55,10 +55,10 @@ export const StatusBar: Component<StatusBarProps> = (props) => {
 
 		// Show different help based on whether we have thread resources
 		if (props.threadResources.length > 0) {
-			return ' Ask follow-up or [@repo] to add context  [/] Commands  [Ctrl+Q] Quit';
+			return ' Ask follow-up or [@resource] to add context  [/] Commands  [Ctrl+Q] Quit';
 		}
 
-		return ' [@repo] Ask question  [/] Commands  [Ctrl+Q] Quit';
+		return ' [@resource] Ask question  [/] Commands  [Ctrl+Q] Quit';
 	};
 
 	const getResourcesLabel = () => {
