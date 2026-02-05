@@ -742,9 +742,31 @@ const fetchPage = async (args: {
 			const slashDotMdUrl = buildSlashDotMdUrl(args.canonicalUrl);
 			const candidates = Array.from(new Set([dotMdUrl, slashDotMdUrl]));
 
-			const tryKnown = async () => {
-				if (support.dotMd) return tryMarkdownFetch(dotMdUrl);
-				if (support.slashDotMd) return tryMarkdownFetch(slashDotMdUrl);
+			const trySupportedInOrder = async () => {
+				const order = [
+					...(support.dotMd === true ? [dotMdUrl] : []),
+					...(support.slashDotMd === true ? [slashDotMdUrl] : [])
+				];
+
+				for (const candidateUrl of order) {
+					const page = await tryMarkdownFetch(candidateUrl);
+					if (page) return page;
+				}
+
+				// If we have partial knowledge and the preferred variant failed for this path,
+				// probe the unknown variant once for this origin and cache the outcome.
+				if (support.dotMd === true && support.slashDotMd === null) {
+					const page = await tryMarkdownFetch(slashDotMdUrl);
+					support.slashDotMd = page ? true : false;
+					if (page) return page;
+				}
+
+				if (support.slashDotMd === true && support.dotMd === null) {
+					const page = await tryMarkdownFetch(dotMdUrl);
+					support.dotMd = page ? true : false;
+					if (page) return page;
+				}
+
 				return null;
 			};
 
@@ -753,7 +775,7 @@ const fetchPage = async (args: {
 			}
 
 			if (support.dotMd !== null || support.slashDotMd !== null) {
-				const markdown = await tryKnown();
+				const markdown = await trySupportedInOrder();
 				return markdown ?? tryCanonicalFetch();
 			}
 
@@ -761,7 +783,6 @@ const fetchPage = async (args: {
 			const dotAttempt = candidates[0] ? await tryMarkdownFetch(candidates[0]) : null;
 			if (dotAttempt) {
 				support.dotMd = true;
-				support.slashDotMd = false;
 				return dotAttempt;
 			}
 			support.dotMd = false;
