@@ -173,12 +173,14 @@ const upsertOpenCode = (
 	};
 };
 
-const upsertTomlSection = (content: string, header: string, blockLines: string[]) => {
+const upsertTomlSection = (content: string, header: string, newKeys: Map<string, string>) => {
 	const lines = content.split(/\r?\n/);
 	const next: string[] = [];
 	let inSection = false;
 	let replaced = false;
 	let found = false;
+	const existingKeys = new Map<string, string>();
+	let headerLine = '';
 
 	for (const line of lines) {
 		const trimmed = line.trim();
@@ -186,30 +188,59 @@ const upsertTomlSection = (content: string, header: string, blockLines: string[]
 
 		if (isHeader) {
 			if (inSection && !replaced) {
-				next.push(...blockLines, '');
+				// Merge existing keys with new keys (new keys take precedence)
+				const mergedKeys = new Map([...existingKeys, ...newKeys]);
+				next.push(headerLine);
+				for (const [key, value] of mergedKeys) {
+					next.push(`${key} = ${value}`);
+				}
+				next.push('');
 				replaced = true;
 			}
 
 			if (trimmed === header) {
 				inSection = true;
 				found = true;
+				headerLine = line;
+				existingKeys.clear();
 				continue;
 			}
 
 			inSection = false;
 		}
 
-		if (!inSection) next.push(line);
+		if (inSection) {
+			// Parse existing key-value pairs
+			const keyMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
+			if (keyMatch?.[1]) {
+				const key = keyMatch[1];
+				const valueStart = trimmed.indexOf('=') + 1;
+				const value = trimmed.slice(valueStart).trim();
+				existingKeys.set(key, value);
+			}
+		} else {
+			next.push(line);
+		}
 	}
 
 	if (inSection && !replaced) {
-		next.push(...blockLines, '');
+		// Merge existing keys with new keys (new keys take precedence)
+		const mergedKeys = new Map([...existingKeys, ...newKeys]);
+		next.push(headerLine);
+		for (const [key, value] of mergedKeys) {
+			next.push(`${key} = ${value}`);
+		}
+		next.push('');
 		replaced = true;
 	}
 
 	if (!found) {
 		const trimmed = next.join('\n').trim();
 		const spacer = trimmed.length > 0 ? '\n\n' : '';
+		const blockLines = [header];
+		for (const [key, value] of newKeys) {
+			blockLines.push(`${key} = ${value}`);
+		}
 		return `${trimmed}${spacer}${blockLines.join('\n')}\n`;
 	}
 
@@ -224,16 +255,19 @@ const writeCodexConfig = async (mode: McpMode) => {
 	const file = Bun.file(filePath);
 	const content = (await file.exists()) ? await file.text() : '';
 	const header = mode === 'local' ? '[mcp_servers.btca_local]' : '[mcp_servers.btca]';
-	const blockLines =
+	const newKeys =
 		mode === 'local'
-			? [header, 'command = "bunx"', 'args = ["btca", "mcp"]']
-			: [
-					header,
-					`url = "${MCP_REMOTE_URL}"`,
-					`http_headers = { Authorization = "Bearer ${API_KEY_PLACEHOLDER}" }`
-				];
+			? new Map([
+					['command', '"bunx"'],
+					['args', '["btca", "mcp"]']
+				])
+			: new Map([
+					['url', `"${MCP_REMOTE_URL}"`],
+					['bearer_token_env_var', '"BTCA_API_KEY"'],
+					['enabled', 'true']
+				]);
 
-	const next = upsertTomlSection(content, header, blockLines);
+	const next = upsertTomlSection(content, header, newKeys);
 	await Bun.write(filePath, next);
 	return filePath;
 };
