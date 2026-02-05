@@ -211,4 +211,136 @@ describe('Website Resource', () => {
 		expect(await fallback.getAbsoluteDirectoryPath()).toBe(resourcePath);
 		expect(await Bun.file(path.join(resourcePath, 'pages/docs.md')).exists()).toBe(true);
 	});
+
+	it('prefers markdown variants when available (.md then /.md) and preserves markdown formatting', async () => {
+		const calls = withMockFetch({
+			'https://docs.btca.dev/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://docs.btca.dev/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: '<?xml version="1.0"?><urlset></urlset>'
+			},
+			'https://docs.btca.dev/guides/cli-reference.md': { status: 404, body: 'not found' },
+			'https://docs.btca.dev/guides/cli-reference/.md': {
+				headers: { 'content-type': 'text/markdown' },
+				body: '# CLI Reference\n\n- foo\n- bar\n'
+			},
+			'https://docs.btca.dev/guides/cli-reference': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>SPA Shell</title></head><body><script>/* nonsense */</script></body></html>'
+			}
+		});
+
+		const resource = await loadWebsiteResource({
+			...baseArgs(),
+			name: 'btca-docs',
+			url: 'https://docs.btca.dev/guides/cli-reference',
+			maxPages: 1,
+			maxDepth: 0
+		});
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+
+		const pagePath = path.join(resourcePath, 'pages/guides/cli-reference.md');
+		expect(await Bun.file(pagePath).exists()).toBe(true);
+
+		const content = await Bun.file(pagePath).text();
+		expect(content).toContain('Source: https://docs.btca.dev/guides/cli-reference');
+		expect(content).toContain('# CLI Reference');
+		expect(content).toContain('\n- foo\n- bar\n');
+
+		expect(calls).toContain('https://docs.btca.dev/guides/cli-reference.md');
+		expect(calls).toContain('https://docs.btca.dev/guides/cli-reference/.md');
+	});
+
+	it('only probes markdown variants once per origin when unsupported', async () => {
+		const calls = withMockFetch({
+			'https://docs.example.com/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://docs.example.com/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: '<?xml version="1.0"?><urlset></urlset>'
+			},
+			'https://docs.example.com/docs': {
+				headers: { 'content-type': 'text/html' },
+				body: `
+					<html><head><title>Docs</title></head><body>
+						<main>
+							<a href="/docs/a">A</a>
+							<a href="/docs/b">B</a>
+						</main>
+					</body></html>
+				`
+			},
+			'https://docs.example.com/docs/a': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>A</title></head><body><main><p>A</p></main></body></html>'
+			},
+			'https://docs.example.com/docs/b': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>B</title></head><body><main><p>B</p></main></body></html>'
+			}
+		});
+
+		const resource = await loadWebsiteResource({
+			...baseArgs(),
+			name: 'no-md',
+			url: 'https://docs.example.com/docs',
+			maxPages: 10,
+			maxDepth: 1
+		});
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+
+		expect(await Bun.file(path.join(resourcePath, 'pages/docs.md')).exists()).toBe(true);
+		expect(await Bun.file(path.join(resourcePath, 'pages/docs/a.md')).exists()).toBe(true);
+		expect(await Bun.file(path.join(resourcePath, 'pages/docs/b.md')).exists()).toBe(true);
+
+		const probeCalls = calls.filter((url) => url.endsWith('.md') || url.endsWith('/.md'));
+		expect(probeCalls.length).toBe(2);
+	});
+
+	it('follows redirects for markdown-variant URLs', async () => {
+		let dotMdCalls = 0;
+		const calls = withMockFetch({
+			'https://bun.com/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://bun.com/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: '<?xml version="1.0"?><urlset></urlset>'
+			},
+			'https://bun.com/docs/runtime/binary-data.md': () => {
+				dotMdCalls += 1;
+				if (dotMdCalls === 1) {
+					return {
+						headers: { 'content-type': 'text/plain' },
+						body: '<!doctype html><html><body>not markdown</body></html>'
+					};
+				}
+				return {
+					headers: { 'content-type': 'text/markdown' },
+					body: '# Binary Data\n\nHello\n'
+				};
+			},
+			'https://bun.com/docs/runtime/binary-data/.md': {
+				status: 302,
+				headers: { location: '/docs/runtime/binary-data.md' }
+			},
+			'https://bun.com/docs/runtime/binary-data': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>Shell</title></head><body><script/></body></html>'
+			}
+		});
+
+		const resource = await loadWebsiteResource({
+			...baseArgs(),
+			name: 'bun-docs',
+			url: 'https://bun.com/docs/runtime/binary-data',
+			maxPages: 1,
+			maxDepth: 0
+		});
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+
+		const pagePath = path.join(resourcePath, 'pages/docs/runtime/binary-data.md');
+		const content = await Bun.file(pagePath).text();
+		expect(content).toContain('Source: https://bun.com/docs/runtime/binary-data');
+		expect(content).toContain('# Binary Data');
+
+		expect(calls).toContain('https://bun.com/docs/runtime/binary-data/.md');
+	});
 });

@@ -141,6 +141,6 @@
 			"url": "https://btca.dev/"
 		}
 	],
-	"model": "claude-haiku-4-5",
-	"provider": "opencode"
+	"model": "gpt-5.3-codex",
+	"provider": "openai"
 }

@@ -245,6 +245,7 @@ Behavior:
 - If `--type` omitted, auto‑detects URL vs path.
 - Git URLs are normalized to base repo when GitHub.
 - Website resources require an absolute HTTPS URL.
+- Website crawling may probe for markdown-friendly variants by appending `.md` and `/.md` to page paths (and follow same-origin redirects) to improve extraction on SPA docs sites.
 - Local paths are resolved to absolute paths.
 
 ### 4.4 `btca remove [name]`

@@ -34,6 +34,11 @@ type CrawlResult = {
 	scopePath: string;
 };
 
+type MarkdownVariantSupport = {
+	dotMd: boolean | null;
+	slashDotMd: boolean | null;
+};
+
 type WebsiteManifestPage = {
 	url: string;
 	title: string;
@@ -56,6 +61,72 @@ const MANIFEST_FILE = '.btca-website-manifest.json';
 const INDEX_FILE = '_index.jsonl';
 const MAX_FETCH_BYTES = 2 * 1024 * 1024;
 const BOT_USER_AGENT = 'btca-website-crawler/1.0';
+const MAX_REDIRECTS = 5;
+
+const looksLikeHtml = (value: string) => {
+	const head = value.trimStart().slice(0, 400).toLowerCase();
+	if (!head.startsWith('<')) return false;
+	return (
+		head.includes('<!doctype') ||
+		head.includes('<html') ||
+		head.includes('<head') ||
+		head.includes('<body')
+	);
+};
+
+const isMarkdownVariantPath = (pathname: string) =>
+	pathname === '/.md' || pathname.endsWith('/.md') || pathname.endsWith('.md');
+
+const buildDotMdUrl = (canonicalUrl: string) => {
+	const url = new URL(canonicalUrl);
+	if (url.pathname === '/') url.pathname = '/.md';
+	else url.pathname = `${url.pathname}.md`;
+	return url.toString();
+};
+
+const buildSlashDotMdUrl = (canonicalUrl: string) => {
+	const url = new URL(canonicalUrl);
+	if (url.pathname === '/') url.pathname = '/.md';
+	else url.pathname = `${url.pathname}/.md`;
+	return url.toString();
+};
+
+const canonicalizeMarkdownVariantUrl = (value: string) => {
+	const parsedResult = Result.try(() => new URL(value));
+	return parsedResult.match({
+		ok: (url) => {
+			const pathname = url.pathname;
+			if (pathname === '/.md') {
+				url.pathname = '/';
+				return url.toString();
+			}
+
+			if (pathname.endsWith('/.md')) {
+				const next = pathname.slice(0, -'/.md'.length) || '/';
+				url.pathname = next.startsWith('/') ? next : `/${next}`;
+				return url.toString();
+			}
+
+			if (pathname.endsWith('.md')) {
+				const segments = pathname.split('/');
+				const last = segments[segments.length - 1] ?? '';
+				const stem = last.slice(0, -'.md'.length);
+
+				// Only strip `.md` when the stem itself has no dots (so `foo.md` -> `foo`,
+				// but `foo.v1.md` stays as-is).
+				if (stem && !stem.includes('.')) {
+					segments[segments.length - 1] = stem;
+					const next = segments.join('/') || '/';
+					url.pathname = next.startsWith('/') ? next : `/${next}`;
+					return url.toString();
+				}
+			}
+
+			return url.toString();
+		},
+		err: () => value
+	});
+};
 
 const fileExists = async (filePath: string) => {
 	const result = await Result.tryPromise(() => fs.stat(filePath));
@@ -310,6 +381,52 @@ const fetchSitemapUrls = async (start: URL, quiet: boolean): Promise<string[]> =
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+const extractLinksFromMarkdown = (markdown: string, pageUrl: string) => {
+	const links = new Set<string>();
+
+	const add = (raw: string) => {
+		const trimmed = raw.trim();
+		if (!trimmed || trimmed.startsWith('#')) return;
+		if (
+			trimmed.startsWith('mailto:') ||
+			trimmed.startsWith('tel:') ||
+			trimmed.startsWith('javascript:')
+		) {
+			return;
+		}
+
+		const normalized = normalizeUrl(trimmed, pageUrl);
+		if (!normalized) return;
+		const canonical = canonicalizeMarkdownVariantUrl(normalized);
+		links.add(canonical);
+	};
+
+	// Inline links: [text](url), excluding images: ![alt](url)
+	for (const match of markdown.matchAll(
+		/(^|[^!])\[[^\]]*?\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g
+	)) {
+		const rawUrl = match[2];
+		if (!rawUrl) continue;
+		add(rawUrl);
+	}
+
+	// Autolinks: <https://example.com>
+	for (const match of markdown.matchAll(/<((?:https?:\/\/)[^>\s]+)>/g)) {
+		const rawUrl = match[1];
+		if (!rawUrl) continue;
+		add(rawUrl);
+	}
+
+	// Reference definitions: [id]: url
+	for (const match of markdown.matchAll(/^\s*\[[^\]]+?\]:\s*(\S+)/gm)) {
+		const rawUrl = match[1];
+		if (!rawUrl) continue;
+		add(rawUrl);
+	}
+
+	return Array.from(links);
+};
+
 const parseMetaRobots = (html: string) => {
 	const $ = load(html);
 	const tokens = new Set<string>();
@@ -346,6 +463,51 @@ const extractLinks = (html: string, pageUrl: string) => {
 	});
 
 	return Array.from(links);
+};
+
+const extractMarkdownTitleAndBody = (markdown: string) => {
+	const normalized = markdown.replace(/\r\n/g, '\n');
+	const lines = normalized.split('\n');
+
+	let firstContentIndex = 0;
+	while (firstContentIndex < lines.length && !lines[firstContentIndex]?.trim())
+		firstContentIndex += 1;
+
+	const first = lines[firstContentIndex] ?? '';
+	if (first.startsWith('# ')) {
+		const title = first.slice(2).trim() || 'Untitled';
+		const rest = lines
+			.slice(firstContentIndex + 1)
+			.join('\n')
+			.replace(/^\n+/, '');
+		return { title, body: rest };
+	}
+
+	return { title: '', body: normalized.trimStart() };
+};
+
+const extractMarkdownHeadings = (markdown: string) =>
+	Array.from(markdown.matchAll(/^#{1,3}\s+(.+?)\s*$/gm))
+		.map((match) => normalizeWhitespace(match[1] ?? ''))
+		.filter(Boolean)
+		.slice(0, 100);
+
+const wrapMarkdownSnapshot = (args: {
+	canonicalUrl: string;
+	markdown: string;
+	titleHint: string;
+}) => {
+	const { title, body } = extractMarkdownTitleAndBody(args.markdown);
+	const finalTitle =
+		title || args.titleHint || new URL(args.canonicalUrl).pathname || args.canonicalUrl;
+	const parts = [`# ${finalTitle}`, '', `Source: ${args.canonicalUrl}`, '', body];
+
+	let wrapped = parts.join('\n');
+	if (wrapped.length > 120_000) {
+		wrapped = `${wrapped.slice(0, 120_000)}\n\n[Content truncated due to size]`;
+	}
+
+	return { title: finalTitle, markdown: wrapped };
 };
 
 const pageToMarkdown = (args: { pageUrl: string; html: string }) => {
@@ -405,64 +567,225 @@ const pageToMarkdown = (args: { pageUrl: string; html: string }) => {
 	};
 };
 
-const fetchPage = async (url: string, quiet: boolean) => {
+const fetchWithRedirects = async (args: { url: string; init: RequestInit; quiet: boolean }) => {
 	const result = await Result.tryPromise(async () => {
-		const response = await fetch(url, {
+		let current = args.url;
+
+		for (let i = 0; i <= MAX_REDIRECTS; i += 1) {
+			const response = await fetch(current, {
+				...args.init,
+				redirect: 'manual',
+				signal: AbortSignal.timeout(15_000)
+			});
+
+			if (response.status >= 300 && response.status < 400) {
+				const location = response.headers.get('location');
+				if (!location) return { response, finalUrl: current };
+
+				const next = new URL(location, current);
+				const currentUrl = new URL(current);
+				if (next.protocol !== 'http:' && next.protocol !== 'https:') return null;
+				if (next.origin !== currentUrl.origin) return null;
+
+				current = next.toString();
+				continue;
+			}
+
+			return { response, finalUrl: current };
+		}
+
+		return null;
+	});
+
+	return result.match({
+		ok: (value) => value,
+		err: (error) => {
+			if (!args.quiet) {
+				Metrics.error('resource.website.redirects.error', {
+					url: args.url,
+					error: Metrics.errorInfo(error)
+				});
+			}
+			return null;
+		}
+	});
+};
+
+const fetchPage = async (args: {
+	canonicalUrl: string;
+	quiet: boolean;
+	mdSupportByOrigin: Map<string, MarkdownVariantSupport>;
+}) => {
+	const result = await Result.tryPromise(async () => {
+		const canonicalParsed = new URL(args.canonicalUrl);
+		const init: RequestInit = {
 			headers: {
 				'user-agent': BOT_USER_AGENT,
 				accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1'
-			},
-			signal: AbortSignal.timeout(15_000)
-		});
-		if (!response.ok) return null;
+			}
+		};
 
-		const contentLengthHeader = response.headers.get('content-length');
-		if (contentLengthHeader) {
-			const contentLength = Number.parseInt(contentLengthHeader, 10);
-			if (Number.isFinite(contentLength) && contentLength > MAX_FETCH_BYTES) return null;
-		}
+		const readTextSafe = async (response: Response) => {
+			const contentLengthHeader = response.headers.get('content-length');
+			if (contentLengthHeader) {
+				const contentLength = Number.parseInt(contentLengthHeader, 10);
+				if (Number.isFinite(contentLength) && contentLength > MAX_FETCH_BYTES) return null;
+			}
 
-		const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
-		const isHtml =
-			contentType.includes('text/html') ||
-			contentType.includes('application/xhtml+xml') ||
-			contentType.includes('application/xml');
-		const isText = contentType.startsWith('text/');
-		if (!isHtml && !isText) return null;
+			const text = await response.text();
+			if (text.length > MAX_FETCH_BYTES) return null;
+			return text;
+		};
 
-		const body = await response.text();
-		if (body.length > MAX_FETCH_BYTES) return null;
+		const support =
+			args.mdSupportByOrigin.get(canonicalParsed.origin) ??
+			({ dotMd: null, slashDotMd: null } satisfies MarkdownVariantSupport);
+		args.mdSupportByOrigin.set(canonicalParsed.origin, support);
 
-		if (!isHtml) {
-			const normalizedText = normalizeWhitespace(body);
-			if (!normalizedText) return null;
+		const tryMarkdownFetch = async (candidateUrl: string) => {
+			const fetched = await fetchWithRedirects({ url: candidateUrl, init, quiet: args.quiet });
+			if (!fetched) return null;
+			if (!fetched.response.ok) return null;
+
+			const contentType = (fetched.response.headers.get('content-type') ?? '').toLowerCase();
+			const isText = !contentType || contentType.startsWith('text/');
+			if (!isText) return null;
+
+			const body = await readTextSafe(fetched.response);
+			if (!body) return null;
+			if (looksLikeHtml(body)) return null;
+
+			const { title, markdown } = wrapMarkdownSnapshot({
+				canonicalUrl: args.canonicalUrl,
+				markdown: body,
+				titleHint: canonicalParsed.pathname
+			});
+			const headings = extractMarkdownHeadings(body);
+			const links = extractLinksFromMarkdown(body, args.canonicalUrl);
+
 			return {
-				title: new URL(url).pathname || url,
-				headings: [] as string[],
-				markdown: `# ${new URL(url).pathname || url}\n\nSource: ${url}\n\n## Content\n\n${normalizedText}`,
-				links: [] as string[],
+				title,
+				headings,
+				markdown,
+				links,
 				meta: { noindex: false, nofollow: false }
 			};
+		};
+
+		const tryCanonicalFetch = async () => {
+			const fetched = await fetchWithRedirects({ url: args.canonicalUrl, init, quiet: args.quiet });
+			if (!fetched) return null;
+			if (!fetched.response.ok) return null;
+
+			const contentType = (fetched.response.headers.get('content-type') ?? '').toLowerCase();
+			const isHtml =
+				contentType.includes('text/html') ||
+				contentType.includes('application/xhtml+xml') ||
+				contentType.includes('application/xml');
+			const isText = !contentType || contentType.startsWith('text/');
+			if (!isHtml && !isText) return null;
+
+			const body = await readTextSafe(fetched.response);
+			if (!body) return null;
+
+			const isMarkdownLike =
+				contentType.includes('text/markdown') ||
+				(isText &&
+					isMarkdownVariantPath(new URL(fetched.finalUrl).pathname) &&
+					!looksLikeHtml(body));
+			if (isMarkdownLike) {
+				const { title, markdown } = wrapMarkdownSnapshot({
+					canonicalUrl: args.canonicalUrl,
+					markdown: body,
+					titleHint: canonicalParsed.pathname
+				});
+				const headings = extractMarkdownHeadings(body);
+				const links = extractLinksFromMarkdown(body, args.canonicalUrl);
+				return {
+					title,
+					headings,
+					markdown,
+					links,
+					meta: { noindex: false, nofollow: false }
+				};
+			}
+
+			if (!isHtml) {
+				const normalizedText = normalizeWhitespace(body);
+				if (!normalizedText) return null;
+				return {
+					title: canonicalParsed.pathname || args.canonicalUrl,
+					headings: [] as string[],
+					markdown: `# ${canonicalParsed.pathname || args.canonicalUrl}\n\nSource: ${args.canonicalUrl}\n\n## Content\n\n${normalizedText}`,
+					links: [] as string[],
+					meta: { noindex: false, nofollow: false }
+				};
+			}
+
+			const meta = parseMetaRobots(body);
+			const { title, headings, markdown } = pageToMarkdown({
+				pageUrl: args.canonicalUrl,
+				html: body
+			});
+			const links = extractLinks(body, args.canonicalUrl);
+			return {
+				title,
+				headings,
+				markdown,
+				links,
+				meta
+			};
+		};
+
+		if (!isMarkdownVariantPath(canonicalParsed.pathname)) {
+			const dotMdUrl = buildDotMdUrl(args.canonicalUrl);
+			const slashDotMdUrl = buildSlashDotMdUrl(args.canonicalUrl);
+			const candidates = Array.from(new Set([dotMdUrl, slashDotMdUrl]));
+
+			const tryKnown = async () => {
+				if (support.dotMd) return tryMarkdownFetch(dotMdUrl);
+				if (support.slashDotMd) return tryMarkdownFetch(slashDotMdUrl);
+				return null;
+			};
+
+			if (support.dotMd === false && support.slashDotMd === false) {
+				return tryCanonicalFetch();
+			}
+
+			if (support.dotMd !== null || support.slashDotMd !== null) {
+				const markdown = await tryKnown();
+				return markdown ?? tryCanonicalFetch();
+			}
+
+			// Probe once per origin: `.md` first, then `/.md`.
+			const dotAttempt = candidates[0] ? await tryMarkdownFetch(candidates[0]) : null;
+			if (dotAttempt) {
+				support.dotMd = true;
+				support.slashDotMd = false;
+				return dotAttempt;
+			}
+			support.dotMd = false;
+
+			const slashCandidate = candidates.find((u) => u !== candidates[0]);
+			const slashAttempt = slashCandidate ? await tryMarkdownFetch(slashCandidate) : null;
+			if (slashAttempt) {
+				support.slashDotMd = true;
+				return slashAttempt;
+			}
+			support.slashDotMd = false;
+
+			return tryCanonicalFetch();
 		}
 
-		const meta = parseMetaRobots(body);
-		const { title, headings, markdown } = pageToMarkdown({ pageUrl: url, html: body });
-		const links = extractLinks(body, url);
-		return {
-			title,
-			headings,
-			markdown,
-			links,
-			meta
-		};
+		return tryCanonicalFetch();
 	});
 
 	return result.match({
 		ok: (page) => page,
 		err: (error) => {
-			if (!quiet) {
+			if (!args.quiet) {
 				Metrics.error('resource.website.page.error', {
-					url,
+					url: args.canonicalUrl,
 					error: Metrics.errorInfo(error)
 				});
 			}
@@ -489,6 +812,7 @@ const crawlWebsite = async (args: {
 	const scopePath = scopePathFromStartUrl(start);
 	const robotsRules = await fetchRobotsRules(start.origin, args.quiet);
 	const sitemapUrls = await fetchSitemapUrls(start, args.quiet);
+	const mdSupportByOrigin = new Map<string, MarkdownVariantSupport>();
 
 	const queue: CrawlQueueItem[] = [];
 	const visited = new Set<string>();
@@ -516,7 +840,11 @@ const crawlWebsite = async (args: {
 		const current = queue.shift();
 		if (!current) break;
 
-		const page = await fetchPage(current.url, args.quiet);
+		const page = await fetchPage({
+			canonicalUrl: current.url,
+			quiet: args.quiet,
+			mdSupportByOrigin
+		});
 		if (!page) continue;
 
 		if (!page.meta.nofollow && current.depth < args.maxDepth) {
