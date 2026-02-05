@@ -42,21 +42,23 @@
 	"devDependencies": {
 		"@btca/shared": "workspace:*",
 		"btca-server": "workspace:*",
+		"@inquirer/select": "^5.0.4",
 		"@opentui/core": "0.1.65",
 		"@opentui/solid": "0.1.65",
 		"@shikijs/langs": "^3.20.0",
 		"@shikijs/themes": "^3.20.0",
+		"@tmcp/adapter-zod": "^0.1.7",
+		"@tmcp/transport-stdio": "^0.4.1",
 		"@types/bun": "latest",
 		"@typescript/native-preview": "^7.0.0-dev.20260109.1",
+		"better-result": "^2.6.0",
 		"commander": "^12.1.0",
 		"hono": "^4.7.11",
 		"marked": "^17.0.1",
 		"prettier": "^3.7.4",
 		"shiki": "^3.20.0",
-		"solid-js": "^1.9.10"
-	},
-	"dependencies": {
-		"@inquirer/select": "^5.0.4",
-		"better-result": "^2.6.0"
+		"solid-js": "^1.9.10",
+		"tmcp": "^1.19.2",
+		"zod": "^4.3.6"
 	}
 }

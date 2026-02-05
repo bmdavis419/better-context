@@ -6,6 +6,7 @@ import { clearCommand } from './commands/clear.ts';
 import { connectCommand } from './commands/connect.ts';
 import { disconnectCommand } from './commands/disconnect.ts';
 import { initCommand } from './commands/init.ts';
+import { mcpCommand } from './commands/mcp.ts';
 import { removeCommand } from './commands/remove.ts';
 import { resourcesCommand } from './commands/resources.ts';
 import { remoteCommand } from './commands/remote.ts';
@@ -55,6 +56,7 @@ program.addCommand(skillCommand);
 
 // Utility commands
 program.addCommand(clearCommand);
+program.addCommand(mcpCommand);
 program.addCommand(serveCommand);
 
 // Remote mode commands

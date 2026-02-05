@@ -129,6 +129,25 @@ Options:
 
 - `-p, --port <port>` sets the port (default `8080`).
 
+## `btca mcp`
+
+Runs the local MCP server over stdio by default.
+
+Subcommands:
+
+- `btca mcp local` scaffolds editor config for local stdio MCP.
+- `btca mcp remote` scaffolds editor config for remote HTTP MCP (stubs an API key).
+
+Behavior:
+
+- Starts (or reuses) the local server and exposes MCP tools over stdin/stdout.
+- Intended for agent configs that support stdio transport.
+
+Tools:
+
+- `listResources` - list local resources.
+- `ask` - ask a question against local resources.
+
 ## Remote commands (`btca remote`)
 
 All remote commands require an API key linked with `btca remote link`.

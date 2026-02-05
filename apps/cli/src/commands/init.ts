@@ -1,5 +1,6 @@
 import { Result } from 'better-result';
 import { Command } from 'commander';
+import select from '@inquirer/select';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import * as readline from 'readline';
@@ -24,28 +25,43 @@ async function promptSelect<T extends string>(
 	question: string,
 	options: { label: string; value: T }[]
 ): Promise<T> {
-	return new Promise((resolve, reject) => {
-		const rl = readline.createInterface({
-			input: process.stdin,
-			output: process.stdout
-		});
+	if (options.length === 0) {
+		throw new Error('Invalid selection');
+	}
 
-		console.log(`\n${question}\n`);
-		options.forEach((opt, idx) => {
-			console.log(`  ${idx + 1}) ${opt.label}`);
-		});
-		console.log('');
+	if (!process.stdin.isTTY || !process.stdout.isTTY) {
+		return new Promise((resolve, reject) => {
+			const rl = readline.createInterface({
+				input: process.stdin,
+				output: process.stdout
+			});
 
-		rl.question('Enter number: ', (answer) => {
-			rl.close();
-			const num = parseInt(answer.trim(), 10);
-			if (isNaN(num) || num < 1 || num > options.length) {
-				reject(new Error('Invalid selection'));
-				return;
-			}
-			resolve(options[num - 1]!.value);
+			console.log(`\n${question}\n`);
+			options.forEach((opt, idx) => {
+				console.log(`  ${idx + 1}) ${opt.label}`);
+			});
+			console.log('');
+
+			rl.question('Enter number: ', (answer) => {
+				rl.close();
+				const num = parseInt(answer.trim(), 10);
+				if (isNaN(num) || num < 1 || num > options.length) {
+					reject(new Error('Invalid selection'));
+					return;
+				}
+				resolve(options[num - 1]!.value);
+			});
 		});
+	}
+
+	const selection = await select({
+		message: question,
+		choices: options.map((option) => ({
+			name: option.label,
+			value: option.value
+		}))
 	});
+	return selection as T;
 }
 
 /**
