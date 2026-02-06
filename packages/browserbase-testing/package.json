@@ -1,0 +1,19 @@
+{
+	"name": "@btca/bb-testing",
+	"module": "index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun run src/index.ts"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"@browserbasehq/sdk": "^2.6.0",
+		"puppeteer-core": "^24.37.1"
+	}
+}
