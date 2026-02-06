@@ -768,7 +768,7 @@ The resources available are defined by the end user in their btca dashboard. If 
 								<a
 									href={SUPPORT_URL}
 									target="_blank"
-									rel="noreferrer"
+									rel="noreferrer noopener"
 									class="text-[hsl(var(--bc-accent))]">{SUPPORT_URL}</a
 								> to raise them.
 							</div>

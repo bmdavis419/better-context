@@ -527,7 +527,7 @@
 									<a
 										href={resource.url}
 										target="_blank"
-										rel="noreferrer"
+										rel="noreferrer noopener"
 										class="bc-chip p-1.5"
 										title="Open repository"
 									>

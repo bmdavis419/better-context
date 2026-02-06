@@ -108,7 +108,12 @@
 				</a>
 
 				<nav aria-label="Primary" class="hidden items-center gap-1 sm:flex">
-					<a class="bc-navLink" href="https://docs.btca.dev" target="_blank" rel="noreferrer">
+					<a
+						class="bc-navLink"
+						href="https://docs.btca.dev"
+						target="_blank"
+						rel="noreferrer noopener"
+					>
 						Docs
 					</a>
 					<a class={`bc-navLink ${isActive('/web') ? 'bc-navLink-active' : ''}`} href="/web">Web</a>
@@ -128,7 +133,7 @@
 						class="bc-chip hidden sm:inline-flex"
 						href="https://github.com/bmdavis419/better-context"
 						target="_blank"
-						rel="noreferrer"
+						rel="noreferrer noopener"
 						aria-label="GitHub"
 						title="GitHub"
 					>
@@ -169,7 +174,12 @@
 				<div class="bc-container pb-4 sm:hidden">
 					<div class="bc-card bc-ring p-2">
 						<nav aria-label="Mobile" class="flex flex-col">
-							<a class="bc-navLink" href="https://docs.btca.dev" target="_blank" rel="noreferrer">
+							<a
+								class="bc-navLink"
+								href="https://docs.btca.dev"
+								target="_blank"
+								rel="noreferrer noopener"
+							>
 								Docs
 							</a>
 							<a class={`bc-navLink ${isActive('/web') ? 'bc-navLink-active' : ''}`} href="/web"
@@ -188,7 +198,7 @@
 								class="bc-navLink"
 								href="https://github.com/bmdavis419/better-context"
 								target="_blank"
-								rel="noreferrer"
+								rel="noreferrer noopener"
 							>
 								GitHub
 							</a>

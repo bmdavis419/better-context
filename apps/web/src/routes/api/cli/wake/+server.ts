@@ -45,6 +45,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return jsonResponse({ serverUrl: result.serverUrl });
 	} catch (err) {
-		return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+		console.error('POST /api/cli/wake failed', err);
+		return errorResponse('Internal error', 500);
 	}
 };

@@ -56,6 +56,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		return jsonResponse({ questions: result.questions });
 	} catch (err) {
-		return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+		console.error('GET /api/cli/questions failed', err);
+		return errorResponse('Internal error', 500);
 	}
 };

@@ -8,6 +8,7 @@ import type { Id } from './_generated/dataModel.js';
 import { httpAction, type ActionCtx } from './_generated/server.js';
 import { AnalyticsEvents } from './analyticsEvents.js';
 import { instances } from './apiHelpers.js';
+import { assertSafeServerUrl } from './urlSafety.js';
 
 const usageActions = api.usage;
 const instanceActions = instances.actions;
@@ -19,6 +20,7 @@ const http = httpRouter();
 const corsAllowedMethods = 'GET, POST, OPTIONS';
 const corsMaxAgeSeconds = 60 * 60 * 24;
 const defaultAllowedHeaders = 'Content-Type, Authorization, X-Requested-With';
+const svixMaxSkewSeconds = 5 * 60;
 
 const buildAllowedOrigins = (): Set<string> => {
 	const origins = (process.env.CLIENT_ORIGIN ?? '')
@@ -338,7 +340,7 @@ const chatStream = httpAction(async (ctx, request) => {
 
 				const serverUrl = await ensureServerUrl(ctx, instance, sendEvent);
 
-				const response = await fetch(`${serverUrl}/question/stream`, {
+				const response = await fetch(new URL('/question/stream', serverUrl), {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json'
@@ -563,7 +565,7 @@ const chatStream = httpAction(async (ctx, request) => {
 	const response = new Response(stream, {
 		headers: {
 			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
+			'Cache-Control': 'no-store',
 			Connection: 'keep-alive'
 		}
 	});
@@ -587,6 +589,16 @@ const clerkWebhook = httpAction(async (ctx, request) => {
 			properties: { webhookType: 'clerk', reason: 'missing_svix_headers' }
 		});
 		const response = jsonResponse({ error: 'Missing Svix headers' }, { status: 400 });
+		return withCors(request, response);
+	}
+
+	if (!isSvixTimestampFresh(headers['svix-timestamp'])) {
+		await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
+			distinctId: 'webhook_system',
+			event: AnalyticsEvents.WEBHOOK_VERIFICATION_FAILED,
+			properties: { webhookType: 'clerk', reason: 'stale_timestamp' }
+		});
+		const response = jsonResponse({ error: 'Stale webhook timestamp' }, { status: 400 });
 		return withCors(request, response);
 	}
 
@@ -667,6 +679,15 @@ const daytonaWebhook = httpAction(async (ctx, request) => {
 		return jsonResponse({ error: 'Missing Svix headers' }, { status: 400 });
 	}
 
+	if (!isSvixTimestampFresh(headers['svix-timestamp'])) {
+		await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
+			distinctId: 'webhook_system',
+			event: AnalyticsEvents.WEBHOOK_VERIFICATION_FAILED,
+			properties: { webhookType: 'daytona', reason: 'stale_timestamp' }
+		});
+		return jsonResponse({ error: 'Stale webhook timestamp' }, { status: 400 });
+	}
+
 	const verifiedPayload = await verifySvixSignature(payload, headers, secret);
 	if (!verifiedPayload) {
 		await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
@@ -720,6 +741,30 @@ function getSvixHeaders(request: Request): SvixHeaders | null {
 	};
 }
 
+const parseSvixTimestampSeconds = (raw: string) => {
+	const ts = Number(raw);
+	if (!Number.isFinite(ts)) return null;
+	return Math.floor(ts > 1e12 ? ts / 1000 : ts);
+};
+
+const isSvixTimestampFresh = (raw: string, maxSkewSeconds = svixMaxSkewSeconds) => {
+	const ts = parseSvixTimestampSeconds(raw);
+	if (!ts) return false;
+	const now = Math.floor(Date.now() / 1000);
+	return Math.abs(now - ts) <= maxSkewSeconds;
+};
+
+const timingSafeEqual = (a: string, b: string) => {
+	const len = Math.max(a.length, b.length);
+	let result = 0;
+	for (let i = 0; i < len; i++) {
+		const ca = a.charCodeAt(i) || 0;
+		const cb = b.charCodeAt(i) || 0;
+		result |= ca ^ cb;
+	}
+	return result === 0 && a.length === b.length;
+};
+
 async function verifySvixSignature(
 	payload: string,
 	headers: SvixHeaders,
@@ -760,8 +805,8 @@ async function verifySvixSignature(
 		.filter((value): value is string => Boolean(value));
 
 	const normalizedSignature = signatureBase64.replace(/=+$/, '');
-	const matches = candidates.some(
-		(candidate) => candidate.replace(/=+$/, '') === normalizedSignature
+	const matches = candidates.some((candidate) =>
+		timingSafeEqual(candidate.replace(/=+$/, ''), normalizedSignature)
 	);
 	if (!matches) {
 		return null;
@@ -854,7 +899,7 @@ async function ensureServerUrl(
 
 	if (instance.state === 'running' && instance.serverUrl) {
 		sendEvent({ type: 'status', status: 'ready' });
-		return instance.serverUrl;
+		return assertSafeServerUrl(instance.serverUrl);
 	}
 
 	if (!instance.sandboxId) {
@@ -872,5 +917,5 @@ async function ensureServerUrl(
 	}
 
 	sendEvent({ type: 'status', status: 'ready' });
-	return serverUrl;
+	return assertSafeServerUrl(serverUrl);
 }

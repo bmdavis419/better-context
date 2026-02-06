@@ -29,7 +29,7 @@
 				href="https://docs.btca.dev/guides/quickstart"
 				class="bc-chip justify-center"
 				target="_blank"
-				rel="noreferrer"
+				rel="noreferrer noopener"
 			>
 				Use the CLI
 			</a>
@@ -91,13 +91,15 @@
 			<div class="flex flex-wrap gap-3">
 				<a href="/pricing" class="bc-chip">Pricing</a>
 				<a href="/resources" class="bc-chip">Resources</a>
-				<a href="https://docs.btca.dev" class="bc-chip" target="_blank" rel="noreferrer"> Docs </a>
+				<a href="https://docs.btca.dev" class="bc-chip" target="_blank" rel="noreferrer noopener">
+					Docs
+				</a>
 				<a href="/web" class="bc-chip">Web app</a>
 				<a
 					href="https://docs.btca.dev/guides/configuration"
 					class="bc-chip"
 					target="_blank"
-					rel="noreferrer"
+					rel="noreferrer noopener"
 				>
 					Configuration
 				</a>

@@ -104,6 +104,8 @@
 	let scrollContainer = $state<HTMLDivElement | null>(null);
 	let isAtBottom = $state(true);
 
+	let markdownClickRoot = $state<HTMLDivElement | null>(null);
+
 	function handleScroll() {
 		if (!scrollContainer) return;
 		const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
@@ -175,26 +177,37 @@
 		return langMap[lang] ?? 'text';
 	}
 
+	const escapeHtml = (value: string) =>
+		value
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+
 	async function renderMarkdownWithShiki(text: string): Promise<string> {
 		const content = stripHistory(text);
 		const highlighter = await shikiHighlighter;
 
 		const renderer = new marked.Renderer();
+		// Disallow raw HTML passthrough from markdown.
+		renderer.html = ({ text }: { text: string }) => escapeHtml(text);
 		renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
 			const normalized = normalizeCodeLang(lang);
 			const codeId = nanoid(8);
+			const safeLangLabel = escapeHtml((lang || 'text').trim() || 'text');
 			const highlighted = highlighter.codeToHtml(text, {
 				lang: normalized,
 				themes: { light: 'light-plus', dark: 'dark-plus' },
 				defaultColor: false
 			});
-			return `<div class="code-block-wrapper" data-code-id="${codeId}"><div class="code-block-header"><span class="code-lang">${lang || 'text'}</span><button class="copy-btn" data-copy-target="${codeId}" onclick="window.copyCode('${codeId}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button></div><div class="code-content" id="code-${codeId}">${highlighted}</div><pre style="display:none" id="code-raw-${codeId}">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`;
+			return `<div class="code-block-wrapper" data-code-id="${codeId}"><div class="code-block-header"><span class="code-lang">${safeLangLabel}</span><button type="button" class="copy-btn" data-copy-target="${codeId}">Copy</button></div><div class="code-content" id="code-${codeId}">${highlighted}</div><pre style="display:none" id="code-raw-${codeId}">${escapeHtml(text)}</pre></div>`;
 		};
 
 		const html = (await marked.parse(content, { async: true, renderer })) as string;
 		return DOMPurify.sanitize(html, {
 			ADD_TAGS: ['pre', 'code'],
-			ADD_ATTR: ['data-code-id', 'data-copy-target', 'onclick', 'class', 'id', 'style']
+			ADD_ATTR: ['data-code-id', 'data-copy-target', 'class', 'id', 'style', 'type']
 		});
 	}
 
@@ -213,27 +226,44 @@
 				});
 		}
 
-		const html = marked.parse(content, { async: false }) as string;
+		const renderer = new marked.Renderer();
+		renderer.html = ({ text }: { text: string }) => escapeHtml(text);
+
+		const html = marked.parse(content, { async: false, renderer }) as string;
 		return DOMPurify.sanitize(html, {
 			ADD_TAGS: ['pre', 'code'],
 			ADD_ATTR: ['class']
 		});
 	}
 
-	// Global copy function
-	if (typeof window !== 'undefined') {
-		(window as unknown as { copyCode: (id: string) => void }).copyCode = async (id: string) => {
-			const rawEl = document.getElementById(`code-raw-${id}`);
-			if (rawEl) {
-				const text = rawEl.textContent ?? '';
-				await navigator.clipboard.writeText(text);
-				copiedId = id;
-				setTimeout(() => {
-					copiedId = null;
-				}, 2000);
-			}
-		};
+	async function handleMarkdownClick(event: MouseEvent) {
+		const target = event.target as Element | null;
+		const button = target?.closest?.('button.copy-btn') as HTMLButtonElement | null;
+		if (!button) return;
+
+		const copyTarget = button.dataset.copyTarget;
+		if (!copyTarget) return;
+
+		const rawEl = document.getElementById(`code-raw-${copyTarget}`);
+		const text = rawEl?.textContent ?? '';
+		if (!text) return;
+
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			// ignore
+		}
 	}
+
+	$effect(() => {
+		const root = markdownClickRoot;
+		if (!root) return;
+		const handler = (event: Event) => {
+			void handleMarkdownClick(event as MouseEvent);
+		};
+		root.addEventListener('click', handler);
+		return () => root.removeEventListener('click', handler);
+	});
 
 	async function copyFullAnswer(messageId: string, chunks: BtcaChunk[]) {
 		const text = chunks
@@ -301,7 +331,7 @@
 		onscroll={handleScroll}
 		class="absolute inset-0 overflow-y-auto bc-chatPattern"
 	>
-		<div class="mx-auto flex w-full max-w-5xl flex-col gap-4 p-5">
+		<div bind:this={markdownClickRoot} class="mx-auto flex w-full max-w-5xl flex-col gap-4 p-5">
 			{#each messages as message, index (message.id)}
 				{#if message.role === 'user'}
 					<div>

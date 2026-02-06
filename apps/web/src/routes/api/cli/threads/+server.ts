@@ -49,6 +49,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		return jsonResponse({ threads: result.threads });
 	} catch (err) {
-		return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+		console.error('GET /api/cli/threads failed', err);
+		return errorResponse('Internal error', 500);
 	}
 };

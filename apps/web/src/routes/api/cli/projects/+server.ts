@@ -45,6 +45,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
 		return jsonResponse({ projects: result.projects });
 	} catch (err) {
-		return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+		console.error('GET /api/cli/projects failed', err);
+		return errorResponse('Internal error', 500);
 	}
 };

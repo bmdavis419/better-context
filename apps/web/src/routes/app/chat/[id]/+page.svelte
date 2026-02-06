@@ -803,7 +803,8 @@
 						You've used all 5 free messages. <a href="/pricing">Upgrade to Pro</a> for $8/month to continue.
 					{:else}
 						You've hit your monthly usage limits. Contact
-						<a href={SUPPORT_URL} target="_blank" rel="noreferrer">{SUPPORT_URL}</a> to raise them.
+						<a href={SUPPORT_URL} target="_blank" rel="noreferrer noopener">{SUPPORT_URL}</a> to raise
+						them.
 					{/if}
 				</div>
 			{/if}

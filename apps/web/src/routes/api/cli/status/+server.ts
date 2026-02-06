@@ -49,6 +49,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
 		return jsonResponse(result);
 	} catch (err) {
-		return errorResponse(err instanceof Error ? err.message : 'Internal error', 500);
+		console.error('GET /api/cli/status failed', err);
+		return errorResponse('Internal error', 500);
 	}
 };
