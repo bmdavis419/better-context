@@ -31,7 +31,7 @@ const program = new Command()
 	.version(VERSION, '-v, --version', 'output the version number')
 	.enablePositionalOptions()
 	.option('--server <url>', 'Use an existing btca server URL')
-	.option('--port <port>', 'Port for auto-started server (default: random)', parseInt)
+	.option('--port <port>', 'Port for auto-started server (default: 0, OS-assigned)', parseInt)
 	.option(
 		'--no-tui',
 		'Use simple REPL mode instead of TUI (useful for Windows or minimal terminals)'

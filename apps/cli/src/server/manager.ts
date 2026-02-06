@@ -16,11 +16,6 @@ export interface EnsureServerOptions {
 const DEFAULT_TIMEOUT = 10000;
 
 /**
- * Get a random port in the range 3000-6000
- */
-const getRandomPort = (): number => Math.floor(Math.random() * 3000) + 3000;
-
-/**
  * Wait for the server to be healthy
  */
 const waitForHealth = async (url: string, timeout: number): Promise<void> => {
@@ -62,7 +57,8 @@ export async function ensureServer(options: EnsureServerOptions = {}): Promise<S
 	}
 
 	// Start the server in-process
-	const port = options.port ?? getRandomPort();
+	// Use port 0 by default: OS assigns an available ephemeral port (avoids collisions).
+	const port = options.port ?? 0;
 
 	const result = await Result.tryPromise(() => startServer({ port, quiet: options.quiet }));
 	if (Result.isError(result)) {

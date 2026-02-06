@@ -54,4 +54,31 @@ describe('StreamService.createSseStream', () => {
 		const doneEvent = events.find((event) => event.type === 'done');
 		expect(doneEvent?.reasoning).toBe('First Second');
 	});
+
+	it('does not throw if the client cancels before an error is emitted', async () => {
+		const eventStream = (async function* () {
+			await new Promise<void>((resolve) => setTimeout(resolve, 5));
+			yield { type: 'error', error: new Error('boom') } as const;
+			yield { type: 'finish', finishReason: 'stop' } as const;
+		})();
+
+		const stream = StreamService.createSseStream({
+			meta: {
+				type: 'meta',
+				model: { provider: 'test', model: 'test-model' },
+				resources: ['svelte'],
+				collection: { key: 'test', path: '/tmp' }
+			},
+			eventStream
+		});
+
+		const reader = stream.getReader();
+		await reader.read(); // meta
+		await reader.cancel();
+
+		// Let the async event loop run; the test will fail if it triggers an unhandled throw/rejection.
+		await new Promise<void>((resolve) => setTimeout(resolve, 25));
+
+		expect(true).toBe(true);
+	});
 });

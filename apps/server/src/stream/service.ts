@@ -28,11 +28,19 @@ export namespace StreamService {
 	}): ReadableStream<Uint8Array> => {
 		const encoder = new TextEncoder();
 
+		let closed = false;
+
 		const emit = (
 			controller: ReadableStreamDefaultController<Uint8Array>,
 			event: BtcaStreamEvent
 		) => {
-			controller.enqueue(encoder.encode(toSse(event)));
+			if (closed) return;
+			try {
+				controller.enqueue(encoder.encode(toSse(event)));
+			} catch {
+				// If the client disconnects/cancels, the controller may already be closed.
+				closed = true;
+			}
 		};
 
 		// Track accumulated text and tool state
@@ -202,9 +210,20 @@ export namespace StreamService {
 
 					{
 						Metrics.info('stream.closed', { collectionKey: args.meta.collection.key });
-						controller.close();
+						if (!closed) {
+							closed = true;
+							try {
+								controller.close();
+							} catch {
+								// Ignore double-close: cancellation/termination may have already closed the stream.
+							}
+						}
 					}
 				})();
+			},
+
+			cancel() {
+				closed = true;
 			}
 		});
 	};

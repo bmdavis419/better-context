@@ -196,7 +196,7 @@ Remote model list (fixed):
 All commands support:
 
 - `--server <url>` — Use existing server (health checked)
-- `--port <port>` — Port for auto-started server
+- `--port <port>` — Port for auto-started server (default: `0`, OS-assigned)
 - `--no-tui` — Use REPL instead of TUI
 - `--no-thinking` — Hide reasoning output (REPL/ask)
 - `--no-tools` — Hide tool traces (REPL/ask)
