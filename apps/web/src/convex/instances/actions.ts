@@ -9,6 +9,7 @@ import type { Doc, Id } from '../_generated/dataModel';
 import { action, internalAction, type ActionCtx } from '../_generated/server';
 import { AnalyticsEvents } from '../analyticsEvents';
 import { instances } from '../apiHelpers';
+import { assertSafeServerUrl } from '../urlSafety';
 
 const instanceQueries = instances.queries;
 const instanceMutations = instances.mutations;
@@ -920,10 +921,13 @@ export const syncResources = internalAction({
 			await uploadBtcaConfig(sandbox, resources);
 
 			// Tell the btca server to reload its config
-			const reloadResponse = await fetch(`${instance.serverUrl}/reload-config`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' }
-			});
+			const reloadResponse = await fetch(
+				new URL('/reload-config', assertSafeServerUrl(instance.serverUrl)),
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' }
+				}
+			);
 
 			if (!reloadResponse.ok) {
 				console.error('Failed to reload config:', await reloadResponse.text());

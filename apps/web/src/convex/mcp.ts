@@ -8,6 +8,7 @@ import { action } from './_generated/server';
 import { AnalyticsEvents } from './analyticsEvents';
 import { instances } from './apiHelpers';
 import type { ApiKeyValidationResult } from './clerkApiKeys';
+import { assertSafeServerUrl } from './urlSafety';
 
 const instanceActions = instances.actions;
 const instanceMutations = instances.mutations;
@@ -239,7 +240,8 @@ export const ask = action({
 		}
 
 		const startedAt = Date.now();
-		const response = await fetch(`${serverUrl}/question`, {
+		const safeServerUrl = assertSafeServerUrl(serverUrl);
+		const response = await fetch(new URL('/question', safeServerUrl), {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({

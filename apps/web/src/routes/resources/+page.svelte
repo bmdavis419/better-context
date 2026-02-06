@@ -79,7 +79,9 @@
 			Some useful resources to add to btca. You can also add any other git repo!
 		</p>
 		<div class="flex flex-wrap gap-3">
-			<a href="https://docs.btca.dev" class="bc-chip" target="_blank" rel="noreferrer">Docs</a>
+			<a href="https://docs.btca.dev" class="bc-chip" target="_blank" rel="noreferrer noopener"
+				>Docs</a
+			>
 		</div>
 	</header>
 
@@ -132,7 +134,7 @@
 						<a
 							href={resource.url}
 							target="_blank"
-							rel="noreferrer"
+							rel="noreferrer noopener"
 							class="bc-chip flex items-center gap-2 px-3 py-1.5 text-xs"
 						>
 							<ExternalLink size={14} />
