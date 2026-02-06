@@ -47,6 +47,13 @@ export const resourcesCommand = new Command('resources')
 							console.log(`    Search Path: ${r.searchPath}`);
 						}
 						if (r.specialNotes) console.log(`    Notes: ${r.specialNotes}`);
+					} else if (r.type === 'website') {
+						console.log(`  ${r.name} (website)`);
+						console.log(`    URL: ${r.url}`);
+						console.log(`    Max Pages: ${r.maxPages ?? 200}`);
+						console.log(`    Max Depth: ${r.maxDepth ?? 3}`);
+						console.log(`    TTL Hours: ${r.ttlHours ?? 24}`);
+						if (r.specialNotes) console.log(`    Notes: ${r.specialNotes}`);
 					} else {
 						console.log(`  ${r.name} (local)`);
 						console.log(`    Path: ${r.path}`);

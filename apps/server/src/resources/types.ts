@@ -5,7 +5,7 @@ export type BtcaFsResource = {
 	readonly _tag: 'fs-based';
 	readonly name: string;
 	readonly fsName: string;
-	readonly type: 'git' | 'local';
+	readonly type: 'git' | 'local' | 'website';
 	readonly repoSubPaths: readonly string[];
 	readonly specialAgentInstructions: string;
 	readonly getAbsoluteDirectoryPath: () => Promise<string>;
@@ -27,4 +27,16 @@ export type BtcaLocalResourceArgs = {
 	readonly name: string;
 	readonly path: string;
 	readonly specialAgentInstructions: string;
+};
+
+export type BtcaWebsiteResourceArgs = {
+	readonly type: 'website';
+	readonly name: string;
+	readonly url: string;
+	readonly maxPages: number;
+	readonly maxDepth: number;
+	readonly ttlHours: number;
+	readonly resourcesDirectoryPath: string;
+	readonly specialAgentInstructions: string;
+	readonly quiet: boolean;
 };

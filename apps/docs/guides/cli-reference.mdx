@@ -31,7 +31,7 @@ The REPL supports `@resource` mentions.
 
 ## `btca add [url-or-path]`
 
-Adds a git repo or local directory resource.
+Adds a git repo, website, or local directory resource.
 
 Options:
 
@@ -40,9 +40,12 @@ Options:
 - `-b, --branch <branch>` sets a branch (default `main`).
 - `-s, --search-path <path...>` sets one or more search paths.
 - `--notes <notes>` sets special notes.
-- `-t, --type <git|local>` forces the resource type.
+- `-t, --type <git|website|local>` forces the resource type.
+- `--max-pages <number>` sets a website crawl page cap (default `200`).
+- `--max-depth <number>` sets a website crawl depth cap (default `3`).
+- `--ttl-hours <number>` sets website cache TTL hours (default `24`).
 
-Behavior: If no argument is provided, the CLI starts an interactive wizard. When `--type` is omitted, it auto-detects URL vs path. GitHub URLs are normalized to the base repo. Local paths are resolved to absolute paths.
+Behavior: If no argument is provided, the CLI starts an interactive wizard. When `--type` is omitted, it auto-detects URL vs path (`git` for URLs, `local` for paths). GitHub URLs are normalized to the base repo. Local paths are resolved to absolute paths.
 
 Example (local path):
 

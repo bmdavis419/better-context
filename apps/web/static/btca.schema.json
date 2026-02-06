@@ -57,15 +57,31 @@
 					},
 					{
 						"$ref": "#/$defs/localResource"
+					},
+					{
+						"$ref": "#/$defs/websiteResource"
 					}
 				]
 			},
 			"default": []
 		}
 	},
-	"required": ["model", "provider", "resources"],
+	"required": ["resources"],
 	"additionalProperties": false,
 	"$defs": {
+		"resourceName": {
+			"type": "string",
+			"maxLength": 64,
+			"pattern": "^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(/[a-zA-Z0-9][a-zA-Z0-9._-]*)*$"
+		},
+		"branchName": {
+			"type": "string",
+			"maxLength": 128,
+			"pattern": "^[a-zA-Z0-9/_.-]+$",
+			"not": {
+				"pattern": "^-"
+			}
+		},
 		"gitResource": {
 			"type": "object",
 			"title": "Git Resource",
@@ -77,16 +93,17 @@
 					"description": "Resource type identifier"
 				},
 				"name": {
-					"type": "string",
+					"$ref": "#/$defs/resourceName",
 					"description": "Unique name for this resource"
 				},
 				"url": {
 					"type": "string",
 					"description": "Git repository URL",
-					"format": "uri"
+					"format": "uri",
+					"pattern": "^https://"
 				},
 				"branch": {
-					"type": "string",
+					"$ref": "#/$defs/branchName",
 					"description": "Git branch to use",
 					"default": "main"
 				},
@@ -120,7 +137,7 @@
 					"description": "Resource type identifier"
 				},
 				"name": {
-					"type": "string",
+					"$ref": "#/$defs/resourceName",
 					"description": "Unique name for this resource"
 				},
 				"path": {
@@ -133,6 +150,55 @@
 				}
 			},
 			"required": ["type", "name", "path"],
+			"additionalProperties": false
+		},
+		"websiteResource": {
+			"type": "object",
+			"title": "Website Resource",
+			"description": "A website snapshot crawled into a local cache for searching",
+			"properties": {
+				"type": {
+					"type": "string",
+					"const": "website",
+					"description": "Resource type identifier"
+				},
+				"name": {
+					"$ref": "#/$defs/resourceName",
+					"description": "Unique name for this resource"
+				},
+				"url": {
+					"type": "string",
+					"description": "Website root URL to crawl",
+					"format": "uri",
+					"pattern": "^https://"
+				},
+				"maxPages": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 5000,
+					"default": 200,
+					"description": "Maximum number of pages to crawl"
+				},
+				"maxDepth": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 10,
+					"default": 3,
+					"description": "Maximum crawl depth from the start URL"
+				},
+				"ttlHours": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 720,
+					"default": 24,
+					"description": "Hours before the cached website snapshot is refreshed"
+				},
+				"specialNotes": {
+					"type": "string",
+					"description": "Additional context or notes about this resource for the AI"
+				}
+			},
+			"required": ["type", "name", "url"],
 			"additionalProperties": false
 		}
 	}

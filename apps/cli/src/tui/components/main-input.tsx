@@ -40,7 +40,7 @@ export const MainInput: Component<MainInputProps> = (props) => {
 		if (props.isStreaming) {
 			return 'press esc to cancel';
 		}
-		return '@repo question... or / for commands';
+		return '@resource question... or / for commands';
 	};
 
 	const getPartValueLength = (p: InputState[number]) =>

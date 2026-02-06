@@ -58,6 +58,7 @@
 		"@btca/shared": "workspace:*",
 		"ai": "^6.0.49",
 		"better-result": "^2.6.0",
+		"cheerio": "^1.2.0",
 		"hono": "^4.7.11",
 		"just-bash": "^2.7.0",
 		"opencode-ai": "^1.1.36",

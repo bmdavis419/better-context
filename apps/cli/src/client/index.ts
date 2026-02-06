@@ -185,7 +185,17 @@ export interface LocalResourceInput {
 	specialNotes?: string;
 }
 
-export type ResourceInput = GitResourceInput | LocalResourceInput;
+export interface WebsiteResourceInput {
+	type: 'website';
+	name: string;
+	url: string;
+	maxPages?: number;
+	maxDepth?: number;
+	ttlHours?: number;
+	specialNotes?: string;
+}
+
+export type ResourceInput = GitResourceInput | LocalResourceInput | WebsiteResourceInput;
 
 /**
  * Add a new resource

@@ -34,7 +34,7 @@
 		"build:all": "turbo build",
 		"build:cli": "turbo build --filter=btca",
 		"build:web": "turbo build --filter=@btca/web",
-		"check:all": "turbo check",
+		"check:all": "turbo check --filter=!@btca/docs",
 		"check:docs": "turbo check --filter=@btca/docs",
 		"check:cli": "turbo check --filter=btca",
 		"check:web": "turbo check --filter=@btca/web",

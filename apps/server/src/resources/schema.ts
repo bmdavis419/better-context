@@ -90,6 +90,42 @@ const GitUrlSchema = z
 		{ message: 'Git URL must not point to localhost or private IP addresses' }
 	);
 
+const WebsiteUrlSchema = z
+	.string()
+	.min(1, 'Website URL cannot be empty')
+	.refine(
+		(url) => {
+			const parsed = parseUrl(url);
+			return parsed ? parsed.protocol === 'https:' : false;
+		},
+		{ message: 'Website URL must be a valid HTTPS URL' }
+	)
+	.refine(
+		(url) => {
+			const parsed = parseUrl(url);
+			if (!parsed) return true;
+			return !parsed.username && !parsed.password;
+		},
+		{ message: 'Website URL must not contain embedded credentials' }
+	)
+	.refine(
+		(url) => {
+			const parsed = parseUrl(url);
+			if (!parsed) return true;
+			const hostname = parsed.hostname.toLowerCase();
+			return !(
+				hostname === 'localhost' ||
+				hostname.startsWith('127.') ||
+				hostname.startsWith('192.168.') ||
+				hostname.startsWith('10.') ||
+				hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+				hostname === '::1' ||
+				hostname === '0.0.0.0'
+			);
+		},
+		{ message: 'Website URL must not point to localhost or private IP addresses' }
+	);
+
 /**
  * Branch name field with security validation.
  */
@@ -175,13 +211,40 @@ export const LocalResourceSchema = z.object({
 	specialNotes: SpecialNotesSchema
 });
 
+export const WebsiteResourceSchema = z.object({
+	type: z.literal('website'),
+	name: ResourceNameSchema,
+	url: WebsiteUrlSchema,
+	maxPages: z
+		.number()
+		.int('maxPages must be an integer')
+		.min(1, 'maxPages must be at least 1')
+		.max(LIMITS.WEBSITE_MAX_PAGES_MAX, `maxPages cannot exceed ${LIMITS.WEBSITE_MAX_PAGES_MAX}`)
+		.default(LIMITS.WEBSITE_DEFAULT_MAX_PAGES),
+	maxDepth: z
+		.number()
+		.int('maxDepth must be an integer')
+		.min(0, 'maxDepth must be at least 0')
+		.max(LIMITS.WEBSITE_MAX_DEPTH_MAX, `maxDepth cannot exceed ${LIMITS.WEBSITE_MAX_DEPTH_MAX}`)
+		.default(LIMITS.WEBSITE_DEFAULT_MAX_DEPTH),
+	ttlHours: z
+		.number()
+		.int('ttlHours must be an integer')
+		.min(1, 'ttlHours must be at least 1')
+		.max(LIMITS.WEBSITE_TTL_HOURS_MAX, `ttlHours cannot exceed ${LIMITS.WEBSITE_TTL_HOURS_MAX}`)
+		.default(LIMITS.WEBSITE_DEFAULT_TTL_HOURS),
+	specialNotes: SpecialNotesSchema
+});
+
 export const ResourceDefinitionSchema = z.discriminatedUnion('type', [
 	GitResourceSchema,
-	LocalResourceSchema
+	LocalResourceSchema,
+	WebsiteResourceSchema
 ]);
 
 export type GitResource = z.infer<typeof GitResourceSchema>;
 export type LocalResource = z.infer<typeof LocalResourceSchema>;
+export type WebsiteResource = z.infer<typeof WebsiteResourceSchema>;
 export type ResourceDefinition = z.infer<typeof ResourceDefinitionSchema>;
 
 export const isGitResource = (value: ResourceDefinition): value is GitResource =>
@@ -189,3 +252,6 @@ export const isGitResource = (value: ResourceDefinition): value is GitResource =
 
 export const isLocalResource = (value: ResourceDefinition): value is LocalResource =>
 	value.type === 'local';
+
+export const isWebsiteResource = (value: ResourceDefinition): value is WebsiteResource =>
+	value.type === 'website';
