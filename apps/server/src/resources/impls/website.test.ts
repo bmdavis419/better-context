@@ -64,7 +64,8 @@ describe('Website Resource', () => {
 		ttlHours: 24,
 		resourcesDirectoryPath: tempDir,
 		specialAgentInstructions: '',
-		quiet: true
+		quiet: true,
+		renderer: null
 	});
 
 	it('rejects non-HTTPS website URLs', async () => {
@@ -342,5 +343,130 @@ describe('Website Resource', () => {
 		expect(content).toContain('# Binary Data');
 
 		expect(calls).toContain('https://bun.com/docs/runtime/binary-data/.md');
+	});
+
+	it('converts HTML to markdown with lists and code blocks', async () => {
+		withMockFetch({
+			'https://docs.example.com/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://docs.example.com/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: '<?xml version="1.0"?><urlset></urlset>'
+			},
+			'https://docs.example.com/docs': {
+				headers: { 'content-type': 'text/html' },
+				body: `
+					<html><head><title>Docs</title></head><body>
+						<main>
+							<h1>Docs</h1>
+							<p>Hello</p>
+							<ul><li>one</li><li>two</li></ul>
+							<pre><code>const x = 1;</code></pre>
+						</main>
+					</body></html>
+				`
+			}
+		});
+
+		const resource = await loadWebsiteResource({ ...baseArgs(), maxPages: 1, maxDepth: 0 });
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+		const content = await Bun.file(path.join(resourcePath, 'pages/docs.md')).text();
+
+		expect(content).toContain('Source: https://docs.example.com/docs');
+		expect(content).toMatch(/-\s+one/);
+		expect(content).toContain('```');
+	});
+
+	it('uses renderer when the page looks like a SPA shell', async () => {
+		const renderCalls: string[] = [];
+		const renderer = {
+			render: async (url: string) => {
+				renderCalls.push(url);
+				return {
+					finalUrl: url,
+					html: '<html><head><title>Rendered</title></head><body><main><h1>Rendered</h1><p>Hello</p></main></body></html>'
+				};
+			},
+			close: async () => undefined
+		};
+
+		withMockFetch({
+			'https://docs.example.com/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://docs.example.com/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: '<?xml version="1.0"?><urlset></urlset>'
+			},
+			'https://docs.example.com/docs': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>App</title></head><body><div id="root"></div><script src="/app.js"></script><script></script><script></script><script></script><script></script><script></script></body></html>'
+			}
+		});
+
+		const resource = await loadWebsiteResource({
+			...baseArgs(),
+			name: 'spa',
+			maxPages: 1,
+			maxDepth: 0,
+			renderer
+		});
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+		const content = await Bun.file(path.join(resourcePath, 'pages/docs.md')).text();
+
+		expect(renderCalls).toEqual(['https://docs.example.com/docs']);
+		expect(content).toContain('Hello');
+	});
+
+	it('enforces a render budget per crawl', async () => {
+		const renderCalls: string[] = [];
+		const renderer = {
+			render: async (url: string) => {
+				renderCalls.push(url);
+				return {
+					finalUrl: url,
+					html: `<html><head><title>Rendered</title></head><body><main><p>RENDERED ${url}</p></main></body></html>`
+				};
+			},
+			close: async () => undefined
+		};
+
+		const urls = Array.from({ length: 40 }, (_, i) => `https://docs.example.com/docs/p${i + 1}`);
+		const routes: MockRoutes = {
+			'https://docs.example.com/robots.txt': { body: 'User-agent: *\nAllow: /\n' },
+			'https://docs.example.com/sitemap.xml': {
+				headers: { 'content-type': 'application/xml' },
+				body: `<?xml version="1.0"?><urlset>${urls
+					.map((u) => `<url><loc>${u}</loc></url>`)
+					.join('')}</urlset>`
+			},
+			'https://docs.example.com/docs': {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>App</title></head><body><div id="root"></div><script></script><script></script><script></script><script></script><script></script><script></script></body></html>'
+			}
+		};
+
+		for (const url of urls) {
+			routes[url] = {
+				headers: { 'content-type': 'text/html' },
+				body: '<html><head><title>App</title></head><body><div id="root"></div><script></script><script></script><script></script><script></script><script></script><script></script></body></html>'
+			};
+		}
+
+		withMockFetch(routes);
+
+		const resource = await loadWebsiteResource({
+			...baseArgs(),
+			name: 'budget',
+			maxPages: 40,
+			maxDepth: 1,
+			renderer
+		});
+		const resourcePath = await resource.getAbsoluteDirectoryPath();
+
+		expect(renderCalls.length).toBe(25);
+
+		const renderedContent = await Bun.file(path.join(resourcePath, 'pages/docs/p1.md')).text();
+		expect(renderedContent).toContain('RENDERED https://docs.example.com/docs/p1');
+
+		const notRenderedContent = await Bun.file(path.join(resourcePath, 'pages/docs/p30.md')).text();
+		expect(notRenderedContent).not.toContain('RENDERED');
 	});
 });

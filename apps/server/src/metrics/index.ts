@@ -46,20 +46,17 @@ export namespace Metrics {
 	): Promise<T> => {
 		const start = performance.now();
 		const result = await Result.tryPromise(fn);
-		return result.match({
-			ok: (value) => {
-				info('span.ok', { name, ms: Math.round(performance.now() - start), ...fields });
-				return value;
-			},
-			err: (cause) => {
-				error('span.err', {
-					name,
-					ms: Math.round(performance.now() - start),
-					...fields,
-					error: errorInfo(cause)
-				});
-				throw cause;
-			}
+		if (!Result.isError(result)) {
+			info('span.ok', { name, ms: Math.round(performance.now() - start), ...fields });
+			return result.value;
+		}
+
+		error('span.err', {
+			name,
+			ms: Math.round(performance.now() - start),
+			...fields,
+			error: errorInfo(result.error)
 		});
+		throw result.error;
 	};
 }

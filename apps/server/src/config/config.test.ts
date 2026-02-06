@@ -443,14 +443,14 @@ describe('Config', () => {
 			const config = await Config.load();
 
 			// Update the model
-			await config.updateModel('new-provider', 'new-model');
+			await config.updateModel('opencode', 'new-model');
 
-			expect(config.provider).toBe('new-provider');
+			expect(config.provider).toBe('opencode');
 			expect(config.model).toBe('new-model');
 
 			// CRITICAL: Verify project config was updated
 			const savedProjectConfig = JSON.parse(await fs.readFile(projectConfigPath, 'utf-8'));
-			expect(savedProjectConfig.provider).toBe('new-provider');
+			expect(savedProjectConfig.provider).toBe('opencode');
 			expect(savedProjectConfig.model).toBe('new-model');
 			// Global resources should NOT have leaked into project config
 			expect(savedProjectConfig.resources.length).toBe(0);

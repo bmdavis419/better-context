@@ -1,0 +1,25 @@
+{
+	"name": "@btca/bb",
+	"module": "src/index.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun run src/smoke.ts",
+		"check": "tsgo --noEmit",
+		"format": "prettier --write ."
+	},
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"prettier": "^3.8.1"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"@browserbasehq/sdk": "^2.6.0",
+		"puppeteer-core": "^24.37.1"
+	}
+}

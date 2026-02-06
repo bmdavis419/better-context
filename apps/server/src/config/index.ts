@@ -464,12 +464,8 @@ export namespace Config {
 			return Result.ok(migrated);
 		});
 
-		const saved = result.match({
-			ok: (value) => value,
-			err: (error) => {
-				throw error;
-			}
-		});
+		if (Result.isError(result)) throw result.error;
+		const saved = result.value;
 
 		Metrics.info('config.legacy.migrated', {
 			newPath: newConfigPath,
@@ -498,12 +494,8 @@ export namespace Config {
 			return Result.ok(stored);
 		});
 
-		return result.match({
-			ok: (value) => value,
-			err: (error) => {
-				throw error;
-			}
-		});
+		if (Result.isError(result)) throw result.error;
+		return result.value;
 	};
 
 	const createDefaultConfig = async (configPath: string): Promise<StoredConfig> => {
@@ -540,12 +532,8 @@ export namespace Config {
 			return Result.ok(defaultStored);
 		});
 
-		return result.match({
-			ok: (value) => value,
-			err: (error) => {
-				throw error;
-			}
-		});
+		if (Result.isError(result)) throw result.error;
+		return result.value;
 	};
 
 	const saveConfig = async (configPath: string, stored: StoredConfig): Promise<void> => {
@@ -555,12 +543,7 @@ export namespace Config {
 			`Failed to save config to: "${configPath}"`,
 			'Check that you have write permissions and the disk is not full.'
 		);
-		result.match({
-			ok: () => undefined,
-			err: (error) => {
-				throw error;
-			}
-		});
+		if (Result.isError(result)) throw result.error;
 	};
 
 	/**
