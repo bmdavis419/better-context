@@ -1,8 +1,13 @@
+/// <reference path="../../types/turndown-plugin-gfm.d.ts" />
+
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import type { BbRenderer } from '@btca/bb';
 import { Result } from 'better-result';
 import { load } from 'cheerio';
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 
 import { CommonHints } from '../../errors.ts';
 import { Metrics } from '../../metrics/index.ts';
@@ -57,11 +62,18 @@ type WebsiteManifest = {
 	pages: WebsiteManifestPage[];
 };
 
+type RenderState = {
+	renderer: BbRenderer;
+	remaining: number;
+};
+
 const MANIFEST_FILE = '.btca-website-manifest.json';
 const INDEX_FILE = '_index.jsonl';
 const MAX_FETCH_BYTES = 2 * 1024 * 1024;
 const BOT_USER_AGENT = 'btca-website-crawler/1.0';
 const MAX_REDIRECTS = 5;
+const MAX_RENDERED_PAGES_PER_CRAWL = 25;
+const RENDER_QUALITY_THRESHOLD = 0.18;
 
 const looksLikeHtml = (value: string) => {
 	const head = value.trimStart().slice(0, 400).toLowerCase();
@@ -510,8 +522,56 @@ const wrapMarkdownSnapshot = (args: {
 	return { title: finalTitle, markdown: wrapped };
 };
 
-const pageToMarkdown = (args: { pageUrl: string; html: string }) => {
+const truncateSnapshot = (markdown: string) =>
+	markdown.length > 120_000
+		? `${markdown.slice(0, 120_000)}\n\n[Content truncated due to size]`
+		: markdown;
+
+const createTurndown = () => {
+	const td = new TurndownService({
+		codeBlockStyle: 'fenced',
+		headingStyle: 'atx',
+		bulletListMarker: '-'
+	});
+	td.use(gfm);
+	return td;
+};
+
+const pickContentRoot = ($: ReturnType<typeof load>) => {
+	const body = $('body').first();
+	const article = $('article').first();
+	const main = $('main').first();
+
+	const bodyLen = normalizeWhitespace(body.text()).length;
+	const articleLen = normalizeWhitespace(article.text()).length;
+	const mainLen = normalizeWhitespace(main.text()).length;
+
+	if (article.length > 0 && articleLen >= 200 && articleLen >= bodyLen * 0.25) return article;
+	if (main.length > 0 && mainLen >= 200 && mainLen >= bodyLen * 0.25) return main;
+	return body;
+};
+
+const scoreHtmlExtraction = (args: { contentTextLen: number; scriptCount: number }) => {
+	const base = Math.min(1, args.contentTextLen / 1500);
+	const scriptPenalty = Math.min(0.85, args.scriptCount / 40);
+	return Math.max(0, base * (1 - scriptPenalty));
+};
+
+const looksLikeSpaShell = (args: {
+	contentTextLen: number;
+	scriptCount: number;
+	hasSpaRoot: boolean;
+}) => args.contentTextLen < 200 && (args.hasSpaRoot || args.scriptCount >= 6);
+
+const htmlToMarkdownSnapshot = (args: { pageUrl: string; html: string }) => {
 	const $ = load(args.html);
+
+	const scriptCount = $('script').length;
+	const hasSpaRoot =
+		$('#root').length > 0 ||
+		$('#__next').length > 0 ||
+		$('#app').length > 0 ||
+		$('[data-reactroot]').length > 0;
 
 	$('script, style, noscript, template, svg').remove();
 
@@ -521,50 +581,34 @@ const pageToMarkdown = (args: { pageUrl: string; html: string }) => {
 		new URL(args.pageUrl).pathname ||
 		args.pageUrl;
 
-	const headings = $('h1, h2, h3')
-		.map((_, element) => normalizeWhitespace($(element).text()))
+	const root = pickContentRoot($).clone();
+	root.find('nav, footer, header, aside').remove();
+
+	const firstH1 = root.find('h1').first();
+	if (firstH1.length > 0 && normalizeWhitespace(firstH1.text()) === title) firstH1.remove();
+
+	const headings = root
+		.find('h1, h2, h3')
+		.map((_, el) => normalizeWhitespace($(el).text()))
 		.get()
 		.filter(Boolean)
 		.slice(0, 100);
 
-	const textBlocks = $('main p, article p, main li, article li, p, li')
-		.map((_, element) => normalizeWhitespace($(element).text()))
-		.get()
-		.filter(Boolean)
-		.filter((text, index, all) => all.indexOf(text) === index)
-		.slice(0, 300);
+	const contentText = normalizeWhitespace(root.text());
+	const contentTextLen = contentText.length;
 
-	const fallback = normalizeWhitespace($('main').text() || $('article').text() || $('body').text())
-		.split(/\.(?:\s+|$)/)
-		.map((chunk) => normalizeWhitespace(chunk))
-		.filter(Boolean)
-		.map((chunk) => `${chunk}.`)
-		.slice(0, 150);
+	const htmlBody = root.html() ?? '';
+	const mdBody = createTurndown().turndown(htmlBody).trim();
+	const finalBody = mdBody || contentText;
 
-	const contentLines = (textBlocks.length > 0 ? textBlocks : fallback).slice(0, 300);
+	const markdown = truncateSnapshot(
+		[`# ${title}`, `Source: ${args.pageUrl}`, finalBody].filter(Boolean).join('\n\n')
+	);
 
-	const lines = [
-		`# ${title}`,
-		'',
-		`Source: ${args.pageUrl}`,
-		'',
-		headings.length > 0 ? '## Headings' : '',
-		headings.length > 0 ? headings.map((heading) => `- ${heading}`).join('\n') : '',
-		headings.length > 0 ? '' : '',
-		'## Content',
-		...contentLines
-	].filter(Boolean);
+	const quality = scoreHtmlExtraction({ contentTextLen, scriptCount });
+	const shell = looksLikeSpaShell({ contentTextLen, scriptCount, hasSpaRoot });
 
-	let markdown = lines.join('\n\n');
-	if (markdown.length > 120_000) {
-		markdown = `${markdown.slice(0, 120_000)}\n\n[Content truncated due to size]`;
-	}
-
-	return {
-		title,
-		headings,
-		markdown
-	};
+	return { title, headings, markdown, quality, shell };
 };
 
 const fetchWithRedirects = async (args: { url: string; init: RequestInit; quiet: boolean }) => {
@@ -615,6 +659,7 @@ const fetchPage = async (args: {
 	canonicalUrl: string;
 	quiet: boolean;
 	mdSupportByOrigin: Map<string, MarkdownVariantSupport>;
+	renderState?: RenderState | null;
 }) => {
 	const result = await Result.tryPromise(async () => {
 		const canonicalParsed = new URL(args.canonicalUrl);
@@ -668,7 +713,9 @@ const fetchPage = async (args: {
 				headings,
 				markdown,
 				links,
-				meta: { noindex: false, nofollow: false }
+				meta: { noindex: false, nofollow: false },
+				quality: 1,
+				shell: false
 			};
 		};
 
@@ -706,7 +753,9 @@ const fetchPage = async (args: {
 					headings,
 					markdown,
 					links,
-					meta: { noindex: false, nofollow: false }
+					meta: { noindex: false, nofollow: false },
+					quality: 1,
+					shell: false
 				};
 			}
 
@@ -718,23 +767,72 @@ const fetchPage = async (args: {
 					headings: [] as string[],
 					markdown: `# ${canonicalParsed.pathname || args.canonicalUrl}\n\nSource: ${args.canonicalUrl}\n\n## Content\n\n${normalizedText}`,
 					links: [] as string[],
-					meta: { noindex: false, nofollow: false }
+					meta: { noindex: false, nofollow: false },
+					quality: 1,
+					shell: false
 				};
 			}
 
 			const meta = parseMetaRobots(body);
-			const { title, headings, markdown } = pageToMarkdown({
+			const base = htmlToMarkdownSnapshot({
 				pageUrl: args.canonicalUrl,
 				html: body
 			});
 			const links = extractLinks(body, args.canonicalUrl);
-			return {
-				title,
-				headings,
-				markdown,
-				links,
-				meta
-			};
+			const page = { ...base, links, meta };
+
+			if (
+				!meta.noindex &&
+				args.renderState &&
+				args.renderState.remaining > 0 &&
+				(page.shell || page.quality < RENDER_QUALITY_THRESHOLD)
+			) {
+				args.renderState.remaining -= 1;
+
+				const renderedResult = await Result.tryPromise(async () => {
+					const rendered = await args.renderState!.renderer.render(args.canonicalUrl);
+					const canonicalOrigin = canonicalParsed.origin;
+					const renderedOrigin = new URL(rendered.finalUrl).origin;
+					if (renderedOrigin !== canonicalOrigin) return null;
+
+					const renderedMeta = parseMetaRobots(rendered.html);
+					const renderedBase = htmlToMarkdownSnapshot({
+						pageUrl: args.canonicalUrl,
+						html: rendered.html
+					});
+					const renderedLinks = extractLinks(rendered.html, args.canonicalUrl);
+					return { ...renderedBase, links: renderedLinks, meta: renderedMeta };
+				});
+
+				const rendered = renderedResult.match({
+					ok: (value) => value,
+					err: (error) => {
+						if (!args.quiet) {
+							Metrics.error('resource.website.render.error', {
+								url: args.canonicalUrl,
+								error: Metrics.errorInfo(error)
+							});
+						}
+						return null;
+					}
+				});
+
+				if (rendered) {
+					const moreContent = rendered.markdown.length > page.markdown.length + 20;
+					const improved = rendered.quality > page.quality + 0.02;
+					const pageBodyLen = page.markdown.split('\n\n').slice(2).join('\n\n').trim().length;
+					const renderedBodyLen = rendered.markdown
+						.split('\n\n')
+						.slice(2)
+						.join('\n\n')
+						.trim().length;
+
+					if (page.shell && !rendered.shell && renderedBodyLen > pageBodyLen) return rendered;
+					if (!rendered.shell && (improved || moreContent)) return rendered;
+				}
+			}
+
+			return page;
 		};
 
 		if (!isMarkdownVariantPath(canonicalParsed.pathname)) {
@@ -820,6 +918,7 @@ const crawlWebsite = async (args: {
 	maxPages: number;
 	maxDepth: number;
 	quiet: boolean;
+	renderState?: RenderState | null;
 }): Promise<CrawlResult> => {
 	const normalizedStart = normalizeUrl(args.startUrl);
 	if (!normalizedStart) {
@@ -864,7 +963,8 @@ const crawlWebsite = async (args: {
 		const page = await fetchPage({
 			canonicalUrl: current.url,
 			quiet: args.quiet,
-			mdSupportByOrigin
+			mdSupportByOrigin,
+			renderState: args.renderState
 		});
 		if (!page) continue;
 
@@ -925,14 +1025,23 @@ const buildSnapshot = async (args: {
 	maxPages: number;
 	maxDepth: number;
 	quiet: boolean;
+	renderer: BbRenderer | null;
 }) => {
 	await fs.mkdir(path.join(args.targetPath, 'pages'), { recursive: true });
+
+	const renderState = args.renderer
+		? {
+				renderer: args.renderer,
+				remaining: Math.min(MAX_RENDERED_PAGES_PER_CRAWL, args.maxPages)
+			}
+		: null;
 
 	const crawl = await crawlWebsite({
 		startUrl: args.startUrl,
 		maxPages: args.maxPages,
 		maxDepth: args.maxDepth,
-		quiet: args.quiet
+		quiet: args.quiet,
+		renderState
 	});
 
 	const indexEntries: WebsiteManifestPage[] = [];
@@ -977,6 +1086,22 @@ const ensureWebsiteResource = async (config: BtcaWebsiteResourceArgs) => {
 		});
 	}
 
+	const isTestRun = Boolean(Bun.env.BUN_TEST) || process.argv.includes('test');
+	const loadRendererFromEnv = async () => {
+		const result = await Result.tryPromise(async () => {
+			const mod = await import('@btca/bb');
+			return mod.createBrowserbaseRendererFromEnv();
+		});
+		return result.match({ ok: (value) => value, err: () => null });
+	};
+	const renderer =
+		config.renderer !== undefined
+			? config.renderer
+			: isTestRun
+				? null
+				: await loadRendererFromEnv();
+	const shouldCloseRenderer = config.renderer === undefined;
+
 	const resourceKey = resourceNameToKey(config.name);
 	const localPath = path.join(config.resourcesDirectoryPath, resourceKey);
 	const tempPath = `${localPath}.tmp-${crypto.randomUUID()}`;
@@ -1013,13 +1138,18 @@ const ensureWebsiteResource = async (config: BtcaWebsiteResourceArgs) => {
 	const crawlResult = await Result.tryPromise(async () => {
 		await fs.rm(tempPath, { recursive: true, force: true });
 		await fs.mkdir(tempPath, { recursive: true });
-		return buildSnapshot({
-			targetPath: tempPath,
-			startUrl: config.url,
-			maxPages: config.maxPages,
-			maxDepth: config.maxDepth,
-			quiet: config.quiet
-		});
+		try {
+			return buildSnapshot({
+				targetPath: tempPath,
+				startUrl: config.url,
+				maxPages: config.maxPages,
+				maxDepth: config.maxDepth,
+				quiet: config.quiet,
+				renderer
+			});
+		} finally {
+			if (shouldCloseRenderer) await renderer?.close();
+		}
 	});
 
 	return crawlResult.match({

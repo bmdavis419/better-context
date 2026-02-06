@@ -25,6 +25,7 @@
 		"dev:web": "turbo dev --filter=@btca/web",
 		"dev:docs": "bun run --cwd apps/docs dev",
 		"dev:cli": "bun run --watch apps/cli/src/index.ts",
+		"dev:bb": "turbo dev --filter=@btca/bb",
 		"cli": "bun run apps/cli/src/index.ts",
 		"server": "bun --watch apps/server/src/index.ts",
 		"sandbox": "bun run apps/sandbox/src/index.ts",

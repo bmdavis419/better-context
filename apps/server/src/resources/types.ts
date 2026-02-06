@@ -1,3 +1,5 @@
+import type { BbRenderer } from '@btca/bb';
+
 export const FS_RESOURCE_SYSTEM_NOTE =
 	'This is a btca resource - a searchable knowledge source the agent can reference.';
 
@@ -39,4 +41,5 @@ export type BtcaWebsiteResourceArgs = {
 	readonly resourcesDirectoryPath: string;
 	readonly specialAgentInstructions: string;
 	readonly quiet: boolean;
+	readonly renderer?: BbRenderer | null;
 };
