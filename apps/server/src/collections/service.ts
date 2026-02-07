@@ -135,13 +135,37 @@ export namespace Collections {
 		});
 	};
 
+	const getGitHeadBranch = async (resourcePath: string) => {
+		const result = await Result.tryPromise(async () => {
+			const proc = Bun.spawn(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], {
+				cwd: resourcePath,
+				stdout: 'pipe',
+				stderr: 'pipe'
+			});
+			const stdout = await new Response(proc.stdout).text();
+			const exitCode = await proc.exited;
+			if (exitCode !== 0) return undefined;
+			const trimmed = stdout.trim();
+			if (!trimmed || trimmed === 'HEAD') return undefined;
+			return trimmed;
+		});
+
+		return result.match({
+			ok: (value) => value,
+			err: () => undefined
+		});
+	};
+
+	const ANON_PREFIX = 'anonymous:';
+	const getAnonymousUrlFromName = (name: string) =>
+		name.startsWith(ANON_PREFIX) ? name.slice(ANON_PREFIX.length) : undefined;
+
 	const buildVirtualMetadata = async (args: {
 		resource: BtcaFsResource;
 		resourcePath: string;
 		loadedAt: string;
 		definition?: ReturnType<Config.Service['getResource']>;
 	}) => {
-		if (!args.definition) return null;
 		const base = {
 			name: args.resource.name,
 			fsName: args.resource.fsName,
@@ -150,13 +174,19 @@ export namespace Collections {
 			repoSubPaths: args.resource.repoSubPaths,
 			loadedAt: args.loadedAt
 		};
-		if (!isGitResource(args.definition)) return base;
+		if (args.resource.type !== 'git') return base;
+
+		const configuredDefinition =
+			args.definition && isGitResource(args.definition) ? args.definition : null;
+		const url = configuredDefinition?.url ?? getAnonymousUrlFromName(args.resource.name);
+		const branch = configuredDefinition?.branch ?? (await getGitHeadBranch(args.resourcePath));
 		const commit = await getGitHeadHash(args.resourcePath);
+
 		return {
 			...base,
-			url: args.definition.url,
-			branch: args.definition.branch,
-			commit
+			...(url ? { url } : {}),
+			...(branch ? { branch } : {}),
+			...(commit ? { commit } : {})
 		};
 	};
 
