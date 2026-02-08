@@ -29,6 +29,11 @@ type IdTokenClaims = {
 };
 
 type OAuthResult = { ok: true } | { ok: false; error: string };
+type OpenAIOAuthOptions = {
+	onAuthorizationUrl?: (url: string) => void;
+	onBrowserOpenFailure?: (url: string, error: Error) => void;
+	continueOnBrowserOpenFailure?: boolean;
+};
 
 const HTML_SUCCESS = `<!doctype html>
 <html>
@@ -212,20 +217,30 @@ const exchangeCodeForTokens = async (
 	return response.json() as Promise<TokenResponse>;
 };
 
+const ensureExitCode = async (
+	proc: ReturnType<typeof spawn>,
+	commandName: string
+): Promise<void> => {
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		throw new Error(`${commandName} exited with code ${exitCode}`);
+	}
+};
+
 const openBrowser = async (url: string): Promise<void> => {
 	const platform = process.platform;
 	if (platform === 'darwin') {
 		const proc = spawn(['open', url], { stdout: 'ignore', stderr: 'ignore' });
-		await proc.exited;
+		await ensureExitCode(proc, 'open');
 		return;
 	}
 	if (platform === 'win32') {
 		const proc = spawn(['cmd', '/c', 'start', '', url], { stdout: 'ignore', stderr: 'ignore' });
-		await proc.exited;
+		await ensureExitCode(proc, 'cmd /c start');
 		return;
 	}
 	const proc = spawn(['xdg-open', url], { stdout: 'ignore', stderr: 'ignore' });
-	await proc.exited;
+	await ensureExitCode(proc, 'xdg-open');
 };
 
 const getAuthFilePath = (): string => {
@@ -274,7 +289,8 @@ export const removeProviderAuth = async (providerId: string): Promise<boolean> =
 	return true;
 };
 
-export const loginOpenAIOAuth = async (): Promise<OAuthResult> => {
+export const loginOpenAIOAuth = async (options: OpenAIOAuthOptions = {}): Promise<OAuthResult> => {
+	const continueOnBrowserOpenFailure = options.continueOnBrowserOpenFailure ?? true;
 	let server: ReturnType<typeof Bun.serve> | undefined;
 	let pending:
 		| {
@@ -382,8 +398,20 @@ export const loginOpenAIOAuth = async (): Promise<OAuthResult> => {
 		const pkce = await generatePKCE();
 		const state = generateState();
 		const authUrl = buildAuthorizeUrl(redirectUri, pkce, state);
+		options.onAuthorizationUrl?.(authUrl);
 		console.log(`\nGo to: ${authUrl}\n`);
-		await openBrowser(authUrl);
+		try {
+			await openBrowser(authUrl);
+		} catch (error) {
+			const browserError =
+				error instanceof Error
+					? error
+					: new Error(typeof error === 'string' ? error : String(error));
+			options.onBrowserOpenFailure?.(authUrl, browserError);
+			if (!continueOnBrowserOpenFailure) {
+				throw browserError;
+			}
+		}
 
 		const code = await waitForCallback(state);
 		const tokens = await exchangeCodeForTokens(code, redirectUri, pkce);
