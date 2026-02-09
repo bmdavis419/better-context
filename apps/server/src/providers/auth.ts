@@ -178,10 +178,10 @@ export namespace Auth {
 			case 'opencode':
 				return 'Set OPENCODE_API_KEY or run "opencode auth --provider opencode".';
 			case 'minimax':
-				return 'Set MINIMAX_API_KEY or run "opencode auth --provider minimax". Get your API key at https://platform.minimax.io/user-center/basic-information.';
+				return 'Run "btca connect -p minimax" and enter your API key. Get your API key at https://platform.minimax.io/user-center/basic-information.';
 			default:
-				return 'Run "opencode auth --provider <provider>" to configure credentials.';
-		}
+				return 'Run "btca connect" and configure credentials for this provider.';
+			}
 	};
 
 	/**
