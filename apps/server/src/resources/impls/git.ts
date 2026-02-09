@@ -239,7 +239,7 @@ const gitClone = async (args: {
 	if (!branchValidation.success) {
 		throw new ResourceError({
 			message: branchValidation.error,
-			hint: 'Branch names can only contain letters, numbers, hyphens, underscores, dots, and forward slashes.',
+			hint: 'Branch names can only contain letters, numbers, hyphens, underscores, dots, forward slashes, and @ symbols.',
 			cause: new Error('Branch validation failed')
 		});
 	}
