@@ -2,7 +2,7 @@
 	"include": ["src/**/*.ts", "src/**/*.tsx"],
 	"exclude": ["node_modules", "dist"],
 	"compilerOptions": {
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"target": "ESNext",
 		"module": "esnext",
 		"moduleDetection": "force",

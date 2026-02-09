@@ -4,8 +4,9 @@ import { MessagesProvider } from './context/messages-context.tsx';
 import { ToastProvider, useToast } from './context/toast-context.tsx';
 import { render, useKeyboard, useRenderer, useSelectionHandler } from '@opentui/solid';
 import { MainUi } from './index.tsx';
-import { ConsolePosition } from '@opentui/core';
+import { addDefaultParsers, ConsolePosition } from '@opentui/core';
 import { copyToClipboard } from './clipboard.ts';
+import { parsers } from './parsers-config.ts';
 
 const App: Component = () => {
 	const renderer = useRenderer();
@@ -54,6 +55,9 @@ const App: Component = () => {
 
 	return <MainUi heightPercent={heightPercent} />;
 };
+
+// Ensure tree-sitter parsers are registered before any markdown/code blocks render.
+addDefaultParsers(parsers);
 
 render(
 	() => (

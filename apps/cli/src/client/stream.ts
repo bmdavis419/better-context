@@ -12,36 +12,46 @@ export async function* parseSSEStream(response: Response): AsyncGenerator<BtcaSt
 	const decoder = new TextDecoder();
 	let buffer = '';
 
-	for await (const value of response.body) {
-		buffer += decoder.decode(value, { stream: true });
+	const reader = (
+		response.body as unknown as { getReader: () => ReadableStreamDefaultReader<Uint8Array> }
+	).getReader();
 
-		// Process complete events from buffer
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? ''; // Keep incomplete line in buffer
+	try {
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value ?? new Uint8Array(), { stream: true });
 
-		let eventType = '';
-		let eventData = '';
+			// Process complete events from buffer
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? ''; // Keep incomplete line in buffer
 
-		for (const line of lines) {
-			if (line.startsWith('event: ')) {
-				eventType = line.slice(7);
-			} else if (line.startsWith('data: ')) {
-				eventData = line.slice(6);
-			} else if (line === '' && eventData) {
-				// Empty line = end of event
-				const parsed = Result.try(() => JSON.parse(eventData));
-				const validated = parsed.andThen((value) =>
-					Result.try(() => BtcaStreamEventSchema.parse(value))
-				);
-				if (Result.isOk(validated)) {
-					yield validated.value;
-				} else {
-					console.error('Failed to parse SSE event:', validated.error);
+			let eventType = '';
+			let eventData = '';
+
+			for (const line of lines) {
+				if (line.startsWith('event: ')) {
+					eventType = line.slice(7);
+				} else if (line.startsWith('data: ')) {
+					eventData = line.slice(6);
+				} else if (line === '' && eventData) {
+					// Empty line = end of event
+					const parsed = Result.try(() => JSON.parse(eventData));
+					const validated = parsed.andThen((value) =>
+						Result.try(() => BtcaStreamEventSchema.parse(value))
+					);
+					if (Result.isOk(validated)) {
+						yield validated.value;
+					} else {
+						console.error('Failed to parse SSE event:', validated.error);
+					}
+					eventType = '';
+					eventData = '';
 				}
-				eventType = '';
-				eventData = '';
 			}
 		}
+	} finally {
+		reader.releaseLock();
 	}
 
 	// Process any remaining data in buffer

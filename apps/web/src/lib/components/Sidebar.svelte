@@ -18,12 +18,14 @@
 		X
 	} from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { useConvexClient } from 'convex-svelte';
 	import { api } from '../../convex/_generated/api';
+	import type { Id } from '../../convex/_generated/dataModel';
 	import { getAuthState, openSignIn, signOut } from '$lib/stores/auth.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
+	import { threadPreloadStore } from '$lib/stores/threadPreload.svelte';
 	import InstanceStatus from '$lib/components/InstanceStatus.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 
@@ -52,6 +54,9 @@
 	let searchValue = $state('');
 	let showUserMenu = $state(false);
 	let showProjectsSection = $state(false);
+	const preloadDelayMs = 120;
+	const preloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	const preloadInFlight = new Set<string>();
 
 	const filteredThreads = $derived.by(() => {
 		const query = searchValue.trim().toLowerCase();
@@ -111,6 +116,64 @@
 	function openCreateProjectModal() {
 		projectStore.showCreateModal = true;
 	}
+
+	function scheduleThreadPreload(threadId: string) {
+		if (threadPreloadStore.has(threadId)) {
+			console.debug('[threadPreload] cache hit, skipping preload', threadId);
+			return;
+		}
+		if (preloadInFlight.has(threadId)) {
+			console.debug('[threadPreload] already in-flight, skipping duplicate', threadId);
+			return;
+		}
+		if (preloadTimers.has(threadId)) {
+			console.debug('[threadPreload] timer already scheduled, skipping', threadId);
+			return;
+		}
+
+		console.debug('[threadPreload] scheduled', threadId);
+
+		preloadTimers.set(
+			threadId,
+			setTimeout(() => {
+				preloadTimers.delete(threadId);
+				void preloadThread(threadId);
+			}, preloadDelayMs)
+		);
+	}
+
+	async function preloadThread(threadId: string) {
+		if (threadPreloadStore.has(threadId) || preloadInFlight.has(threadId)) {
+			return;
+		}
+		preloadInFlight.add(threadId);
+		console.debug('[threadPreload] starting', threadId, Date.now());
+
+		try {
+			const data = await client.query(api.threads.getWithMessages, {
+				threadId: threadId as Id<'threads'>
+			});
+			console.debug(
+				'[threadPreload] loaded',
+				threadId,
+				Array.isArray(data?.messages) ? data.messages.length : 0
+			);
+			threadPreloadStore.set(threadId, data);
+		} catch (error) {
+			console.debug('Thread prefetch failed', error);
+		} finally {
+			preloadInFlight.delete(threadId);
+			console.debug('[threadPreload] finished', threadId);
+		}
+	}
+
+	onDestroy(() => {
+		for (const timer of preloadTimers.values()) {
+			clearTimeout(timer);
+		}
+		preloadTimers.clear();
+		preloadInFlight.clear();
+	});
 </script>
 
 <svelte:window onclick={handleClickOutside} />
@@ -250,6 +313,8 @@
 						? 'bc-thread-item bc-thread-item-active'
 						: 'bc-thread-item'}
 					onclick={handleNavigate}
+					onmouseenter={() => scheduleThreadPreload(thread._id)}
+					onfocus={() => scheduleThreadPreload(thread._id)}
 				>
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2 truncate text-sm font-semibold">

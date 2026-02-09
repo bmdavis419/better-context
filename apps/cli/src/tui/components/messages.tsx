@@ -1,9 +1,19 @@
-import { For, Show, Switch, Match, createSignal, onCleanup, type Component } from 'solid-js';
+import {
+	For,
+	Index,
+	Show,
+	Switch,
+	Match,
+	createMemo,
+	createSignal,
+	onCleanup,
+	type Accessor,
+	type Component
+} from 'solid-js';
 import { useMessagesContext } from '../context/messages-context.tsx';
 import { colors, getColor } from '../theme.ts';
 import { MarkdownText } from './markdown-text.tsx';
-import type { BtcaChunk } from '../types.ts';
-import type { AssistantContent } from '../types.ts';
+import type { BtcaChunk, AssistantContent, Message } from '../types.ts';
 
 const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -109,11 +119,7 @@ const TextChunk: Component<{
 }> = (props) => {
 	const displayText = () => stripHistoryTags(props.chunk.text);
 
-	return (
-		<Show when={!props.isStreaming} fallback={<text>{displayText()}</text>}>
-			<MarkdownText content={displayText()} />
-		</Show>
-	);
+	return <MarkdownText content={displayText()} streaming={props.isStreaming} />;
 };
 
 const ChunkRenderer: Component<{ chunk: BtcaChunk; isStreaming: boolean }> = (props) => {
@@ -141,10 +147,6 @@ const ChunkRenderer: Component<{ chunk: BtcaChunk; isStreaming: boolean }> = (pr
 	);
 };
 
-type RenderItem =
-	| { kind: 'chunk'; chunk: BtcaChunk }
-	| { kind: 'tool-summary'; chunks: Extract<BtcaChunk, { type: 'tool' }>[] };
-
 /**
  * Renders chunks in display order: reasoning, tools, text
  * This ensures consistent UX regardless of stream arrival order
@@ -155,7 +157,7 @@ const ChunksRenderer: Component<{
 	isCanceled?: boolean;
 	textColor?: string;
 }> = (props) => {
-	const renderItems = () => {
+	const groups = createMemo(() => {
 		const reasoning: BtcaChunk[] = [];
 		const tools: Extract<BtcaChunk, { type: 'tool' }>[] = [];
 		const text: BtcaChunk[] = [];
@@ -177,62 +179,38 @@ const ChunksRenderer: Component<{
 			}
 		}
 
-		const items: RenderItem[] = [];
-		for (const chunk of reasoning) {
-			items.push({ kind: 'chunk', chunk });
-		}
-		if (tools.length > 0) {
-			items.push({ kind: 'tool-summary', chunks: tools });
-		}
-		for (const chunk of text) {
-			items.push({ kind: 'chunk', chunk });
-		}
-		for (const chunk of other) {
-			items.push({ kind: 'chunk', chunk });
-		}
+		return { reasoning, tools, text, other };
+	});
 
-		return items;
-	};
+	const lastChunkId = createMemo(() => {
+		const g = groups();
+		const last = g.other.at(-1) ?? g.text.at(-1) ?? g.reasoning.at(-1);
+		return last?.id ?? null;
+	});
 
-	const lastChunkIndex = () => {
-		const items = renderItems();
-		for (let i = items.length - 1; i >= 0; i -= 1) {
-			if (items[i]?.kind === 'chunk') {
-				return i;
-			}
-		}
-		return -1;
-	};
+	const isStreamingChunk = (chunk: BtcaChunk) => props.isStreaming && chunk.id === lastChunkId();
 
-	const isLastChunk = (idx: number) => idx === lastChunkIndex();
+	const renderChunk = (chunk: Accessor<BtcaChunk>) => (
+		<Show
+			when={props.isCanceled && chunk().type === 'text'}
+			fallback={<ChunkRenderer chunk={chunk()} isStreaming={isStreamingChunk(chunk())} />}
+		>
+			<text fg={props.textColor}>
+				{stripHistoryTags(
+					chunk().type === 'text' ? (chunk() as Extract<BtcaChunk, { type: 'text' }>).text : ''
+				)}
+			</text>
+		</Show>
+	);
 
 	return (
 		<box style={{ flexDirection: 'column', gap: 1 }}>
-			<For each={renderItems()}>
-				{(item, idx) => {
-					if (item.kind === 'tool-summary') {
-						return <ToolSummary chunks={item.chunks} />;
-					}
-
-					const chunk = item.chunk;
-
-					return (
-						<Show
-							when={props.isCanceled && chunk.type === 'text'}
-							fallback={
-								<ChunkRenderer
-									chunk={chunk}
-									isStreaming={props.isStreaming && isLastChunk(idx())}
-								/>
-							}
-						>
-							<text fg={props.textColor}>
-								{stripHistoryTags(chunk.type === 'text' ? chunk.text : '')}
-							</text>
-						</Show>
-					);
-				}}
-			</For>
+			<Index each={groups().reasoning}>{(chunk) => renderChunk(chunk)}</Index>
+			<Show when={groups().tools.length > 0}>
+				<ToolSummary chunks={groups().tools} />
+			</Show>
+			<Index each={groups().text}>{(chunk) => renderChunk(chunk)}</Index>
+			<Index each={groups().other}>{(chunk) => renderChunk(chunk)}</Index>
 		</box>
 	);
 };
@@ -256,22 +234,20 @@ const AssistantMessage: Component<{
 		<Switch>
 			<Match when={isStringContent()}>
 				<Show
-					when={!props.isStreaming}
-					fallback={<text fg={textColor()}>{props.content as string}</text>}
+					when={props.isCanceled}
+					fallback={
+						<MarkdownText content={props.content as string} streaming={props.isStreaming} />
+					}
 				>
-					<Show
-						when={props.isCanceled}
-						fallback={<MarkdownText content={props.content as string} />}
-					>
-						<text fg={textColor()}>{props.content as string}</text>
-					</Show>
+					<text fg={textColor()}>{props.content as string}</text>
 				</Show>
 			</Match>
 			<Match when={isTextContent()}>
-				<Show when={!props.isStreaming} fallback={<text fg={textColor()}>{getTextContent()}</text>}>
-					<Show when={props.isCanceled} fallback={<MarkdownText content={getTextContent()} />}>
-						<text fg={textColor()}>{getTextContent()}</text>
-					</Show>
+				<Show
+					when={props.isCanceled}
+					fallback={<MarkdownText content={getTextContent()} streaming={props.isStreaming} />}
+				>
+					<text fg={textColor()}>{getTextContent()}</text>
 				</Show>
 			</Match>
 			<Match when={isChunksContent()}>
@@ -307,40 +283,45 @@ export const Messages: Component = () => {
 					stickyStart: 'bottom'
 				}}
 			>
-				<For each={messagesState.messages()}>
+				<Index each={messagesState.messages()}>
 					{(m, index) => {
-						if (m.role === 'user') {
+						const role = m().role;
+
+						if (role === 'user') {
+							const user = () => m() as Extract<Message, { role: 'user' }>;
 							return (
 								<box style={{ flexDirection: 'column', gap: 1 }}>
 									<text fg={colors.accent}>You </text>
 									<text>
-										<For each={m.content}>
+										<For each={user().content}>
 											{(part) => <span style={{ fg: getColor(part.type) }}>{part.content}</span>}
 										</For>
 									</text>
 								</box>
 							);
 						}
-						if (m.role === 'system') {
+						if (role === 'system') {
+							const sys = () => m() as Extract<Message, { role: 'system' }>;
 							return (
 								<box style={{ flexDirection: 'column', gap: 1 }}>
 									<text fg={colors.info}>SYS </text>
-									<text fg={colors.text} content={`${m.content}`} />
+									<text fg={colors.text} content={`${sys().content}`} />
 								</box>
 							);
 						}
-						if (m.role === 'assistant') {
+						if (role === 'assistant') {
+							const assistant = () => m() as Extract<Message, { role: 'assistant' }>;
 							const isLastAssistant = () => {
 								const history = messagesState.messages();
 								for (let i = history.length - 1; i >= 0; i--) {
 									if (history[i]?.role === 'assistant') {
-										return i === index();
+										return i === index;
 									}
 								}
 								return false;
 							};
 							const isStreaming = () => messagesState.isStreaming() && isLastAssistant();
-							const isCanceled = () => m.canceled === true;
+							const isCanceled = () => assistant().canceled === true;
 
 							return (
 								<box style={{ flexDirection: 'column', gap: 1 }}>
@@ -353,7 +334,7 @@ export const Messages: Component = () => {
 										</Show>
 									</box>
 									<AssistantMessage
-										content={m.content}
+										content={assistant().content}
 										isStreaming={isStreaming()}
 										isCanceled={isCanceled()}
 									/>
@@ -361,7 +342,7 @@ export const Messages: Component = () => {
 							);
 						}
 					}}
-				</For>
+				</Index>
 			</scrollbox>
 		</box>
 	);

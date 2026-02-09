@@ -2,6 +2,7 @@
 	import { MessageSquare, Loader2, Send, BookOpen } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import ChatMessages from '$lib/components/ChatMessages.svelte';
@@ -9,6 +10,7 @@
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
+	import { threadPreloadStore } from '$lib/stores/threadPreload.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
 	import type { BtcaChunk, CancelState } from '$lib/types';
@@ -31,7 +33,12 @@
 	// Convex queries - only query if we have a real thread ID
 	const threadQuery = $derived.by(() => {
 		if (!threadId) return null;
-		return useQuery(api.threads.getWithMessages, { threadId });
+		const initialThreadData = threadPreloadStore.get(threadId);
+		return useQuery(
+			api.threads.getWithMessages,
+			{ threadId },
+			initialThreadData ? { initialData: initialThreadData } : undefined
+		);
 	});
 
 	const selectedProjectId = $derived(projectStore.selectedProject?._id);
@@ -84,10 +91,64 @@
 
 	// Get active stream from Convex (for background streams)
 	const activeStream = $derived(thread?.activeStream ?? null);
+	let showLoadingSpinner = $state(false);
+	const loadingSpinnerDelayMs = 200;
+	const loadingSpinnerTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	// Show "in progress" indicator when there's a background stream
 	// (stream running but we're not connected to it)
 	const hasBackgroundStream = $derived(activeStream !== null && !isStreamingThisThread);
+
+	$effect(() => {
+		routeId;
+		const currentThread = threadId;
+		const currentThreadKey = currentThread ?? '';
+
+		for (const key of loadingSpinnerTimers.keys()) {
+			if (key !== currentThreadKey) {
+				const oldTimer = loadingSpinnerTimers.get(key);
+				if (oldTimer) clearTimeout(oldTimer);
+				loadingSpinnerTimers.delete(key);
+			}
+		}
+
+		showLoadingSpinner = false;
+		if (currentThread && threadQuery) {
+			const timerId = setTimeout(() => {
+				if (threadQuery?.isLoading && !threadQuery?.data) {
+					showLoadingSpinner = true;
+				}
+				loadingSpinnerTimers.delete(currentThreadKey);
+			}, loadingSpinnerDelayMs);
+			loadingSpinnerTimers.set(currentThreadKey, timerId);
+		}
+
+		return () => {
+			const timerId = loadingSpinnerTimers.get(currentThreadKey);
+			if (timerId) {
+				clearTimeout(timerId);
+				loadingSpinnerTimers.delete(currentThreadKey);
+			}
+		};
+	});
+
+	$effect(() => {
+		if (!threadQuery?.isLoading || threadQuery?.data) {
+			showLoadingSpinner = false;
+			const timerId = loadingSpinnerTimers.get(threadId ?? '');
+			if (timerId) {
+				clearTimeout(timerId);
+				loadingSpinnerTimers.delete(threadId ?? '');
+			}
+		}
+	});
+
+	onMount(() => {
+		return () => {
+			for (const timer of loadingSpinnerTimers.values()) clearTimeout(timer);
+			loadingSpinnerTimers.clear();
+		};
+	});
 
 	$effect(() => {
 		if (!auth.isSignedIn && auth.isLoaded) {
@@ -645,7 +706,7 @@
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-	{#if !isNewThread && threadQuery?.isLoading}
+	{#if !isNewThread && showLoadingSpinner}
 		<div class="flex flex-1 items-center justify-center">
 			<Loader2 size={32} class="animate-spin" />
 		</div>

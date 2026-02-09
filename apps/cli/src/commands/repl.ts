@@ -109,7 +109,9 @@ function handleStreamEvent(event: BtcaStreamEvent, handlers: StreamHandlers): vo
  */
 async function prompt(message: string): Promise<string | null> {
 	process.stdout.write(message);
-	const reader = Bun.stdin.stream().getReader();
+	const reader = (
+		Bun.stdin.stream() as unknown as { getReader: () => ReadableStreamDefaultReader<Uint8Array> }
+	).getReader();
 	const decoder = new TextDecoder();
 	let input = '';
 
