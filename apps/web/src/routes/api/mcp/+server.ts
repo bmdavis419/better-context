@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { env } from '$env/dynamic/public';
 import { api } from '../../../convex/_generated/api';
 import type { RequestHandler } from './$types';
+import { extractApiKey, jsonError } from '../../../lib/result/http';
 
 interface AuthContext extends Record<string, unknown> {
 	apiKey: string;
@@ -194,20 +195,6 @@ mcpServer.tool(
 );
 
 const transport = new HttpTransport<AuthContext>(mcpServer, { path: '/api/mcp' });
-
-function extractApiKey(request: Request): string | null {
-	const authHeader = request.headers.get('Authorization');
-	if (!authHeader?.startsWith('Bearer ')) {
-		return null;
-	}
-	return authHeader.slice(7) || null;
-}
-
-const jsonError = (status: number, error: string) =>
-	new Response(JSON.stringify({ error }), {
-		status,
-		headers: { 'Content-Type': 'application/json' }
-	});
 
 const respondWithMcp = async (request: Request) => {
 	const apiKey = extractApiKey(request);

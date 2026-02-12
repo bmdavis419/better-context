@@ -1,8 +1,17 @@
-import { ConvexError, v } from 'convex/values';
+import { v } from 'convex/values';
 
 import { internal } from './_generated/api';
 import { mutation, query } from './_generated/server';
-import { requireMessageOwnership, requireThreadOwnership } from './authHelpers';
+import {
+	requireMessageOwnershipResult,
+	requireThreadOwnershipResult,
+	unwrapAuthResult
+} from './authHelpers';
+import { WebValidationError, type WebError } from '../lib/result/errors';
+
+const throwMessageError = (error: WebError): never => {
+	throw error;
+};
 
 // BtcaChunk validator (same as in schema)
 const btcaChunkValidator = v.union(
@@ -49,7 +58,9 @@ export const addUserMessage = mutation({
 	},
 	returns: v.id('messages'),
 	handler: async (ctx, args) => {
-		const { thread } = await requireThreadOwnership(ctx, args.threadId);
+		const { thread } = await unwrapAuthResult(
+			await requireThreadOwnershipResult(ctx, args.threadId)
+		);
 
 		// Check if thread needs a title generated (first message)
 		const shouldGenerateTitle = !thread.title;
@@ -106,7 +117,7 @@ export const addAssistantMessage = mutation({
 	},
 	returns: v.id('messages'),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		const messageId = await ctx.db.insert('messages', {
 			threadId: args.threadId,
@@ -133,7 +144,7 @@ export const addSystemMessage = mutation({
 	},
 	returns: v.id('messages'),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		return await ctx.db.insert('messages', {
 			threadId: args.threadId,
@@ -163,7 +174,7 @@ export const getByThread = query({
 	args: { threadId: v.id('threads') },
 	returns: v.array(messageValidator),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		const messages = await ctx.db
 			.query('messages')
@@ -184,7 +195,7 @@ export const updateAssistantMessage = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await requireMessageOwnership(ctx, args.messageId);
+		await unwrapAuthResult(await requireMessageOwnershipResult(ctx, args.messageId));
 		await ctx.db.patch(args.messageId, { content: args.content });
 		return null;
 	}
@@ -197,7 +208,7 @@ export const markCanceled = mutation({
 	args: { messageId: v.id('messages') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await requireMessageOwnership(ctx, args.messageId);
+		await unwrapAuthResult(await requireMessageOwnershipResult(ctx, args.messageId));
 		await ctx.db.patch(args.messageId, { canceled: true });
 		return null;
 	}
@@ -213,11 +224,13 @@ export const deleteMessageAndAfter = mutation({
 	},
 	returns: v.object({ deletedCount: v.number() }),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		const targetMessage = await ctx.db.get(args.messageId);
 		if (!targetMessage || targetMessage.threadId !== args.threadId) {
-			throw new ConvexError({ code: 'NOT_FOUND', message: 'Message not found in thread' });
+			return throwMessageError(
+				new WebValidationError({ message: 'Message not found in thread', field: 'messageId' })
+			);
 		}
 
 		const allMessages = await ctx.db

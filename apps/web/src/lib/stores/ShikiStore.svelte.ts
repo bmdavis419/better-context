@@ -1,3 +1,4 @@
+import { Result } from 'better-result';
 import { createContext, onMount } from 'svelte';
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
@@ -6,6 +7,7 @@ import json from '@shikijs/langs/json';
 import toml from '@shikijs/langs/toml';
 import darkPlus from '@shikijs/themes/dark-plus';
 import lightPlus from '@shikijs/themes/light-plus';
+import { WebValidationError } from '../result/errors';
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 let highlighterInstance: HighlighterCore | null = null;
@@ -45,11 +47,23 @@ class ShikiStore {
 const [internalGet, internalSet] = createContext<ShikiStore>();
 
 export const getShikiStore = () => {
-	const store = internalGet();
-	if (!store) {
-		throw new Error('ShikiStore not found, did you call setShikiStore() in a parent component?');
-	}
-	return store;
+	const missingShikiStoreError = () =>
+		new WebValidationError({
+			message: 'ShikiStore not found, did you call setShikiStore() in a parent component?'
+		});
+
+	const getShikiStoreResult = (): Result<ShikiStore, WebValidationError> => {
+		const store = internalGet();
+		if (!store) return Result.err(missingShikiStoreError());
+		return Result.ok(store);
+	};
+
+	return Result.match(getShikiStoreResult(), {
+		ok: (store) => store,
+		err: (error) => {
+			throw error;
+		}
+	});
 };
 
 export const setShikiStore = () => {

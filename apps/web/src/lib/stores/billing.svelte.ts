@@ -1,8 +1,10 @@
+import { Result } from 'better-result';
 import { createContext } from 'svelte';
 import { useConvexClient } from 'convex-svelte';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { BillingSummary } from '$lib/billing/types';
+import { WebValidationError } from '../result/errors';
 
 class BillingStore {
 	private _client = useConvexClient();
@@ -114,9 +116,21 @@ class BillingStore {
 const [internalGetStore, internalSetStore] = createContext<BillingStore>();
 
 export const getBillingStore = () => {
-	const store = internalGetStore();
-	if (!store) throw new Error('Billing store not found. Did you call setBillingStore?');
-	return store;
+	const missingBillingStoreError = () =>
+		new WebValidationError({ message: 'Billing store not found. Did you call setBillingStore?' });
+
+	const getBillingStoreResult = (): Result<BillingStore, WebValidationError> => {
+		const store = internalGetStore();
+		if (!store) return Result.err(missingBillingStoreError());
+		return Result.ok(store);
+	};
+
+	return Result.match(getBillingStoreResult(), {
+		ok: (store) => store,
+		err: (error) => {
+			throw error;
+		}
+	});
 };
 
 export const setBillingStore = () => internalSetStore(new BillingStore());

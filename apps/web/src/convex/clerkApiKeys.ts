@@ -38,10 +38,10 @@ const clerkApiKeysQueriesInternal = internal as unknown as {
 	};
 };
 
-const getClerkClient = () => {
+const getClerkClient = (): ReturnType<typeof createClerkClient> | null => {
 	const secretKey = process.env.CLERK_SECRET_KEY;
 	if (!secretKey) {
-		throw new Error('CLERK_SECRET_KEY environment variable is not set');
+		return null;
 	}
 	return createClerkClient({ secretKey });
 };
@@ -91,6 +91,9 @@ export const validate = action({
 		let clerkResult: { id: string; subject: string; name: string | null };
 		try {
 			const clerkClient = getClerkClient();
+			if (!clerkClient) {
+				return { valid: false, error: 'CLERK_SECRET_KEY environment variable is not set' };
+			}
 			clerkResult = await clerkClient.apiKeys.verify(apiKey);
 		} catch (error) {
 			// Clerk throws on invalid/revoked/expired keys

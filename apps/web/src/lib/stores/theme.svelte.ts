@@ -1,5 +1,7 @@
+import { Result } from 'better-result';
 import { getContext, setContext } from 'svelte';
 import { browser } from '$app/environment';
+import { WebValidationError } from '../result/errors';
 
 const THEME_KEY = Symbol('theme');
 
@@ -48,9 +50,21 @@ export const setThemeStore = () => {
 };
 
 export const getThemeStore = (): ThemeStore => {
-	const store = getContext<ThemeStore>(THEME_KEY);
-	if (!store) {
-		throw new Error('ThemeStore not found. Did you call setThemeStore() in a parent component?');
-	}
-	return store;
+	const missingThemeStoreError = () =>
+		new WebValidationError({
+			message: 'Theme store not found. Did you call setThemeStore() in a parent component?'
+		});
+
+	const getThemeStoreResult = (): Result<ThemeStore, WebValidationError> => {
+		const store = getContext<ThemeStore>(THEME_KEY);
+		if (!store) return Result.err(missingThemeStoreError());
+		return Result.ok(store);
+	};
+
+	return Result.match(getThemeStoreResult(), {
+		ok: (store) => store,
+		err: (error) => {
+			throw error;
+		}
+	});
 };

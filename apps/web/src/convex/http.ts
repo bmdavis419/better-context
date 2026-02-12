@@ -2,12 +2,16 @@ import { formatConversationHistory, type BtcaChunk, type ThreadMessage } from '@
 import { httpRouter } from 'convex/server';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
+import { Result } from 'better-result';
 
 import { api, internal } from './_generated/api.js';
 import type { Id } from './_generated/dataModel.js';
 import { httpAction, type ActionCtx } from './_generated/server.js';
 import { AnalyticsEvents } from './analyticsEvents.js';
 import { instances } from './apiHelpers.js';
+import { WebUnhandledError, type WebError } from '../lib/result/errors';
+
+type HttpFlowResult<T> = Result<T, WebError>;
 
 const usageActions = api.usage;
 const instanceActions = instances.actions;
@@ -358,7 +362,11 @@ const chatStream = httpAction(async (ctx, request) => {
 
 				sendEvent({ type: 'session', sessionId } as StreamEventPayload);
 
-				const serverUrl = await ensureServerUrl(ctx, instance, sendEvent);
+				const serverUrlResult = await ensureServerUrlResult(ctx, instance, sendEvent);
+				if (Result.isError(serverUrlResult)) {
+					throw serverUrlResult.error;
+				}
+				const serverUrl = serverUrlResult.value;
 
 				const response = await fetch(`${serverUrl}/question/stream`, {
 					method: 'POST',
@@ -374,10 +382,13 @@ const chatStream = httpAction(async (ctx, request) => {
 
 				if (!response.ok) {
 					const errorText = await response.text();
-					throw new Error(errorText || `Server error: ${response.status}`);
+					throw new WebUnhandledError({
+						message: errorText || `Server error: ${response.status}`,
+						cause: new Error(errorText || `Server error: ${response.status}`)
+					});
 				}
 				if (!response.body) {
-					throw new Error('No response body');
+					throw new WebUnhandledError({ message: 'No response body' });
 				}
 
 				let chunksById = new Map<string, BtcaChunk>();
@@ -412,7 +423,10 @@ const chatStream = httpAction(async (ctx, request) => {
 							}
 
 							if (event.type === 'error') {
-								throw new Error(event.message ?? 'Stream error');
+								throw new WebUnhandledError({
+									message: event.message ?? 'Stream error',
+									cause: new Error(event.message ?? 'Stream error')
+								});
 							}
 							if (event.type === 'done') {
 								doneEvent = event;
@@ -497,7 +511,7 @@ const chatStream = httpAction(async (ctx, request) => {
 				};
 
 				if (!assistantMessageId) {
-					throw new Error('Missing assistant message');
+					throw new WebUnhandledError({ message: 'Missing assistant message' });
 				}
 				await ctx.runMutation(api.messages.updateAssistantMessage, {
 					messageId: assistantMessageId,
@@ -861,38 +875,48 @@ function processStreamEvent(
 	}
 }
 
-async function ensureServerUrl(
+async function ensureServerUrlResult(
 	ctx: ActionCtx,
 	instance: InstanceRecord,
 	sendEvent: (payload: StreamEventPayload) => void
-): Promise<string> {
+): Promise<HttpFlowResult<string>> {
 	if (instance.state === 'error') {
-		throw new Error('Instance is in an error state');
+		return Result.err(new WebUnhandledError({ message: 'Instance is in an error state' }));
 	}
 
 	if (instance.state === 'provisioning' || instance.state === 'unprovisioned') {
-		throw new Error('Instance is still provisioning');
+		return Result.err(new WebUnhandledError({ message: 'Instance is still provisioning' }));
 	}
 
 	if (instance.state === 'running' && instance.serverUrl) {
 		sendEvent({ type: 'status', status: 'ready' });
-		return instance.serverUrl;
+		return Result.ok(instance.serverUrl);
 	}
 
 	if (!instance.sandboxId) {
-		throw new Error('Instance does not have a sandbox');
+		return Result.err(new WebUnhandledError({ message: 'Instance does not have a sandbox' }));
 	}
 
 	sendEvent({ type: 'status', status: 'starting' });
 	if (!ctx.runAction) {
-		throw new Error('Convex runAction is unavailable in HTTP actions');
-	}
-	const result = await ctx.runAction(instanceActions.wake, { instanceId: instance._id });
-	const serverUrl = result.serverUrl;
-	if (!serverUrl) {
-		throw new Error('Instance did not return a server URL');
+		return Result.err(
+			new WebUnhandledError({ message: 'Convex runAction is unavailable in HTTP actions' })
+		);
 	}
 
-	sendEvent({ type: 'status', status: 'ready' });
-	return serverUrl;
+	try {
+		const result = await ctx.runAction(instanceActions.wake, { instanceId: instance._id });
+		const serverUrl = result.serverUrl;
+		if (!serverUrl) {
+			return Result.err(new WebUnhandledError({ message: 'Instance did not return a server URL' }));
+		}
+
+		sendEvent({ type: 'status', status: 'ready' });
+		return Result.ok(serverUrl);
+	} catch (error) {
+		if (error instanceof Error) {
+			return Result.err(new WebUnhandledError({ message: error.message, cause: error }));
+		}
+		return Result.err(new WebUnhandledError({ message: 'Failed to resolve instance URL' }));
+	}
 }

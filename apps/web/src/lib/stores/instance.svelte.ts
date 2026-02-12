@@ -1,8 +1,10 @@
+import { Result } from 'better-result';
 import { createContext } from 'svelte';
 import { useQuery, useConvexClient } from 'convex-svelte';
 import { instances } from '../../convex/apiHelpers';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { trackEvent, ClientAnalyticsEvents } from './analytics.svelte';
+import { WebValidationError } from '../result/errors';
 
 type InstanceStatus = {
 	instance: Doc<'instances'>;
@@ -181,11 +183,22 @@ class InstanceStore {
 
 const [internalGetStore, internalSetStore] = createContext<InstanceStore>();
 
-export const getInstanceStore = () => {
+const missingInstanceStoreError = () =>
+	new WebValidationError({ message: 'Instance store not found. Did you call setInstanceStore?' });
+
+const getInstanceStoreResult = (): Result<InstanceStore, WebValidationError> => {
 	const store = internalGetStore();
-	if (!store) throw new Error('Instance store not found. Did you call setInstanceStore?');
-	return store;
+	if (!store) return Result.err(missingInstanceStoreError());
+	return Result.ok(store);
 };
+
+export const getInstanceStore = () =>
+	Result.match(getInstanceStoreResult(), {
+		ok: (store) => store,
+		err: (error) => {
+			throw error;
+		}
+	});
 
 export const setInstanceStore = () => {
 	const store = new InstanceStore();

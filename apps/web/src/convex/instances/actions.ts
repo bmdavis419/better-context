@@ -3,12 +3,19 @@
 import { Daytona, type Sandbox } from '@daytonaio/sdk';
 import { BTCA_SNAPSHOT_NAME } from 'btca-sandbox/shared';
 import { v } from 'convex/values';
+import { Result } from 'better-result';
 
 import { api, internal } from '../_generated/api';
 import type { Doc, Id } from '../_generated/dataModel';
 import { action, internalAction, type ActionCtx } from '../_generated/server';
 import { AnalyticsEvents } from '../analyticsEvents';
 import { instances } from '../apiHelpers';
+import {
+	WebAuthError,
+	WebConfigMissingError,
+	WebUnhandledError,
+	type WebError
+} from '../../lib/result/errors';
 
 const instanceQueries = instances.queries;
 const instanceMutations = instances.mutations;
@@ -36,24 +43,51 @@ type InstalledVersions = {
 };
 
 let daytonaInstance: Daytona | null = null;
+type InstanceActionResult<T> = Result<T, WebError>;
 
 function getDaytona(): Daytona {
-	if (!daytonaInstance) {
-		const apiKey = requireEnv('DAYTONA_API_KEY');
-		daytonaInstance = new Daytona({
-			apiKey,
-			apiUrl: process.env.DAYTONA_API_URL
-		});
+	const daytonaResult = getDaytonaResult();
+	if (Result.isError(daytonaResult)) {
+		throw daytonaResult.error;
 	}
-	return daytonaInstance;
+	return daytonaResult.value;
+}
+
+function requireEnvResult(name: string): InstanceActionResult<string> {
+	const value = process.env[name];
+	if (!value) {
+		return Result.err(
+			new WebConfigMissingError({
+				message: `${name} is not set in the Convex environment`,
+				config: name
+			})
+		);
+	}
+	return Result.ok(value);
 }
 
 function requireEnv(name: string): string {
-	const value = process.env[name];
-	if (!value) {
-		throw new Error(`${name} is not set in the Convex environment`);
+	const result = requireEnvResult(name);
+	if (Result.isError(result)) {
+		throw result.error;
 	}
-	return value;
+	return result.value;
+}
+
+function getDaytonaResult(): InstanceActionResult<Daytona> {
+	if (!daytonaInstance) {
+		const apiKeyResult = requireEnvResult('DAYTONA_API_KEY');
+		if (Result.isError(apiKeyResult)) {
+			return Result.err(apiKeyResult.error);
+		}
+
+		daytonaInstance = new Daytona({
+			apiKey: apiKeyResult.value,
+			apiUrl: process.env.DAYTONA_API_URL
+		});
+	}
+
+	return Result.ok(daytonaInstance);
 }
 
 function generateBtcaConfig(resources: ResourceConfig[]): string {
@@ -133,11 +167,28 @@ const attachErrorContext = (error: unknown, context: Record<string, unknown>) =>
 	return error;
 };
 
-const withStep = async <T>(step: string, task: () => Promise<T>) => {
+const throwInstanceError = (error: WebError): never => {
+	throw error;
+};
+
+const unwrapInstance = <T>(result: InstanceActionResult<T>): T => {
+	return Result.match(result, {
+		ok: (value) => value,
+		err: (error) => throwInstanceError(error)
+	});
+};
+
+const withStep = async <T>(
+	step: string,
+	task: () => Promise<T>
+): Promise<InstanceActionResult<T>> => {
 	try {
-		return await task();
+		return Result.ok(await task());
 	} catch (error) {
-		throw attachErrorContext(error, { step });
+		const contextualError = attachErrorContext(error, { step });
+		return Result.err(
+			new WebUnhandledError({ message: getErrorMessage(contextualError), cause: contextualError })
+		);
 	}
 };
 
@@ -198,11 +249,19 @@ async function requireInstance(
 	ctx: ActionCtx,
 	instanceId: Id<'instances'>
 ): Promise<Doc<'instances'>> {
+	const result = await requireInstanceResult(ctx, instanceId);
+	return unwrapInstance(result);
+}
+
+async function requireInstanceResult(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>
+): Promise<InstanceActionResult<Doc<'instances'>>> {
 	const instance = await ctx.runQuery(instances.internalQueries.getInternal, { id: instanceId });
 	if (!instance) {
-		throw new Error('Instance not found');
+		return Result.err(new WebUnhandledError({ message: 'Instance not found' }));
 	}
-	return instance;
+	return Result.ok(instance);
 }
 
 async function uploadBtcaConfig(sandbox: Sandbox, resources: ResourceConfig[]): Promise<void> {
@@ -342,32 +401,38 @@ export const provision = action({
 		let sandbox: Sandbox | null = null;
 		let step = 'load_resources';
 		try {
-			const resources = await withStep(step, () => getResourceConfigs(ctx, args.instanceId));
+			const resources = unwrapInstance(
+				await withStep(step, () => getResourceConfigs(ctx, args.instanceId))
+			);
 			const daytona = getDaytona();
 			step = 'create_sandbox';
-			const createdSandbox = await withStep(step, () =>
-				daytona.create({
-					snapshot: BTCA_SNAPSHOT_NAME,
-					autoStopInterval: SANDBOX_IDLE_MINUTES,
-					envVars: {
-						NODE_ENV: 'production',
-						OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
-					},
-					public: true
-				})
+			const createdSandbox = unwrapInstance(
+				await withStep(step, () =>
+					daytona.create({
+						snapshot: BTCA_SNAPSHOT_NAME,
+						autoStopInterval: SANDBOX_IDLE_MINUTES,
+						envVars: {
+							NODE_ENV: 'production',
+							OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
+						},
+						public: true
+					})
+				)
 			);
 			sandbox = createdSandbox;
 
 			step = 'upload_config';
-			await withStep(step, () => uploadBtcaConfig(createdSandbox, resources));
+			unwrapInstance(await withStep(step, () => uploadBtcaConfig(createdSandbox, resources)));
 
 			step = 'start_btca';
-			await withStep(step, () => startBtcaServer(createdSandbox));
+			unwrapInstance(await withStep(step, () => startBtcaServer(createdSandbox)));
 
 			step = 'get_versions';
-			const versions = await withStep(step, () => getInstalledVersions(createdSandbox));
+			const versions = unwrapInstance(
+				await withStep(step, () => getInstalledVersions(createdSandbox))
+			);
 			step = 'stop_sandbox';
-			await withStep(step, () => stopSandboxIfRunning(createdSandbox));
+			unwrapInstance(await withStep(step, () => stopSandboxIfRunning(createdSandbox)));
 
 			await ctx.runMutation(instanceMutations.setProvisioned, {
 				instanceId: args.instanceId,
@@ -440,7 +505,7 @@ export const provision = action({
 				instanceId: args.instanceId,
 				errorMessage: message
 			});
-			throw new Error(message);
+			throw new WebUnhandledError({ message });
 		}
 	}
 });
@@ -536,17 +601,29 @@ export const destroy = action({
 });
 
 async function requireAuthenticatedInstance(ctx: ActionCtx): Promise<Doc<'instances'>> {
+	const result = await requireAuthenticatedInstanceResult(ctx);
+	return unwrapInstance(result);
+}
+
+async function requireAuthenticatedInstanceResult(
+	ctx: ActionCtx
+): Promise<InstanceActionResult<Doc<'instances'>>> {
 	const identity = await ctx.auth.getUserIdentity();
 	if (!identity) {
-		throw new Error('Unauthorized');
+		return Result.err(
+			new WebAuthError({
+				message: 'Unauthorized',
+				code: 'UNAUTHORIZED'
+			})
+		);
 	}
 
 	const instance = await ctx.runQuery(instanceQueries.getByClerkId, {});
 	if (!instance) {
-		throw new Error('Instance not found');
+		return Result.err(new WebUnhandledError({ message: 'Instance not found' }));
 	}
 
-	return instance;
+	return Result.ok(instance);
 }
 
 async function createSandboxFromScratch(
@@ -557,27 +634,29 @@ async function createSandboxFromScratch(
 	requireEnv('OPENCODE_API_KEY');
 
 	let step = 'load_resources';
-	const resources = await withStep(step, () => getResourceConfigs(ctx, instanceId));
+	const resources = unwrapInstance(await withStep(step, () => getResourceConfigs(ctx, instanceId)));
 	const daytona = getDaytona();
 	step = 'create_sandbox';
-	const sandbox = await withStep(step, () =>
-		daytona.create({
-			snapshot: BTCA_SNAPSHOT_NAME,
-			autoStopInterval: SANDBOX_IDLE_MINUTES,
-			envVars: {
-				NODE_ENV: 'production',
-				OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
-			},
-			public: true
-		})
+	const sandbox = unwrapInstance(
+		await withStep(step, () =>
+			daytona.create({
+				snapshot: BTCA_SNAPSHOT_NAME,
+				autoStopInterval: SANDBOX_IDLE_MINUTES,
+				envVars: {
+					NODE_ENV: 'production',
+					OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
+				},
+				public: true
+			})
+		)
 	);
 
 	step = 'upload_config';
-	await withStep(step, () => uploadBtcaConfig(sandbox, resources));
+	unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
 	step = 'start_btca';
-	const serverUrl = await withStep(step, () => startBtcaServer(sandbox));
+	const serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
 	step = 'get_versions';
-	const versions = await withStep(step, () => getInstalledVersions(sandbox));
+	const versions = unwrapInstance(await withStep(step, () => getInstalledVersions(sandbox)));
 
 	await ctx.runMutation(instanceMutations.setProvisioned, {
 		instanceId,
@@ -634,17 +713,19 @@ async function wakeInstanceInternal(
 		} else {
 			// Use project-specific resources if projectId is provided
 			step = 'load_resources';
-			const resources = await getResourceConfigs(ctx, instanceId, projectId);
+			const resources = unwrapInstance(
+				await withStep(step, () => getResourceConfigs(ctx, instanceId, projectId))
+			);
 			const daytona = getDaytona();
 			step = 'get_sandbox';
 			const sandbox = await daytona.get(instance.sandboxId);
 
 			step = 'start_sandbox';
-			await ensureSandboxStarted(sandbox);
+			unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
 			step = 'upload_config';
-			await uploadBtcaConfig(sandbox, resources);
+			unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
 			step = 'start_btca';
-			serverUrl = await startBtcaServer(sandbox);
+			serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
 			sandboxId = instance.sandboxId;
 		}
 
@@ -681,7 +762,7 @@ async function wakeInstanceInternal(
 		});
 
 		await ctx.runMutation(instanceMutations.setError, { instanceId, errorMessage: message });
-		throw new Error(message);
+		throw new WebUnhandledError({ message });
 	}
 }
 
@@ -709,7 +790,7 @@ async function stopInstanceInternal(
 	} catch (error) {
 		const message = getErrorMessage(error);
 		await ctx.runMutation(instanceMutations.setError, { instanceId, errorMessage: message });
-		throw new Error(message);
+		throw new WebUnhandledError({ message });
 	}
 }
 
@@ -719,7 +800,7 @@ async function updateInstanceInternal(
 ): Promise<{ serverUrl?: string; updated?: boolean }> {
 	const instance = await requireInstance(ctx, instanceId);
 	if (!instance.sandboxId) {
-		throw new Error('Instance does not have a sandbox to update');
+		throw new WebUnhandledError({ message: 'Instance does not have a sandbox to update' });
 	}
 
 	await ctx.runMutation(instanceMutations.updateState, { instanceId, state: 'updating' });
@@ -728,11 +809,14 @@ async function updateInstanceInternal(
 		const resources = await getResourceConfigs(ctx, instanceId);
 		const daytona = getDaytona();
 		const sandbox = await daytona.get(instance.sandboxId);
-		const wasRunning = await ensureSandboxStarted(sandbox);
+		let step = 'start_sandbox';
+		const wasRunning = unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
 
 		await updatePackages(sandbox);
-		await uploadBtcaConfig(sandbox, resources);
-		const versions = await getInstalledVersions(sandbox);
+		step = 'upload_config';
+		unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
+		step = 'get_versions';
+		const versions = unwrapInstance(await withStep(step, () => getInstalledVersions(sandbox)));
 
 		await ctx.runMutation(instanceMutations.setVersions, {
 			instanceId,
@@ -754,7 +838,9 @@ async function updateInstanceInternal(
 
 		if (wasRunning) {
 			await sandbox.process.executeCommand('pkill -f "btca serve" || true');
-			const serverUrl = await startBtcaServer(sandbox);
+			const serverUrl = unwrapInstance(
+				await withStep('start_btca', () => startBtcaServer(sandbox))
+			);
 			await ctx.runMutation(instanceMutations.setServerUrl, { instanceId, serverUrl });
 			await ctx.runMutation(instanceMutations.updateState, { instanceId, state: 'running' });
 			return { serverUrl };
@@ -768,7 +854,7 @@ async function updateInstanceInternal(
 	} catch (error) {
 		const message = getErrorMessage(error);
 		await ctx.runMutation(instanceMutations.setError, { instanceId, errorMessage: message });
-		throw new Error(message);
+		throw new WebUnhandledError({ message });
 	}
 }
 
@@ -798,7 +884,10 @@ export const ensureInstanceExists = action({
 		if (!clerkId) {
 			const identity = await ctx.auth.getUserIdentity();
 			if (!identity) {
-				throw new Error('Unauthorized: No clerkId provided and user is not authenticated');
+				throw new WebAuthError({
+					message: 'Unauthorized: No clerkId provided and user is not authenticated',
+					code: 'UNAUTHORIZED'
+				});
 			}
 			clerkId = identity.subject;
 		}

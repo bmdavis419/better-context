@@ -1,10 +1,12 @@
-import { ConvexError, v } from 'convex/values';
+import { v } from 'convex/values';
+import { Result } from 'better-result';
 
 import { internal } from './_generated/api';
-import type { Id } from './_generated/dataModel';
+import type { Doc, Id } from './_generated/dataModel';
 import { internalQuery, mutation, query } from './_generated/server';
 import { AnalyticsEvents } from './analyticsEvents';
-import { getAuthenticatedInstance } from './authHelpers';
+import { getAuthenticatedInstanceResult, unwrapAuthResult } from './authHelpers';
+import { WebConflictError, WebValidationError, type WebError } from '../lib/result/errors';
 
 // Project validator
 const projectValidator = v.object({
@@ -17,6 +19,33 @@ const projectValidator = v.object({
 	createdAt: v.number()
 });
 
+type ProjectResult<T> = Result<T, WebError>;
+
+const throwProjectError = (error: WebError): never => {
+	throw error;
+};
+
+const projectNotFoundError = (message: string): WebValidationError =>
+	new WebValidationError({ message, field: 'project' });
+
+type ProjectDb = {
+	get(id: Id<'projects'>): Promise<Doc<'projects'> | null>;
+};
+
+type DbCtx = { db: ProjectDb };
+
+const requireProjectOwnershipResult = async (
+	ctx: DbCtx,
+	projectId: Id<'projects'>,
+	instanceId: Id<'instances'>
+): Promise<ProjectResult<Doc<'projects'>>> => {
+	const project = await ctx.db.get(projectId);
+	if (!project || project.instanceId !== instanceId) {
+		return Result.err(projectNotFoundError('Project not found'));
+	}
+	return Result.ok(project);
+};
+
 /**
  * List all projects for the authenticated user's instance
  */
@@ -24,7 +53,7 @@ export const list = query({
 	args: {},
 	returns: v.array(projectValidator),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		const projects = await ctx.db
 			.query('projects')
@@ -48,7 +77,7 @@ export const getByName = query({
 	args: { name: v.string() },
 	returns: v.union(v.null(), projectValidator),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		return await ctx.db
 			.query('projects')
@@ -66,7 +95,7 @@ export const get = query({
 	args: { projectId: v.id('projects') },
 	returns: v.union(v.null(), projectValidator),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 		const project = await ctx.db.get(args.projectId);
 
 		if (!project || project.instanceId !== instance._id) {
@@ -85,7 +114,7 @@ export const getDefault = query({
 	args: {},
 	returns: v.union(v.null(), projectValidator),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		const defaultProject = await ctx.db
 			.query('projects')
@@ -108,9 +137,7 @@ export const create = mutation({
 	},
 	returns: v.id('projects'),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
-
-		// Check if project with this name already exists
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 		const existing = await ctx.db
 			.query('projects')
 			.withIndex('by_instance_and_name', (q) =>
@@ -118,11 +145,16 @@ export const create = mutation({
 			)
 			.first();
 
-		if (existing) {
-			throw new ConvexError({
-				code: 'ALREADY_EXISTS',
-				message: `Project with name "${args.name}" already exists`
-			});
+		const hasExistingProject: ProjectResult<boolean> = existing
+			? Result.err(
+					new WebConflictError({
+						message: `Project with name "${args.name}" already exists`,
+						conflict: args.name
+					})
+				)
+			: Result.ok(true);
+		if (Result.isError(hasExistingProject)) {
+			throwProjectError(hasExistingProject.error);
 		}
 
 		const projectId = await ctx.db.insert('projects', {
@@ -156,7 +188,7 @@ export const ensureDefault = mutation({
 	args: {},
 	returns: v.id('projects'),
 	handler: async (ctx): Promise<Id<'projects'>> => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		// Check if default project exists
 		const existing = await ctx.db
@@ -203,12 +235,12 @@ export const updateModel = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
-		const project = await ctx.db.get(args.projectId);
-
-		if (!project || project.instanceId !== instance._id) {
-			throw new ConvexError({ code: 'NOT_FOUND', message: 'Project not found' });
-		}
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
+		const projectResult = await requireProjectOwnershipResult(ctx, args.projectId, instance._id);
+		Result.match(projectResult, {
+			ok: () => undefined,
+			err: (error) => throwProjectError(error)
+		});
 
 		await ctx.db.patch(args.projectId, { model: args.model });
 		return null;
@@ -222,15 +254,17 @@ export const remove = mutation({
 	args: { projectId: v.id('projects') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
-		const project = await ctx.db.get(args.projectId);
-
-		if (!project || project.instanceId !== instance._id) {
-			throw new ConvexError({ code: 'NOT_FOUND', message: 'Project not found' });
-		}
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
+		const projectResult = await requireProjectOwnershipResult(ctx, args.projectId, instance._id);
+		const project = Result.match(projectResult, {
+			ok: (value) => value,
+			err: (error) => throwProjectError(error)
+		});
 
 		if (project.isDefault) {
-			throw new ConvexError({ code: 'FORBIDDEN', message: 'Cannot delete the default project' });
+			throwProjectError(
+				new WebValidationError({ message: 'Cannot delete the default project', field: 'project' })
+			);
 		}
 
 		// Delete all related threads
@@ -379,7 +413,7 @@ export const listQuestions = query({
 		items: v.array(mcpQuestionValidator)
 	}),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 		const project = await ctx.db.get(args.projectId);
 
 		if (!project || project.instanceId !== instance._id) {

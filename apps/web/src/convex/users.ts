@@ -3,7 +3,7 @@ import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import { create as createInstance } from './instances/mutations';
 import { getByClerkId as getInstance } from './instances/queries';
-import { getAuthenticatedInstance } from './authHelpers';
+import { getAuthenticatedInstanceResult, unwrapAuthResult } from './authHelpers';
 
 export const get = getInstance;
 
@@ -16,7 +16,7 @@ export const updateSandboxActivity = mutation({
 	args: {},
 	returns: v.null(),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		await ctx.db.patch(instance._id, {
 			lastActiveAt: Date.now()
@@ -32,7 +32,7 @@ export const touchMcpUsage = mutation({
 	args: {},
 	returns: v.null(),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		await ctx.db.patch(instance._id, {
 			lastActiveAt: Date.now()
@@ -48,7 +48,7 @@ export const setMcpSandboxId = mutation({
 	args: {},
 	returns: v.null(),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		await ctx.db.patch(instance._id, {
 			lastActiveAt: Date.now()

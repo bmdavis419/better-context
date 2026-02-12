@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { requireThreadOwnership } from './authHelpers';
+import { requireThreadOwnershipResult, unwrapAuthResult } from './authHelpers';
 
 // Stream session validator
 const streamSessionValidator = v.object({
@@ -26,7 +26,7 @@ export const create = mutation({
 	},
 	returns: v.id('streamSessions'),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		const existing = await ctx.db
 			.query('streamSessions')
@@ -114,7 +114,7 @@ export const getActiveForThread = query({
 	},
 	returns: v.union(v.null(), streamSessionValidator),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 
 		return await ctx.db
 			.query('streamSessions')

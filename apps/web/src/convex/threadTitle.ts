@@ -13,7 +13,7 @@ const OPENCODE_ZEN_BASE_URL = 'https://opencode.ai/zen/v1';
 function getOpencodeZen() {
 	const apiKey = process.env.OPENCODE_API_KEY;
 	if (!apiKey) {
-		throw new Error('OPENCODE_API_KEY environment variable is required');
+		return null;
 	}
 
 	return createOpenAICompatible({
@@ -33,6 +33,9 @@ export const generateTitle = internalAction({
 	returns: v.string(),
 	handler: async (_ctx: ActionCtx, args: { firstMessage: string }): Promise<string> => {
 		const opencodeZen = getOpencodeZen();
+		if (!opencodeZen) {
+			return 'Untitled';
+		}
 
 		const { text } = await generateText({
 			model: opencodeZen.chatModel('gpt-5-nano'),
@@ -79,6 +82,13 @@ export const generateAndUpdateTitle = internalAction({
 		args: { threadId: Id<'threads'>; firstMessage: string }
 	): Promise<null> => {
 		const opencodeZen = getOpencodeZen();
+		if (!opencodeZen) {
+			await ctx.runMutation(internal.threads.updateTitleInternal, {
+				threadId: args.threadId,
+				title: 'Untitled'
+			});
+			return null;
+		}
 
 		const { text } = await generateText({
 			model: opencodeZen.chatModel('gpt-5-nano'),

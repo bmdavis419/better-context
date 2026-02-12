@@ -1,6 +1,9 @@
-import { ConvexError, v } from 'convex/values';
+import { v } from 'convex/values';
+import { Result } from 'better-result';
 
 import { internalQuery, query } from '../_generated/server';
+import { requireInstanceOwnershipResult, unwrapAuthResult } from '../authHelpers';
+import { WebAuthError } from '../../lib/result/errors';
 
 // Instance validator
 const instanceValidator = v.object({
@@ -72,21 +75,16 @@ export const get = query({
 	args: { id: v.id('instances') },
 	returns: v.union(v.null(), instanceValidator),
 	handler: async (ctx, args) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) {
-			throw new ConvexError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+		const instanceResult = await requireInstanceOwnershipResult(ctx, args.id);
+		if (Result.isError(instanceResult) && WebAuthError.is(instanceResult.error)) {
+			if (instanceResult.error.code === 'NOT_FOUND') {
+				return null;
+			}
 		}
-
-		const instance = await ctx.db.get(args.id);
-		if (!instance) {
+		if (Result.isError(instanceResult)) {
 			return null;
 		}
-
-		// Verify the caller owns this instance
-		if (instance.clerkId !== identity.subject) {
-			throw new ConvexError({ code: 'FORBIDDEN', message: 'Access denied' });
-		}
-
+		const instance = await unwrapAuthResult(instanceResult);
 		return instance;
 	}
 });

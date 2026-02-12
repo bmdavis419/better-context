@@ -1,7 +1,15 @@
-import { ConvexError, v } from 'convex/values';
+import { v } from 'convex/values';
+import { Result } from 'better-result';
 
 import type { Id } from './_generated/dataModel';
 import { internalMutation } from './_generated/server';
+import { WebConflictError, WebValidationError, type WebError } from '../lib/result/errors';
+
+type McpInternalResult<T> = Result<T, WebError>;
+
+const throwMcpInternalError = (error: WebError): never => {
+	throw error;
+};
 
 /**
  * Internal mutation to create a project (used by MCP to avoid auth requirements)
@@ -81,10 +89,13 @@ export const addResourceInternal = internalMutation({
 			.first();
 
 		if (existing) {
-			throw new ConvexError({
-				code: 'ALREADY_EXISTS',
-				message: `Resource "${args.name}" already exists in this project`
-			});
+			const result: McpInternalResult<Id<'userResources'>> = Result.err(
+				new WebConflictError({
+					message: `Resource "${args.name}" already exists in this project`,
+					conflict: args.name
+				})
+			);
+			throwMcpInternalError(result.error);
 		}
 
 		return await ctx.db.insert('userResources', {
@@ -125,13 +136,15 @@ export const updateResourceInternal = internalMutation({
 			.first();
 
 		if (!existing) {
-			throw new ConvexError({
-				code: 'NOT_FOUND',
-				message: `Resource "${args.name}" not found in this project`
-			});
+			const result: McpInternalResult<null> = Result.err(
+				new WebValidationError({
+					message: `Resource "${args.name}" not found in this project`,
+					field: 'name'
+				})
+			);
+			throwMcpInternalError(result.error);
 		}
-
-		await ctx.db.patch(existing._id, {
+		await ctx.db.patch(existing!._id, {
 			url: args.url,
 			branch: args.branch,
 			searchPath: args.searchPath,

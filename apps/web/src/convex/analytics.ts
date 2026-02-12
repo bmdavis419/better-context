@@ -7,11 +7,11 @@ import { internalAction } from './_generated/server';
 
 let posthogClient: PostHog | null = null;
 
-function getPostHog(): PostHog {
+function getPostHog(): PostHog | null {
 	if (!posthogClient) {
 		const apiKey = process.env.POSTHOG_ID;
 		if (!apiKey) {
-			throw new Error('POSTHOG_ID is not set in the Convex environment');
+			return null;
 		}
 		posthogClient = new PostHog(apiKey, {
 			host: 'https://us.i.posthog.com',
@@ -31,6 +31,9 @@ export const trackEvent = internalAction({
 	returns: v.null(),
 	handler: async (_ctx, args) => {
 		const posthog = getPostHog();
+		if (!posthog) {
+			return null;
+		}
 		posthog.capture({
 			distinctId: args.distinctId,
 			event: args.event,
@@ -52,6 +55,9 @@ export const identifyUser = internalAction({
 	returns: v.null(),
 	handler: async (_ctx, args) => {
 		const posthog = getPostHog();
+		if (!posthog) {
+			return null;
+		}
 		posthog.identify({
 			distinctId: args.distinctId,
 			properties: args.properties as Record<string, unknown> | undefined

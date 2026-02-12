@@ -3,7 +3,11 @@ import { v } from 'convex/values';
 
 import { internal } from './_generated/api';
 import { AnalyticsEvents } from './analyticsEvents';
-import { getAuthenticatedInstance, requireThreadOwnership } from './authHelpers';
+import {
+	getAuthenticatedInstanceResult,
+	requireThreadOwnershipResult,
+	unwrapAuthResult
+} from './authHelpers';
 
 // Shared validators
 const threadValidator = v.object({
@@ -36,7 +40,7 @@ export const list = query({
 	},
 	returns: v.array(threadWithStreamingValidator),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		let threads;
 		if (args.projectId) {
@@ -141,7 +145,9 @@ export const getWithMessages = query({
 		})
 	),
 	handler: async (ctx, args) => {
-		const { thread } = await requireThreadOwnership(ctx, args.threadId);
+		const { thread } = await unwrapAuthResult(
+			await requireThreadOwnershipResult(ctx, args.threadId)
+		);
 
 		const messages = await ctx.db
 			.query('messages')
@@ -186,7 +192,7 @@ export const create = mutation({
 	},
 	returns: v.id('threads'),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		const threadId = await ctx.db.insert('threads', {
 			instanceId: instance._id,
@@ -216,7 +222,9 @@ export const remove = mutation({
 	args: { threadId: v.id('threads') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const { thread, instance } = await requireThreadOwnership(ctx, args.threadId);
+		const { thread, instance } = await unwrapAuthResult(
+			await requireThreadOwnershipResult(ctx, args.threadId)
+		);
 
 		const messages = await ctx.db
 			.query('messages')
@@ -259,7 +267,9 @@ export const clearMessages = mutation({
 	args: { threadId: v.id('threads') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const { thread, instance } = await requireThreadOwnership(ctx, args.threadId);
+		const { thread, instance } = await unwrapAuthResult(
+			await requireThreadOwnershipResult(ctx, args.threadId)
+		);
 
 		const messages = await ctx.db
 			.query('messages')
@@ -294,7 +304,7 @@ export const updateTitle = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await requireThreadOwnership(ctx, args.threadId);
+		await unwrapAuthResult(await requireThreadOwnershipResult(ctx, args.threadId));
 		await ctx.db.patch(args.threadId, { title: args.title });
 		return null;
 	}

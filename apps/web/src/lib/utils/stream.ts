@@ -5,7 +5,7 @@ import { BtcaStreamEventSchema, type BtcaStreamEvent } from '../types/index.ts';
  */
 export async function* parseSSEStream(response: Response): AsyncGenerator<BtcaStreamEvent> {
 	if (!response.body) {
-		throw new Error('Response body is null');
+		return;
 	}
 
 	const reader = response.body.getReader();

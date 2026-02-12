@@ -1,6 +1,7 @@
 'use node';
 
 import { v } from 'convex/values';
+import { Result } from 'better-result';
 
 import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
@@ -8,11 +9,13 @@ import { action } from './_generated/server';
 import { AnalyticsEvents } from './analyticsEvents';
 import { instances } from './apiHelpers';
 import type { ApiKeyValidationResult } from './clerkApiKeys';
+import { toWebError, type WebError } from '../lib/result/errors';
 
 const instanceActions = instances.actions;
 const instanceMutations = instances.mutations;
 
 type AskResult = { ok: true; text: string } | { ok: false; error: string };
+type McpActionResult<T> = Result<T, WebError>;
 
 function stripJsonComments(content: string): string {
 	let result = '';
@@ -95,28 +98,30 @@ async function getOrCreateProject(
 	},
 	instanceId: Id<'instances'>,
 	projectName?: string
-): Promise<Id<'projects'>> {
+): Promise<McpActionResult<Id<'projects'>>> {
 	const name = projectName || 'default';
 
-	// Try to find existing project
-	const existing = await ctx.runQuery(internal.projects.getByInstanceAndName, {
-		instanceId,
-		name
-	});
+	try {
+		const existing = await ctx.runQuery(internal.projects.getByInstanceAndName, {
+			instanceId,
+			name
+		});
 
-	if (existing) {
-		return existing._id;
+		if (existing) {
+			return Result.ok(existing._id);
+		}
+
+		const isDefault = name === 'default';
+		const projectId = await ctx.runMutation(internal.mcpInternal.createProjectInternal, {
+			instanceId,
+			name,
+			isDefault
+		});
+
+		return Result.ok(projectId);
+	} catch (error) {
+		return Result.err(toWebError(error));
 	}
-
-	// Create the project (this handles the default case specially)
-	const isDefault = name === 'default';
-	const projectId = await ctx.runMutation(internal.mcpInternal.createProjectInternal, {
-		instanceId,
-		name,
-		isDefault
-	});
-
-	return projectId;
 }
 
 /**
@@ -178,7 +183,12 @@ export const ask = action({
 		}
 
 		// Get or create the project
-		const projectId = await getOrCreateProject(ctx, instanceId, projectName);
+		const projectIdResult = await getOrCreateProject(ctx, instanceId, projectName);
+		if (Result.isError(projectIdResult)) {
+			await trackAskFailure(projectIdResult.error.message);
+			return { ok: false as const, error: projectIdResult.error.message };
+		}
+		const projectId = projectIdResult.value;
 		const projectProperties = { ...baseProperties, projectId };
 
 		// Note: Usage tracking is handled in the validate action via touchUsage
@@ -344,7 +354,12 @@ export const listResources = action({
 		const instanceId = validation.instanceId;
 
 		// Get or create the project
-		const projectId = await getOrCreateProject(ctx, instanceId, projectName);
+		const projectIdResult = await getOrCreateProject(ctx, instanceId, projectName);
+		if (Result.isError(projectIdResult)) {
+			return { ok: false as const, error: projectIdResult.error.message };
+		}
+
+		const projectId = projectIdResult.value;
 
 		// Return project-specific resources
 		const { custom } = await ctx.runQuery(internal.resources.listAvailableForProject, {
@@ -422,7 +437,12 @@ export const addResource = action({
 		const instanceId = validation.instanceId;
 
 		// Get or create the project
-		const projectId = await getOrCreateProject(ctx, instanceId, projectName);
+		const projectIdResult = await getOrCreateProject(ctx, instanceId, projectName);
+		if (Result.isError(projectIdResult)) {
+			return { ok: false as const, error: projectIdResult.error.message };
+		}
+
+		const projectId = projectIdResult.value;
 
 		// Note: Usage tracking is handled in the validate action via touchUsage
 
@@ -582,7 +602,11 @@ export const sync = action({
 		}
 
 		// Get or create the project
-		const projectId = await getOrCreateProject(ctx, instanceId, config.project);
+		const projectIdResult = await getOrCreateProject(ctx, instanceId, config.project);
+		if (Result.isError(projectIdResult)) {
+			return { ok: false, errors: [projectIdResult.error.message], synced: [] };
+		}
+		const projectId = projectIdResult.value;
 
 		// Get current resources for this project
 		const existingResources = await ctx.runQuery(internal.resources.listByProject, {

@@ -1,11 +1,32 @@
 import { GLOBAL_RESOURCES, getResourceNameError } from '@btca/shared';
 import { v } from 'convex/values';
+import { Result } from 'better-result';
 import { internalQuery, mutation, query } from './_generated/server';
 
 import { internal } from './_generated/api';
 import { AnalyticsEvents } from './analyticsEvents';
 import { instances } from './apiHelpers';
-import { getAuthenticatedInstance, requireUserResourceOwnership } from './authHelpers';
+import {
+	getAuthenticatedInstanceResult,
+	requireUserResourceOwnershipResult,
+	unwrapAuthResult
+} from './authHelpers';
+import { WebValidationError } from '../lib/result/errors';
+import type { WebError } from '../lib/result/errors';
+
+type ResourceNameResult = Result<string, WebValidationError>;
+
+const validateResourceNameResult = (name: string): ResourceNameResult => {
+	const nameError = getResourceNameError(name);
+	if (nameError) {
+		return Result.err(new WebValidationError({ message: nameError, field: 'name' }));
+	}
+	return Result.ok(name);
+};
+
+const throwResourceError = (error: WebError): never => {
+	throw error;
+};
 
 // Resource validators
 const globalResourceValidator = v.object({
@@ -76,7 +97,7 @@ export const listUserResources = query({
 	},
 	returns: v.array(userResourceValidator),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		if (args.projectId) {
 			const resources = await ctx.db
@@ -110,7 +131,7 @@ export const listAvailable = query({
 		custom: v.array(customResourceValidator)
 	}),
 	handler: async (ctx) => {
-		const instance = await getAuthenticatedInstance(ctx);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
 
 		const userResources = await ctx.db
 			.query('userResources')
@@ -278,10 +299,10 @@ export const addCustomResource = mutation({
 	},
 	returns: v.id('userResources'),
 	handler: async (ctx, args) => {
-		const instance = await getAuthenticatedInstance(ctx);
-		const nameError = getResourceNameError(args.name);
-		if (nameError) {
-			throw new Error(nameError);
+		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
+		const nameResult = validateResourceNameResult(args.name);
+		if (Result.isError(nameResult)) {
+			throwResourceError(nameResult.error);
 		}
 
 		const resourceId = await ctx.db.insert('userResources', {
@@ -325,7 +346,9 @@ export const removeCustomResource = mutation({
 	args: { resourceId: v.id('userResources') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		const { resource, instance } = await requireUserResourceOwnership(ctx, args.resourceId);
+		const { resource, instance } = await unwrapAuthResult(
+			await requireUserResourceOwnershipResult(ctx, args.resourceId)
+		);
 
 		await ctx.db.delete(args.resourceId);
 

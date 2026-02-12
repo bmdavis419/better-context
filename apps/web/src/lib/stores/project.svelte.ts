@@ -1,8 +1,10 @@
+import { Result } from 'better-result';
 import { getContext, setContext } from 'svelte';
 import { useQuery, useConvexClient } from 'convex-svelte';
 import { goto } from '$app/navigation';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
+import { WebValidationError } from '../result/errors';
 
 type Project = {
 	_id: Id<'projects'>;
@@ -143,10 +145,22 @@ export class ProjectStore {
 	}
 }
 
-export const getProjectStore = (): ProjectStore => {
+const missingProjectStoreError = () =>
+	new WebValidationError({ message: 'Project store not found. Did you call setProjectStore?' });
+
+const getProjectStoreResult = (): Result<ProjectStore, WebValidationError> => {
 	const store = getContext<ProjectStore>(PROJECT_STORE_KEY);
-	if (!store) throw new Error('Project store not found. Did you call setProjectStore?');
-	return store;
+	if (!store) return Result.err(missingProjectStoreError());
+	return Result.ok(store);
+};
+
+export const getProjectStore = (): ProjectStore => {
+	return Result.match(getProjectStoreResult(), {
+		ok: (store) => store,
+		err: (error) => {
+			throw error;
+		}
+	});
 };
 
 export const setProjectStore = (): ProjectStore => {
