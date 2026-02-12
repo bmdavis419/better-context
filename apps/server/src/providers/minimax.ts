@@ -7,7 +7,7 @@ const readEnv = (key: string) => {
 	return value && value.trim().length > 0 ? value.trim() : undefined;
 };
 
-export const MINIMAX_MODELS = ['MiniMax-M2.1'] as const;
+export const MINIMAX_MODELS = ['MiniMax-M2.1', 'MiniMax-M2.5'] as const;
 
 export type MinimaxModel = (typeof MINIMAX_MODELS)[number];
 

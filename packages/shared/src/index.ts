@@ -87,6 +87,13 @@ export const BLESSED_MODELS: BlessedModel[] = [
 	},
 	{
 		provider: 'openai',
+		model: 'gpt-5.3-codex-spark',
+		description: 'GPT-5.3 Codex Spark (OAuth; uses your ChatGPT subscription).',
+		providerSetupUrl: 'https://chatgpt.com',
+		isDefault: true
+	},
+	{
+		provider: 'openai',
 		model: 'gpt-5.3-codex',
 		description: 'GPT-5.3 Codex (OAuth; uses your ChatGPT subscription).',
 		providerSetupUrl: 'https://chatgpt.com',

@@ -1,136 +1,138 @@
 {
-	"$schema": "https://btca.dev/btca.schema.json",
-	"dataDirectory": ".btca",
-	"resources": [
-		{
-			"type": "git",
-			"name": "runed",
-			"url": "https://github.com/svecosystem/runed",
-			"branch": "main"
-		},
-		{
-			"type": "git",
-			"name": "justBash",
-			"url": "https://github.com/vercel-labs/just-bash",
-			"branch": "main"
-		},
-		{
-			"type": "git",
-			"name": "autumn",
-			"url": "https://github.com/useautumn/typescript",
-			"branch": "main",
-			"specialNotes": "this is the TS SDK and cli for autumn. the cli is in atmn/ and the important sdk stuff is in package/"
-		},
-		{
-			"type": "git",
-			"name": "convexWorkpools",
-			"url": "https://github.com/get-convex/workpool",
-			"branch": "main",
-			"specialNotes": "This is a Convex component that does work pools. Work pools are basically background jobs with proper queuing setup, retries, and all that stuff. "
-		},
-		{
-			"type": "git",
-			"name": "daytona",
-			"url": "https://github.com/daytonaio/daytona",
-			"branch": "main",
-			"specialNotes": "this is the full daytona codebase. focus on the guides and examples for answers"
-		},
-		{
-			"type": "git",
-			"name": "svelte",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPaths": ["apps/svelte.dev"],
-			"specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
-		},
-		{
-			"type": "git",
-			"name": "svelteKit",
-			"url": "https://github.com/sveltejs/kit",
-			"branch": "main",
-			"searchPath": "documentation"
-		},
-		{
-			"type": "git",
-			"name": "tailwind",
-			"url": "https://github.com/tailwindlabs/tailwindcss.com",
-			"branch": "main",
-			"searchPath": "src/docs"
-		},
-		{
-			"type": "git",
-			"name": "hono",
-			"url": "https://github.com/honojs/website",
-			"branch": "main",
-			"searchPath": "docs"
-		},
-		{
-			"type": "git",
-			"name": "zod",
-			"url": "https://github.com/colinhacks/zod",
-			"branch": "main",
-			"searchPath": "packages/docs/content"
-		},
-		{
-			"type": "git",
-			"name": "solidJs",
-			"url": "https://github.com/solidjs/solid-docs",
-			"branch": "main",
-			"searchPath": "src/routes"
-		},
-		{
-			"type": "git",
-			"name": "commander",
-			"url": "https://github.com/tj/commander.js",
-			"branch": "master",
-			"searchPath": "docs"
-		},
-		{
-			"type": "git",
-			"name": "vite",
-			"url": "https://github.com/vitejs/vite",
-			"branch": "main",
-			"searchPath": "docs"
-		},
-		{
-			"type": "git",
-			"name": "opencode",
-			"url": "https://github.com/anomalyco/opencode",
-			"branch": "dev"
-		},
-		{
-			"type": "git",
-			"name": "clerk",
-			"url": "https://github.com/clerk/javascript",
-			"branch": "main"
-		},
-		{
-			"type": "git",
-			"name": "convexJs",
-			"url": "https://github.com/get-convex/convex-js",
-			"branch": "main"
-		},
-		{
-			"type": "git",
-			"name": "convexDocs",
-			"url": "https://github.com/get-convex/convex-docs",
-			"branch": "main",
-			"specialNotes": "Official Convex documentation. Use for HTTP actions, queries, mutations, actions, schema, etc."
-		},
-		{
-			"type": "git",
-			"name": "daytonaSdk",
-			"url": "https://github.com/daytonaio/sdk",
-			"branch": "main",
-			"specialNotes": "Daytona TypeScript SDK. Use for sandbox creation, management, and API reference."
-		},
-		{
-			"type": "git",
-			"name": "convex",
-			"url": "https://github.com/get-convex/convex-js",
-			"branch": "main"
-		}
-	],
-	"model": "claude-haiku-4-5",
-	"provider": "opencode"
+  "$schema": "https://btca.dev/btca.schema.json",
+  "dataDirectory": ".btca",
+  "resources": [
+    {
+      "type": "git",
+      "name": "runed",
+      "url": "https://github.com/svecosystem/runed",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "justBash",
+      "url": "https://github.com/vercel-labs/just-bash",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "autumn",
+      "url": "https://github.com/useautumn/typescript",
+      "branch": "main",
+      "specialNotes": "this is the TS SDK and cli for autumn. the cli is in atmn/ and the important sdk stuff is in package/"
+    },
+    {
+      "type": "git",
+      "name": "convexWorkpools",
+      "url": "https://github.com/get-convex/workpool",
+      "branch": "main",
+      "specialNotes": "This is a Convex component that does work pools. Work pools are basically background jobs with proper queuing setup, retries, and all that stuff. "
+    },
+    {
+      "type": "git",
+      "name": "daytona",
+      "url": "https://github.com/daytonaio/daytona",
+      "branch": "main",
+      "specialNotes": "this is the full daytona codebase. focus on the guides and examples for answers"
+    },
+    {
+      "type": "git",
+      "name": "svelte",
+      "url": "https://github.com/sveltejs/svelte.dev",
+      "branch": "main",
+      "searchPaths": [
+        "apps/svelte.dev"
+      ],
+      "specialNotes": "Svelte docs website. Focus on content directory for markdown documentation."
+    },
+    {
+      "type": "git",
+      "name": "svelteKit",
+      "url": "https://github.com/sveltejs/kit",
+      "branch": "main",
+      "searchPath": "documentation"
+    },
+    {
+      "type": "git",
+      "name": "tailwind",
+      "url": "https://github.com/tailwindlabs/tailwindcss.com",
+      "branch": "main",
+      "searchPath": "src/docs"
+    },
+    {
+      "type": "git",
+      "name": "hono",
+      "url": "https://github.com/honojs/website",
+      "branch": "main",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "zod",
+      "url": "https://github.com/colinhacks/zod",
+      "branch": "main",
+      "searchPath": "packages/docs/content"
+    },
+    {
+      "type": "git",
+      "name": "solidJs",
+      "url": "https://github.com/solidjs/solid-docs",
+      "branch": "main",
+      "searchPath": "src/routes"
+    },
+    {
+      "type": "git",
+      "name": "commander",
+      "url": "https://github.com/tj/commander.js",
+      "branch": "master",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "vite",
+      "url": "https://github.com/vitejs/vite",
+      "branch": "main",
+      "searchPath": "docs"
+    },
+    {
+      "type": "git",
+      "name": "opencode",
+      "url": "https://github.com/anomalyco/opencode",
+      "branch": "dev"
+    },
+    {
+      "type": "git",
+      "name": "clerk",
+      "url": "https://github.com/clerk/javascript",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "convexJs",
+      "url": "https://github.com/get-convex/convex-js",
+      "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "convexDocs",
+      "url": "https://github.com/get-convex/convex-docs",
+      "branch": "main",
+      "specialNotes": "Official Convex documentation. Use for HTTP actions, queries, mutations, actions, schema, etc."
+    },
+    {
+      "type": "git",
+      "name": "daytonaSdk",
+      "url": "https://github.com/daytonaio/sdk",
+      "branch": "main",
+      "specialNotes": "Daytona TypeScript SDK. Use for sandbox creation, management, and API reference."
+    },
+    {
+      "type": "git",
+      "name": "convex",
+      "url": "https://github.com/get-convex/convex-js",
+      "branch": "main"
+    }
+  ],
+  "model": "gpt-5.3-codex",
+  "provider": "openai"
 }

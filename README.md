@@ -111,11 +111,16 @@ All scripts use Turborepo for caching. Run from the repository root.
 
 **openai**
 
-- "gpt-5.2-codex"
+- "gpt-5.3-codex-spark"
+- "gpt-5.3-codex"
 
 **opencode**
 
 - "claude-sonnet-4-5"
 - "claude-haiku-4-5"
 - "gemini-3-flash"
-- "minimax-m2.1"
+
+**minimax**
+
+- "MiniMax-M2.5"
+- "MiniMax-M2.1"

@@ -1,5 +1,8 @@
 export const CURATED_MODELS: Record<string, { id: string; label: string }[]> = {
-	openai: [{ id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' }],
+	openai: [
+		{ id: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
+		{ id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' }
+	],
 	'github-copilot': [
 		{ id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5' },
 		{ id: 'grok-code-fast-1', label: 'Grok Code Fast 1' }
@@ -24,7 +27,10 @@ export const CURATED_MODELS: Record<string, { id: string; label: string }[]> = {
 		{ id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (2025-09-29)' }
 	],
 	google: [{ id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' }],
-	minimax: [{ id: 'MiniMax-M2.1', label: 'MiniMax M2.1' }]
+	minimax: [
+		{ id: 'MiniMax-M2.5', label: 'MiniMax M2.5' },
+		{ id: 'MiniMax-M2.1', label: 'MiniMax M2.1' }
+	]
 };
 
 export const PROVIDER_INFO: Record<string, { label: string; requiresAuth: boolean }> = {
