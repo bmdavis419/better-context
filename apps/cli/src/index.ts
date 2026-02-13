@@ -6,6 +6,7 @@ import { clearCommand } from './commands/clear.ts';
 import { connectCommand } from './commands/connect.ts';
 import { disconnectCommand } from './commands/disconnect.ts';
 import { initCommand } from './commands/init.ts';
+import { statusCommand } from './commands/status.ts';
 import { mcpCommand } from './commands/mcp.ts';
 import { removeCommand } from './commands/remove.ts';
 import { resourcesCommand } from './commands/resources.ts';
@@ -53,6 +54,7 @@ program.addCommand(askCommand);
 program.addCommand(connectCommand);
 program.addCommand(disconnectCommand);
 program.addCommand(initCommand);
+program.addCommand(statusCommand);
 program.addCommand(skillCommand);
 
 // Utility commands

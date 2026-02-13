@@ -118,6 +118,28 @@ For `openai-compat`, the interactive flow additionally prompts for:
 - Model ID (required): saved as `model` in `btca.config.jsonc`.
 - API key (optional): only if your server requires auth, stored in OpenCode auth.
 
+## `btca status`
+
+Shows current btca status.
+
+Output includes:
+
+- selected model
+- selected provider
+- selected model source (`project`, `global`, or `default`)
+- selected provider source (`project`, `global`, or `default`)
+- whether the selected provider is authenticated
+- resources from `~/.config/btca/btca.config.jsonc`
+- resources from `./btca.config.jsonc` (if the file exists)
+- installed btca version and latest npm version
+- update hint if your version is behind
+
+If an update is available, it prints:
+
+```bash
+Update available: run "bun add -g btca@latest"
+```
+
 ## `btca disconnect`
 
 Disconnects provider credentials.

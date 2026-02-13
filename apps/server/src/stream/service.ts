@@ -1,7 +1,7 @@
 import { stripUserQuestionFromStart, extractCoreQuestion } from '@btca/shared';
 import { Result } from 'better-result';
 
-import { getErrorMessage, getErrorTag } from '../errors.ts';
+import { getErrorHint, getErrorMessage, getErrorTag } from '../errors.ts';
 import { Metrics } from '../metrics/index.ts';
 import type { AgentLoop } from '../agent/loop.ts';
 
@@ -304,7 +304,8 @@ export namespace StreamService {
 									const err: BtcaStreamErrorEvent = {
 										type: 'error',
 										tag: getErrorTag(event.error),
-										message: getErrorMessage(event.error)
+										message: getErrorMessage(event.error),
+										hint: getErrorHint(event.error)
 									};
 									emit(controller, err);
 									break;
@@ -323,7 +324,8 @@ export namespace StreamService {
 							const err: BtcaStreamErrorEvent = {
 								type: 'error',
 								tag: getErrorTag(cause),
-								message: getErrorMessage(cause)
+								message: getErrorMessage(cause),
+								hint: getErrorHint(cause)
 							};
 							emit(controller, err);
 						}
