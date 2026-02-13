@@ -23,7 +23,7 @@ const RESOURCE_NAME_REGEX = /^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(\/[a-zA-Z0-9][a-zA-Z0
  * Branch name: alphanumeric, forward slashes, dots, underscores, and hyphens.
  * Must not start with hyphen to prevent git option injection.
  */
-const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
+const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.\-@]+$/;
 
 /**
  * Provider/Model names: letters, numbers, dots, underscores, plus, hyphens, forward slashes, colons.
@@ -152,7 +152,7 @@ export const validateBranchName = (branch: string): ValidationResult => {
 
 	if (!BRANCH_NAME_REGEX.test(branch)) {
 		return fail(
-			`Invalid branch name: "${branch}". Must contain only alphanumeric characters, forward slashes, dots, underscores, and hyphens`
+			`Invalid branch name: "${branch}". Must contain only alphanumeric characters, forward slashes, dots, underscores, hyphens, and @ symbols`
 		);
 	}
 

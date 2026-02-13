@@ -87,7 +87,8 @@
 				},
 				"branch": {
 					"type": "string",
-					"description": "Git branch to use",
+					"description": "Git branch, tag, or ref to use (supports monorepo-style tags like @scope/pkg@version)",
+					"pattern": "^[a-zA-Z0-9/_\\.\\-@]+$",
 					"default": "main"
 				},
 				"searchPath": {

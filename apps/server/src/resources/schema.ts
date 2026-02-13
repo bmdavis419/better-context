@@ -17,7 +17,7 @@ const RESOURCE_NAME_REGEX = /^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(\/[a-zA-Z0-9][a-zA-Z0
  * Branch name: alphanumeric, forward slashes, dots, underscores, and hyphens.
  * Must not start with hyphen to prevent git option injection.
  */
-const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
+const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.\-@]+$/;
 
 const parseUrl = (value: string) =>
 	Result.try(() => new URL(value)).match({
@@ -99,7 +99,7 @@ const BranchNameSchema = z
 	.max(LIMITS.BRANCH_NAME_MAX, `Branch name too long (max ${LIMITS.BRANCH_NAME_MAX} chars)`)
 	.regex(
 		BRANCH_NAME_REGEX,
-		'Branch name must contain only alphanumeric characters, forward slashes, dots, underscores, and hyphens'
+		'Branch name must contain only alphanumeric characters, forward slashes, dots, underscores, hyphens, and @ symbols'
 	)
 	.refine((branch) => !branch.startsWith('-'), {
 		message: "Branch name must not start with '-' to prevent git option injection"
