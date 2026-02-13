@@ -10,7 +10,8 @@
 		Link,
 		Check,
 		X,
-		Layers
+		Layers,
+		Package
 	} from '@lucide/svelte';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { goto } from '$app/navigation';
@@ -18,6 +19,7 @@
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
 	import { api } from '../../../../convex/_generated/api';
+	import type { Id } from '../../../../convex/_generated/dataModel';
 
 	const auth = getAuthState();
 	const client = useConvexClient();
@@ -45,14 +47,20 @@
 	let showAddForm = $state(false);
 	let showConfirmation = $state(false);
 	let formName = $state('');
+	let formType = $state<'git' | 'npm'>('git');
 	let formUrl = $state('');
 	let formBranch = $state('main');
 	let formSearchPath = $state('');
+	let formPackage = $state('');
+	let formVersion = $state('');
 	let formSpecialNotes = $state('');
 	let isSubmitting = $state(false);
 	let formError = $state<string | null>(null);
 	let addingGlobal = $state<string | null>(null);
 	let globalAddError = $state<string | null>(null);
+
+	const NPM_PACKAGE_SEGMENT_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
+	const NPM_VERSION_OR_TAG_REGEX = /^[^\s/]+$/;
 
 	const userResourceNames = $derived(new Set((userResourcesQuery?.data ?? []).map((r) => r.name)));
 
@@ -112,6 +120,40 @@
 		};
 	}
 
+	function isValidNpmPackage(value: string) {
+		if (!value) return false;
+		if (value.startsWith('@')) {
+			const parts = value.split('/');
+			return (
+				parts.length === 2 &&
+				parts[0] !== '@' &&
+				NPM_PACKAGE_SEGMENT_REGEX.test(parts[0]!.slice(1)) &&
+				NPM_PACKAGE_SEGMENT_REGEX.test(parts[1]!)
+			);
+		}
+		return !value.includes('/') && NPM_PACKAGE_SEGMENT_REGEX.test(value);
+	}
+
+	function getNpmPackageUrl(packageName: string) {
+		const encoded = packageName
+			.split('/')
+			.map((part) => encodeURIComponent(part))
+			.join('/');
+		return `https://www.npmjs.com/package/${encoded}`;
+	}
+
+	function resetForm() {
+		formName = '';
+		formType = 'git';
+		formUrl = '';
+		formBranch = 'main';
+		formSearchPath = '';
+		formPackage = '';
+		formVersion = '';
+		formSpecialNotes = '';
+		formError = null;
+	}
+
 	async function handleQuickAdd() {
 		parseError = null;
 		isParsingUrl = true;
@@ -126,9 +168,12 @@
 
 			// Prefill the form
 			formName = parsed.name;
+			formType = 'git';
 			formUrl = parsed.url;
 			formBranch = parsed.branch;
 			formSearchPath = '';
+			formPackage = '';
+			formVersion = '';
 			formSpecialNotes = '';
 
 			// Show confirmation
@@ -141,12 +186,7 @@
 
 	function handleCancelConfirmation() {
 		showConfirmation = false;
-		formName = '';
-		formUrl = '';
-		formBranch = 'main';
-		formSearchPath = '';
-		formSpecialNotes = '';
-		formError = null;
+		resetForm();
 	}
 
 	async function handleConfirmAdd() {
@@ -164,8 +204,8 @@
 
 	async function handleAddResource() {
 		if (!auth.instanceId) return;
-		if (!formName.trim() || !formUrl.trim()) {
-			formError = 'Name and URL are required';
+		if (!formName.trim()) {
+			formError = 'Name is required';
 			return;
 		}
 
@@ -175,33 +215,65 @@
 			return;
 		}
 
-		// Basic URL validation
-		try {
-			new URL(formUrl);
-		} catch {
-			formError = 'Invalid URL format';
-			return;
+		const payload: {
+			name: string;
+			type: 'git' | 'npm';
+			url?: string;
+			branch?: string;
+			searchPath?: string;
+			package?: string;
+			version?: string;
+			specialNotes?: string;
+			projectId?: Id<'projects'>;
+		} = {
+			name: formName.trim(),
+			type: formType,
+			specialNotes: formSpecialNotes.trim() || undefined,
+			projectId: selectedProjectId
+		};
+
+		if (formType === 'git') {
+			if (!formUrl.trim()) {
+				formError = 'Git URL is required';
+				return;
+			}
+
+			try {
+				new URL(formUrl);
+			} catch {
+				formError = 'Invalid URL format';
+				return;
+			}
+
+			payload.url = formUrl.trim();
+			payload.branch = formBranch.trim() || 'main';
+			payload.searchPath = formSearchPath.trim() || undefined;
+		} else {
+			if (!formPackage.trim()) {
+				formError = 'npm package is required';
+				return;
+			}
+			if (!isValidNpmPackage(formPackage.trim())) {
+				formError = 'npm package must be valid (for example react or @types/node)';
+				return;
+			}
+			if (formVersion.trim() && !NPM_VERSION_OR_TAG_REGEX.test(formVersion.trim())) {
+				formError = 'npm version/tag must not contain spaces or "/"';
+				return;
+			}
+
+			payload.package = formPackage.trim();
+			payload.version = formVersion.trim() || undefined;
 		}
 
 		isSubmitting = true;
 		formError = null;
 
 		try {
-			await client.mutation(api.resources.addCustomResource, {
-				name: formName.trim(),
-				url: formUrl.trim(),
-				branch: formBranch.trim() || 'main',
-				searchPath: formSearchPath.trim() || undefined,
-				specialNotes: formSpecialNotes.trim() || undefined,
-				projectId: selectedProjectId
-			});
+			await client.mutation(api.resources.addCustomResource, payload);
 
 			// Reset form
-			formName = '';
-			formUrl = '';
-			formBranch = 'main';
-			formSearchPath = '';
-			formSpecialNotes = '';
+			resetForm();
 			showAddForm = false;
 		} catch (error) {
 			formError = error instanceof Error ? error.message : 'Failed to add resource';
@@ -231,6 +303,7 @@
 		try {
 			await client.mutation(api.resources.addCustomResource, {
 				name: resource.name,
+				type: 'git',
 				url: resource.url,
 				branch: resource.branch,
 				searchPath: resource.searchPath ?? resource.searchPaths?.[0],
@@ -278,7 +351,9 @@
 					</button>
 				</div>
 			</div>
-			<p class="bc-muted mb-4 text-sm">Add your own git repositories as documentation resources.</p>
+			<p class="bc-muted mb-4 text-sm">
+				Add your own git repositories or npm packages as documentation resources.
+			</p>
 
 			<!-- Quick Add Section -->
 			<div class="bc-card mb-4 p-4">
@@ -441,38 +516,69 @@
 						</div>
 
 						<div>
-							<label for="url" class="mb-1 block text-sm font-medium">Git URL *</label>
-							<input
-								id="url"
-								type="url"
-								class="bc-input w-full"
-								placeholder="https://github.com/owner/repo"
-								bind:value={formUrl}
-							/>
+							<label for="resource-type" class="mb-1 block text-sm font-medium">Type *</label>
+							<select id="resource-type" class="bc-input w-full" bind:value={formType}>
+								<option value="git">git repository</option>
+								<option value="npm">npm package</option>
+							</select>
 						</div>
 
-						<div class="grid grid-cols-2 gap-4">
+						{#if formType === 'git'}
 							<div>
-								<label for="branch" class="mb-1 block text-sm font-medium">Branch</label>
+								<label for="url" class="mb-1 block text-sm font-medium">Git URL *</label>
 								<input
-									id="branch"
+									id="url"
+									type="url"
+									class="bc-input w-full"
+									placeholder="https://github.com/owner/repo"
+									bind:value={formUrl}
+								/>
+							</div>
+
+							<div class="grid grid-cols-2 gap-4">
+								<div>
+									<label for="branch" class="mb-1 block text-sm font-medium">Branch</label>
+									<input
+										id="branch"
+										type="text"
+										class="bc-input w-full"
+										placeholder="main"
+										bind:value={formBranch}
+									/>
+								</div>
+								<div>
+									<label for="searchPath" class="mb-1 block text-sm font-medium">Search Path</label>
+									<input
+										id="searchPath"
+										type="text"
+										class="bc-input w-full"
+										placeholder="docs/"
+										bind:value={formSearchPath}
+									/>
+								</div>
+							</div>
+						{:else}
+							<div>
+								<label for="package" class="mb-1 block text-sm font-medium">npm Package *</label>
+								<input
+									id="package"
 									type="text"
 									class="bc-input w-full"
-									placeholder="main"
-									bind:value={formBranch}
+									placeholder="react or @types/node"
+									bind:value={formPackage}
 								/>
 							</div>
 							<div>
-								<label for="searchPath" class="mb-1 block text-sm font-medium">Search Path</label>
+								<label for="version" class="mb-1 block text-sm font-medium">Version / Tag</label>
 								<input
-									id="searchPath"
+									id="version"
 									type="text"
 									class="bc-input w-full"
-									placeholder="docs/"
-									bind:value={formSearchPath}
+									placeholder="latest or 19.0.0"
+									bind:value={formVersion}
 								/>
 							</div>
-						</div>
+						{/if}
 
 						<div>
 							<label for="notes" class="mb-1 block text-sm font-medium">Notes</label>
@@ -524,15 +630,27 @@
 							<div class="mb-3 flex items-start justify-between gap-2">
 								<span class="font-medium">@{resource.name}</span>
 								<div class="flex shrink-0 gap-1">
-									<a
-										href={resource.url}
-										target="_blank"
-										rel="noreferrer"
-										class="bc-chip p-1.5"
-										title="Open repository"
-									>
-										<ExternalLink size={12} />
-									</a>
+									{#if resource.type === 'npm' && resource.package}
+										<a
+											href={getNpmPackageUrl(resource.package)}
+											target="_blank"
+											rel="noreferrer"
+											class="bc-chip p-1.5"
+											title="Open npm package"
+										>
+											<Package size={12} />
+										</a>
+									{:else if resource.url}
+										<a
+											href={resource.url}
+											target="_blank"
+											rel="noreferrer"
+											class="bc-chip p-1.5"
+											title="Open repository"
+										>
+											<ExternalLink size={12} />
+										</a>
+									{/if}
 									<button
 										type="button"
 										class="bc-chip p-1.5 text-red-500"
@@ -543,16 +661,25 @@
 									</button>
 								</div>
 							</div>
-							<div class="bc-muted line-clamp-1 text-xs">
-								{resource.url.replace(/^https?:\/\//, '')}
-							</div>
-							<div class="bc-muted mt-1 text-xs">
-								{resource.branch}
-								{#if resource.searchPath}
-									<span class="mx-1">·</span>
-									{resource.searchPath}
-								{/if}
-							</div>
+							{#if resource.type === 'npm'}
+								<div class="bc-muted line-clamp-1 text-xs">
+									{resource.package ?? 'Unknown package'}
+								</div>
+								<div class="bc-muted mt-1 text-xs">
+									{resource.version ? `version ${resource.version}` : 'latest'}
+								</div>
+							{:else}
+								<div class="bc-muted line-clamp-1 text-xs">
+									{resource.url?.replace(/^https?:\/\//, '') ?? 'Unknown repository'}
+								</div>
+								<div class="bc-muted mt-1 text-xs">
+									{resource.branch ?? 'main'}
+									{#if resource.searchPath}
+										<span class="mx-1">·</span>
+										{resource.searchPath}
+									{/if}
+								</div>
+							{/if}
 							{#if resource.specialNotes}
 								<div class="bc-muted mt-2 line-clamp-2 text-xs italic">{resource.specialNotes}</div>
 							{/if}

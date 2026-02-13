@@ -225,12 +225,22 @@ export const upsertCachedResources = mutation({
 	args: {
 		instanceId: v.id('instances'),
 		resources: v.array(
-			v.object({
-				name: v.string(),
-				url: v.string(),
-				branch: v.string(),
-				sizeBytes: v.optional(v.number())
-			})
+			v.union(
+				v.object({
+					name: v.string(),
+					type: v.literal('git'),
+					url: v.string(),
+					branch: v.string(),
+					sizeBytes: v.optional(v.number())
+				}),
+				v.object({
+					name: v.string(),
+					type: v.literal('npm'),
+					package: v.string(),
+					version: v.optional(v.string()),
+					sizeBytes: v.optional(v.number())
+				})
+			)
 		)
 	},
 	returns: v.null(),
@@ -247,8 +257,20 @@ export const upsertCachedResources = mutation({
 			const existingResource = existingByName.get(resource.name);
 			if (existingResource) {
 				await ctx.db.patch(existingResource._id, {
-					url: resource.url,
-					branch: resource.branch,
+					type: resource.type,
+					...(resource.type === 'git'
+						? {
+								url: resource.url,
+								branch: resource.branch,
+								package: undefined,
+								version: undefined
+							}
+						: {
+								package: resource.package,
+								version: resource.version,
+								url: undefined,
+								branch: undefined
+							}),
 					sizeBytes: resource.sizeBytes,
 					lastUsedAt: now
 				});
@@ -256,8 +278,10 @@ export const upsertCachedResources = mutation({
 				await ctx.db.insert('cachedResources', {
 					instanceId: args.instanceId,
 					name: resource.name,
-					url: resource.url,
-					branch: resource.branch,
+					type: resource.type,
+					...(resource.type === 'git'
+						? { url: resource.url, branch: resource.branch }
+						: { package: resource.package, version: resource.version }),
 					sizeBytes: resource.sizeBytes,
 					cachedAt: now,
 					lastUsedAt: now
