@@ -17,6 +17,7 @@ import { useMessagesContext } from '../context/messages-context.tsx';
 import { useConfigContext } from '../context/config-context.tsx';
 import { services } from '../services.ts';
 import { formatError } from '../lib/format-error.ts';
+import { copyToClipboard } from '../clipboard.ts';
 import { loginCopilotOAuth } from '../../lib/copilot-oauth.ts';
 import { loginOpenAIOAuth, saveProviderApiKey } from '../../lib/opencode-oauth.ts';
 import {
@@ -75,6 +76,7 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	const [error, setError] = createSignal<string | null>(null);
 	const [statusMessage, setStatusMessage] = createSignal('');
 	const [busy, setBusy] = createSignal(false);
+	const [oauthFallbackUrl, setOauthFallbackUrl] = createSignal<string | null>(null);
 
 	const customModelOption: ModelOption = {
 		id: '__custom__',
@@ -87,6 +89,9 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 	const setStepSafe = (nextStep: ConnectStep) => {
 		setError(null);
 		setStatusMessage('');
+		if (nextStep !== 'auth') {
+			setOauthFallbackUrl(null);
+		}
 		setStep(nextStep);
 	};
 
@@ -126,6 +131,9 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			return 'Loading providers...';
 		}
 		if (step() === 'auth') {
+			if (oauthFallbackUrl()) {
+				return 'Browser auto-open failed. Press c to copy the URL and paste it manually.';
+			}
 			return 'Complete authentication in the browser or terminal.';
 		}
 		if (step() === 'api-key') {
@@ -243,7 +251,13 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 		setStepSafe('auth');
 		setBusy(true);
 		setStatusMessage('Starting OpenAI OAuth flow...');
-		const result = await loginOpenAIOAuth();
+		const result = await loginOpenAIOAuth({
+			continueOnBrowserOpenFailure: true,
+			onBrowserOpenFailure: (url) => {
+				setOauthFallbackUrl(url);
+				setStatusMessage('Could not auto-open browser. Press c to copy authorization URL.');
+			}
+		});
 		setBusy(false);
 
 		if (!result.ok) {
@@ -472,6 +486,21 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			return;
 		}
 
+		if (currentStep === 'auth' && key.name === 'c' && !key.ctrl) {
+			const url = oauthFallbackUrl();
+			if (!url) return;
+			void Result.tryPromise(() => copyToClipboard(url)).then((copyResult) => {
+				if (copyResult.isErr()) {
+					const message = formatError(copyResult.error);
+					setError(message);
+					messages.addSystemMessage(`Error: ${message}`);
+					return;
+				}
+				setStatusMessage('Authorization URL copied. Paste it in your browser to continue.');
+			});
+			return;
+		}
+
 		if (currentStep === 'provider') {
 			switch (key.name) {
 				case 'up':
@@ -628,6 +657,9 @@ export const ConnectWizard: Component<ConnectWizardProps> = (props) => {
 			</Show>
 			<Show when={statusMessage().length > 0}>
 				<text fg={colors.textMuted} content={` ${statusMessage()}`} />
+			</Show>
+			<Show when={step() === 'auth' && oauthFallbackUrl()}>
+				<text fg={colors.textSubtle} content={` Authorization URL: ${oauthFallbackUrl()}`} />
 			</Show>
 			<Show when={error()}>
 				<text fg={colors.error} content={` ${error()}`} />
