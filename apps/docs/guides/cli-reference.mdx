@@ -116,6 +116,19 @@ You can also pass one-off npm references directly:
 
 These references are hydrated into temporary resources and removed automatically after the request.
 
+Examples:
+
+```bash
+# Normal configured resource ask
+btca ask -r svelte -q "How do runes work in Svelte 5?"
+
+# Anonymous one-off git repo ask
+btca ask -r https://github.com/sveltejs/svelte -q "Where is the implementation of writable stores?"
+
+# Anonymous one-off npm package ask
+btca ask -r npm:react@19.0.0 -q "How is useTransition exported?"
+```
+
 ## `btca connect`
 
 Configures provider and model.
