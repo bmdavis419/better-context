@@ -148,7 +148,7 @@ Clears all locally cloned resources.
 
 ## `btca wipe`
 
-Permanently deletes all local BTCA state.
+Permanently deletes BTCA config files for the current directory and global config.
 
 Options:
 
@@ -156,11 +156,10 @@ Options:
 
 Behavior:
 
-- Removes global BTCA config/data directories.
-- Removes local provider auth storage.
-- Scans your home directory for BTCA project configs and `.btca` data folders and deletes them.
-- Prints removed, skipped, and failed paths.
-- Refuses dangerous targets (for example root, home, or project-root ancestor paths).
+- Targets `./btca.config.jsonc` and `./btca.remote.config.jsonc`.
+- Targets `~/.config/btca/btca.config.jsonc` and `~/.config/btca/btca.remote.config.jsonc`.
+- Prints removed, missing, and failed paths.
+- Shows a confirmation prompt unless `--yes` is passed.
 
 ## `btca serve`
 
