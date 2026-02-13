@@ -1,6 +1,6 @@
 ---
 title: 'Authentication'
-description: 'Connect providers locally and link your cloud API key'
+description: 'Connect and manage local provider authentication'
 ---
 
 ## Local provider auth (btca-server)
@@ -32,10 +32,14 @@ Environment variable overrides:
 ```bash
 btca connect
 btca disconnect
+btca wipe
 ```
 
 `btca connect` performs OAuth for `openai` and `github-copilot`, prompts for API keys when
 required, and falls back to `opencode auth --provider <provider>` for other providers.
+
+`btca wipe` removes BTCA config files in the current directory and global BTCA config files
+(with a confirmation prompt unless `--yes` is passed).
 
 For `github-copilot`, btca uses device flow OAuth and opens a browser prompt to complete
 the sign-in.
@@ -48,32 +52,3 @@ For `openai-compat`, `btca connect` also collects the required provider details:
   OpenAI-compatible provider.
 - **Model ID** (required): the model to use for requests; stored in `btca.config.jsonc` as `model`.
 - **API key** (optional): only if your server requires authentication; stored in OpenCode auth.
-
-## Cloud auth (btca remote)
-
-Remote commands require an API key stored at:
-
-```
-~/.config/btca/remote-auth.json
-```
-
-Example:
-
-```json
-{
-	"apiKey": "btca_xxxxxxxxxxxx",
-	"linkedAt": 1706000000000
-}
-```
-
-Use the CLI to link:
-
-```bash
-btca remote link
-```
-
-All cloud requests send:
-
-```
-Authorization: Bearer <apiKey>
-```

@@ -143,12 +143,18 @@ export type ProviderOptionsInput = {
 	name?: string;
 };
 
+export type ModelUpdateResult = {
+	provider: string;
+	model: string;
+	savedTo: 'project' | 'global';
+};
+
 export async function updateModel(
 	baseUrl: string,
 	provider: string,
 	model: string,
 	providerOptions?: ProviderOptionsInput
-): Promise<{ provider: string; model: string }> {
+): Promise<ModelUpdateResult> {
 	const res = await fetch(`${baseUrl}/config/model`, {
 		method: 'PUT',
 		headers: {
@@ -165,7 +171,7 @@ export async function updateModel(
 		throw await parseErrorResponse(res, `Failed to update model: ${res.status}`);
 	}
 
-	return res.json() as Promise<{ provider: string; model: string }>;
+	return res.json() as Promise<ModelUpdateResult>;
 }
 
 export interface GitResourceInput {

@@ -118,6 +118,28 @@ For `openai-compat`, the interactive flow additionally prompts for:
 - Model ID (required): saved as `model` in `btca.config.jsonc`.
 - API key (optional): only if your server requires auth, stored in OpenCode auth.
 
+## `btca status`
+
+Shows current btca status.
+
+Output includes:
+
+- selected model
+- selected provider
+- selected model source (`project`, `global`, or `default`)
+- selected provider source (`project`, `global`, or `default`)
+- whether the selected provider is authenticated
+- resources from `~/.config/btca/btca.config.jsonc`
+- resources from `./btca.config.jsonc` (if the file exists)
+- installed btca version and latest npm version
+- update hint if your version is behind
+
+If an update is available, it prints:
+
+```bash
+Update available: run "bun add -g btca@latest"
+```
+
 ## `btca disconnect`
 
 Disconnects provider credentials.
@@ -140,11 +162,26 @@ Options:
 
 - `-f, --force` overwrites existing config.
 
-Behavior: Prompts for setup type: MCP (remote) or CLI (local). The MCP path validates an API key if needed and creates `btca.remote.config.jsonc`. The CLI path creates `btca.config.jsonc` and handles `.btca/` and `.gitignore`.
+Behavior: Creates `btca.config.jsonc` and prompts for storage mode (`local` `.btca/` or global). If local storage is selected, it also handles `.gitignore` updates for `.btca/`.
 
 ## `btca clear`
 
 Clears all locally cloned resources.
+
+## `btca wipe`
+
+Permanently deletes BTCA config files for the current directory and global config.
+
+Options:
+
+- `-y, --yes` skips the interactive confirmation prompt.
+
+Behavior:
+
+- Targets `./btca.config.jsonc`.
+- Targets `~/.config/btca/btca.config.jsonc`.
+- Prints removed, missing, and failed paths.
+- Shows a confirmation prompt unless `--yes` is passed.
 
 ## `btca serve`
 
@@ -161,7 +198,6 @@ Runs the local MCP server over stdio by default.
 Subcommands:
 
 - `btca mcp local` scaffolds editor config for local stdio MCP.
-- `btca mcp remote` scaffolds editor config for remote HTTP MCP (stubs an API key).
 
 Behavior:
 
@@ -172,84 +208,3 @@ Tools:
 
 - `listResources` - list local resources.
 - `ask` - ask a question against local resources.
-
-## Remote commands (`btca remote`)
-
-All remote commands require an API key linked with `btca remote link`.
-
-### `btca remote link`
-
-Authenticates with the btca cloud API.
-
-Options:
-
-- `--key <apiKey>` provides the API key directly.
-
-Behavior: If `--key` is omitted, it prompts for a key and validates it by calling MCP `listResources`.
-
-### `btca remote unlink`
-
-Removes the stored API key.
-
-### `btca remote status`
-
-Shows sandbox state, plan, version, and current project info.
-
-### `btca remote wake`
-
-Pre-warms the sandbox and returns when ready.
-
-### `btca remote add [url]`
-
-Adds a git resource to local remote config and syncs to the cloud.
-
-Options:
-
-- `-n, --name <name>` sets a resource name.
-- `-b, --branch <branch>` sets a branch.
-- `-s, --search-path <path...>` sets one or more search paths.
-- `--notes <notes>` sets special notes.
-
-Behavior: Creates local config if missing and prompts for a project name. GitHub URLs are normalized. Syncs to cloud and warns if the sync fails.
-
-### `btca remote sync`
-
-Syncs local remote config with the cloud.
-
-Options:
-
-- `--force` overwrites cloud config on conflicts.
-
-Behavior: Detects conflicts when a resource name exists with different settings.
-
-### `btca remote ask`
-
-Asks a question via the cloud sandbox.
-
-Options:
-
-- `-q, --question <text>` is required.
-- `-r, --resource <name...>` can be repeated.
-
-Behavior: Validates resources by calling `listResources`. If none are specified, it uses all available resources.
-
-### `btca remote grab <threadId>`
-
-Fetches the full thread transcript.
-
-Options:
-
-- `--json` outputs JSON.
-- `--markdown` outputs Markdown (default).
-
-### `btca remote init`
-
-Creates `btca.remote.config.jsonc`.
-
-Options:
-
-- `-p, --project <name>` sets the project name.
-
-### `btca remote mcp [agent]`
-
-Outputs an MCP configuration snippet. Supported agents are `opencode` (JSON config block) and `claude` (Claude Code CLI command).

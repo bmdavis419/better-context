@@ -6,15 +6,16 @@ import { clearCommand } from './commands/clear.ts';
 import { connectCommand } from './commands/connect.ts';
 import { disconnectCommand } from './commands/disconnect.ts';
 import { initCommand } from './commands/init.ts';
+import { statusCommand } from './commands/status.ts';
 import { mcpCommand } from './commands/mcp.ts';
 import { removeCommand } from './commands/remove.ts';
 import { resourcesCommand } from './commands/resources.ts';
-import { remoteCommand } from './commands/remote.ts';
 import { serveCommand } from './commands/serve.ts';
 import { skillCommand } from './commands/skill.ts';
 import { telemetryCommand } from './commands/telemetry.ts';
 import { launchTui } from './commands/tui.ts';
 import { launchRepl } from './commands/repl.ts';
+import { wipeCommand } from './commands/wipe.ts';
 import { setTelemetryContext } from './lib/telemetry.ts';
 import packageJson from '../package.json';
 
@@ -52,15 +53,15 @@ program.addCommand(askCommand);
 program.addCommand(connectCommand);
 program.addCommand(disconnectCommand);
 program.addCommand(initCommand);
+program.addCommand(statusCommand);
 program.addCommand(skillCommand);
 
 // Utility commands
 program.addCommand(clearCommand);
+program.addCommand(wipeCommand);
 program.addCommand(mcpCommand);
 program.addCommand(serveCommand);
 
-// Remote mode commands
-program.addCommand(remoteCommand);
 program.addCommand(telemetryCommand);
 
 // Default action (no subcommand) → launch TUI or REPL

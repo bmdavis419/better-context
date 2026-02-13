@@ -565,13 +565,18 @@ export const ConnectWizard = (props: ConnectWizardProps) => {
 			{step === 'provider'
 				? providerOptions.map((provider, i) => {
 						const isSelected = i === selectedProviderIndex;
+						const providerColor = provider.connected
+							? colors.success
+							: isSelected
+								? colors.accent
+								: colors.text;
 						return (
 							<box key={provider.id} style={{ flexDirection: 'row' }}>
 								<text
 									fg={isSelected ? colors.accent : colors.text}
 									content={isSelected ? '> ' : '  '}
 								/>
-								<text fg={isSelected ? colors.accent : colors.text} content={provider.label} />
+								<text fg={providerColor} content={provider.label} />
 							</box>
 						);
 					})

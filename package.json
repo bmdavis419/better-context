@@ -49,6 +49,7 @@
 		"format:sandbox": "turbo format --filter=btca-sandbox",
 		"test:all": "turbo test",
 		"test:server": "turbo test --filter=btca-server",
+		"wipe:btca": "bun run apps/cli/src/index.ts wipe",
 		"clean": "find . -type d \\( -name node_modules -o -name .svelte-kit -o -name .turbo -o -name .vercel \\) -prune -exec rm -rf {} +"
 	},
 	"devDependencies": {

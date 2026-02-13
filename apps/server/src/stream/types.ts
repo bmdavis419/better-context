@@ -129,7 +129,8 @@ export const BtcaStreamDoneEventSchema = z.object({
 export const BtcaStreamErrorEventSchema = z.object({
 	type: z.literal('error'),
 	tag: z.string(),
-	message: z.string()
+	message: z.string(),
+	hint: z.string().optional()
 });
 
 export const BtcaStreamEventSchema = z.union([

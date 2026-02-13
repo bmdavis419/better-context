@@ -104,6 +104,9 @@ export const services = {
 		const streamResult = await Result.tryPromise(async () => {
 			for await (const event of parseSSEStream(response)) {
 				if (signal.aborted) break;
+				if (event.type === 'error') {
+					throw new Error(formatTuiStreamError(event));
+				}
 				if (event.type === 'done') {
 					doneEvent = event;
 					continue;
@@ -247,5 +250,14 @@ function processStreamEvent(
 			break;
 	}
 }
+
+const formatTuiStreamError = (event: Extract<BtcaStreamEvent, { type: 'error' }>) => {
+	const authError =
+		event.tag === 'ProviderNotAuthenticatedError' || event.message.includes('is not authenticated');
+	const hint = authError
+		? 'Run /connect to authenticate this provider, then try again.'
+		: event.hint;
+	return hint ? `${event.message}\n\nHint: ${hint}` : event.message;
+};
 
 export type Services = typeof services;

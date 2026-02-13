@@ -192,9 +192,21 @@
 		};
 
 		const html = (await marked.parse(content, { async: true, renderer })) as string;
-		return DOMPurify.sanitize(html, {
+		const sanitizedHtml = DOMPurify.sanitize(html, {
 			ADD_TAGS: ['pre', 'code'],
 			ADD_ATTR: ['data-code-id', 'data-copy-target', 'onclick', 'class', 'id', 'style']
+		});
+		return ensureChatLinksOpenInNewTab(sanitizedHtml);
+	}
+
+	function ensureChatLinksOpenInNewTab(html: string): string {
+		return html.replace(/<a\b[^>]*>/gi, (match) => {
+			const withTarget = /\s+target\s*=\s*(["'].*?["']|[^\s>]+)/i.test(match)
+				? match.replace(/\s+target\s*=\s*(["'].*?["']|[^\s>]+)/i, ' target="_blank"')
+				: match.replace(/>$/, ' target="_blank">');
+			return /\s+rel\s*=\s*(["'].*?["']|[^\s>]+)/i.test(withTarget)
+				? withTarget.replace(/\s+rel\s*=\s*(["'].*?["']|[^\s>]+)/i, ' rel="noopener noreferrer"')
+				: withTarget.replace(/>$/, ' rel="noopener noreferrer">');
 		});
 	}
 
@@ -214,10 +226,11 @@
 		}
 
 		const html = marked.parse(content, { async: false }) as string;
-		return DOMPurify.sanitize(html, {
+		const sanitizedHtml = DOMPurify.sanitize(html, {
 			ADD_TAGS: ['pre', 'code'],
 			ADD_ATTR: ['class']
 		});
+		return ensureChatLinksOpenInNewTab(sanitizedHtml);
 	}
 
 	// Global copy function

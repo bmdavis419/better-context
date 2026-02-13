@@ -117,7 +117,11 @@ export const InputSection = () => {
 			.join('')
 			.trim();
 		if (!inputText) return;
-		if (cursorIsCurrentlyIn === 'command' || cursorIsCurrentlyIn === 'mention') return;
+		if (
+			cursorIsCurrentlyIn === 'command' ||
+			(cursorIsCurrentlyIn === 'mention' && !isCurrentMentionResolved)
+		)
+			return;
 		if (messages.isStreaming) return;
 
 		const parsed = parseAllMentions(inputText);
@@ -214,7 +218,11 @@ export const InputSection = () => {
 		}
 
 		if (key.name === 'return' && !isAnyWizardOpen && !messages.isStreaming) {
-			if (cursorIsCurrentlyIn === 'text' || cursorIsCurrentlyIn === 'pasted') {
+			if (
+				cursorIsCurrentlyIn === 'text' ||
+				cursorIsCurrentlyIn === 'pasted' ||
+				(cursorIsCurrentlyIn === 'mention' && isCurrentMentionResolved)
+			) {
 				void handleSubmit();
 			}
 		}

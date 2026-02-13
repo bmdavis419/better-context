@@ -25,14 +25,39 @@ export namespace Collections {
 		}) => Promise<CollectionResult>;
 	};
 
-	const createCollectionInstructionBlock = (resource: BtcaFsResource): string => {
+	const encodePathSegments = (value: string) => value.split('/').map(encodeURIComponent).join('/');
+
+	const trimGitSuffix = (url: string) => url.replace(/\.git$/u, '').replace(/\/+$/u, '');
+
+	const createCollectionInstructionBlock = (
+		resource: BtcaFsResource,
+		metadata?: VirtualResourceMetadata
+	): string => {
 		const focusLines = resource.repoSubPaths.map(
 			(subPath) => `Focus: ./${resource.fsName}/${subPath}`
 		);
+		const gitRef = metadata?.branch ?? metadata?.commit;
+		const githubPrefix =
+			resource.type === 'git' && metadata?.url && gitRef
+				? `${trimGitSuffix(metadata.url)}/blob/${encodeURIComponent(gitRef)}`
+				: undefined;
 		const lines = [
 			`## Resource: ${resource.name}`,
 			FS_RESOURCE_SYSTEM_NOTE,
 			`Path: ./${resource.fsName}`,
+			resource.type === 'git' && metadata?.url ? `Repo URL: ${trimGitSuffix(metadata.url)}` : '',
+			resource.type === 'git' && metadata?.branch ? `Repo Branch: ${metadata.branch}` : '',
+			resource.type === 'git' && metadata?.commit ? `Repo Commit: ${metadata.commit}` : '',
+			githubPrefix ? `GitHub Blob Prefix: ${githubPrefix}` : '',
+			githubPrefix
+				? `GitHub Citation Rule: Convert virtual paths under ./${resource.fsName}/ to repo-relative paths, then encode each path segment for GitHub URLs (example segment: "+page.server.js" -> "${encodeURIComponent('+page.server.js')}").`
+				: '',
+			githubPrefix
+				? `GitHub Citation Example: ${githubPrefix}/${encodePathSegments('src/routes/blog/+page.server.js')}`
+				: '',
+			resource.type === 'local'
+				? 'Citation Rule: Cite local file paths only for this resource (no GitHub URL).'
+				: '',
 			...focusLines,
 			resource.specialAgentInstructions ? `Notes: ${resource.specialAgentInstructions}` : ''
 		].filter(Boolean);
@@ -267,7 +292,12 @@ export namespace Collections {
 							resources: metadataResources
 						});
 
-						const instructionBlocks = loadedResources.map(createCollectionInstructionBlock);
+						const metadataByName = new Map(
+							metadataResources.map((resource) => [resource.name, resource])
+						);
+						const instructionBlocks = loadedResources.map((resource) =>
+							createCollectionInstructionBlock(resource, metadataByName.get(resource.name))
+						);
 
 						return Result.ok({
 							path: collectionPath,

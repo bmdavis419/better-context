@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { MarkdownText } from './markdown-text.tsx';
 import { useMessagesContext } from '../context/messages-context.tsx';
+import { useToast } from '../context/toast-context.tsx';
+import { openBrowser } from '../lib/open-browser.ts';
 import { colors, getColor } from '../theme.ts';
 import type { AssistantContent, BtcaChunk } from '../types.ts';
 
@@ -74,7 +76,81 @@ const TextChunk = (props: {
 	chunk: Extract<BtcaChunk, { type: 'text' }>;
 	isStreaming: boolean;
 }) => {
-	return <MarkdownText content={props.chunk.text} streaming={props.isStreaming} />;
+	return <AssistantText content={props.chunk.text} streaming={props.isStreaming} />;
+};
+
+type ParsedSource = { label: string; url: string };
+
+const parseSources = (content: string): { body: string; sources: ParsedSource[] } => {
+	const lines = content.split('\n');
+	const headingIndex = lines.findIndex((line) => line.trim().toLowerCase() === 'sources');
+	if (headingIndex < 0) return { body: content, sources: [] };
+
+	const body = lines.slice(0, headingIndex).join('\n').trimEnd();
+	const sourceLines = lines.slice(headingIndex + 1);
+	const sources: ParsedSource[] = [];
+
+	for (const line of sourceLines) {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith('-')) continue;
+		const markdownMatch = trimmed.match(/^-\s*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)\s*$/i);
+		if (markdownMatch) {
+			sources.push({ label: markdownMatch[1] ?? '', url: markdownMatch[2] ?? '' });
+			continue;
+		}
+
+		const labelUrlMatch = trimmed.match(/^-\s*(.+?)\s+\((https?:\/\/[^\s)]+)\)\s*$/i);
+		if (labelUrlMatch) {
+			sources.push({ label: labelUrlMatch[1] ?? '', url: labelUrlMatch[2] ?? '' });
+			continue;
+		}
+
+		const rawUrlMatch = trimmed.match(/^-\s*(https?:\/\/[^\s)]+)\s*$/i);
+		if (rawUrlMatch) {
+			const url = rawUrlMatch[1] ?? '';
+			sources.push({ label: url, url });
+		}
+	}
+
+	return { body, sources };
+};
+
+const SourceLinks = (props: { sources: ParsedSource[] }) => {
+	const toast = useToast();
+	if (props.sources.length === 0) return null;
+
+	return (
+		<box style={{ flexDirection: 'column', gap: 0 }}>
+			<text fg={colors.info}>Sources</text>
+			{props.sources.map((source, index) => (
+				<box
+					key={`${source.url}:${index}`}
+					style={{ flexDirection: 'column' }}
+					onMouseUp={() => {
+						void openBrowser(source.url)
+							.then(() => toast.show(`Opened: ${source.url}`))
+							.catch(() => toast.show('Failed to open URL'));
+					}}
+				>
+					<text fg={colors.info}>{`- ${source.label} (${source.url})`}</text>
+				</box>
+			))}
+		</box>
+	);
+};
+
+const AssistantText = (props: { content: string; streaming: boolean }) => {
+	const parsed = useMemo(() => parseSources(props.content), [props.content]);
+	if (parsed.sources.length === 0) {
+		return <MarkdownText content={props.content} streaming={props.streaming} />;
+	}
+
+	return (
+		<box style={{ flexDirection: 'column', gap: 1 }}>
+			{parsed.body ? <MarkdownText content={parsed.body} streaming={props.streaming} /> : null}
+			<SourceLinks sources={parsed.sources} />
+		</box>
+	);
 };
 
 const ChunkRenderer = (props: { chunk: BtcaChunk; isStreaming: boolean }) => {
@@ -187,14 +263,14 @@ const AssistantMessage = (props: {
 		if (props.isCanceled) {
 			return <text fg={textColor}>{props.content}</text>;
 		}
-		return <MarkdownText content={props.content} streaming={props.isStreaming} />;
+		return <AssistantText content={props.content} streaming={props.isStreaming} />;
 	}
 
 	if (props.content.type === 'text') {
 		if (props.isCanceled) {
 			return <text fg={textColor}>{props.content.content}</text>;
 		}
-		return <MarkdownText content={props.content.content} streaming={props.isStreaming} />;
+		return <AssistantText content={props.content.content} streaming={props.isStreaming} />;
 	}
 
 	if (props.content.type === 'chunks') {

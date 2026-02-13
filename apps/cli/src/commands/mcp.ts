@@ -34,13 +34,12 @@ const askSchema = z.object({
 	resources: z
 		.array(z.string())
 		.optional()
-		.describe('Optional resource names to query (defaults to all local resources)')
+		.describe(
+			'Optional resource names or HTTPS GitHub repository URLs to query (defaults to all local resources)'
+		)
 });
 type AskInput = z.infer<typeof askSchema>;
 
-const MCP_REMOTE_URL = 'https://btca.dev/api/mcp';
-const MCP_API_KEY_URL = 'https://btca.dev/app/settings?tab=mcp';
-const API_KEY_PLACEHOLDER = 'btca_xxxxxxxxx';
 const LOCAL_COMMAND = ['bunx', 'btca', 'mcp'];
 
 const MCP_EDITORS = [
@@ -51,7 +50,6 @@ const MCP_EDITORS = [
 ] as const;
 
 type McpEditor = (typeof MCP_EDITORS)[number]['id'];
-type McpMode = 'local' | 'remote';
 
 const promptSelectNumeric = <T extends string>(
 	question: string,
@@ -188,7 +186,6 @@ const upsertTomlSection = (content: string, header: string, newKeys: Map<string,
 
 		if (isHeader) {
 			if (inSection && !replaced) {
-				// Merge existing keys with new keys (new keys take precedence)
 				const mergedKeys = new Map([...existingKeys, ...newKeys]);
 				next.push(headerLine);
 				for (const [key, value] of mergedKeys) {
@@ -210,7 +207,6 @@ const upsertTomlSection = (content: string, header: string, newKeys: Map<string,
 		}
 
 		if (inSection) {
-			// Parse existing key-value pairs
 			const keyMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
 			if (keyMatch?.[1]) {
 				const key = keyMatch[1];
@@ -224,7 +220,6 @@ const upsertTomlSection = (content: string, header: string, newKeys: Map<string,
 	}
 
 	if (inSection && !replaced) {
-		// Merge existing keys with new keys (new keys take precedence)
 		const mergedKeys = new Map([...existingKeys, ...newKeys]);
 		next.push(headerLine);
 		for (const [key, value] of mergedKeys) {
@@ -247,100 +242,62 @@ const upsertTomlSection = (content: string, header: string, newKeys: Map<string,
 	return `${next.join('\n').trimEnd()}\n`;
 };
 
-const writeCodexConfig = async (mode: McpMode) => {
+const writeCodexConfig = async () => {
 	const codexDir = path.join(process.cwd(), '.codex');
 	const filePath = path.join(codexDir, 'config.toml');
 	await ensureDir(codexDir);
 
 	const file = Bun.file(filePath);
 	const content = (await file.exists()) ? await file.text() : '';
-	const header = mode === 'local' ? '[mcp_servers.btca_local]' : '[mcp_servers.btca]';
-	const newKeys =
-		mode === 'local'
-			? new Map([
-					['command', '"bunx"'],
-					['args', '["btca", "mcp"]']
-				])
-			: new Map([
-					['url', `"${MCP_REMOTE_URL}"`],
-					['bearer_token_env_var', '"BTCA_API_KEY"'],
-					['enabled', 'true']
-				]);
+	const next = upsertTomlSection(
+		content,
+		'[mcp_servers.btca_local]',
+		new Map([
+			['command', '"bunx"'],
+			['args', '["btca", "mcp"]']
+		])
+	);
 
-	const next = upsertTomlSection(content, header, newKeys);
 	await Bun.write(filePath, next);
 	return filePath;
 };
 
-const writeCursorConfig = async (mode: McpMode) => {
+const writeCursorConfig = async () => {
 	const filePath = path.join(process.cwd(), '.cursor', 'mcp.json');
-	const serverName = mode === 'local' ? 'btca-local' : 'btca';
-	const entry =
-		mode === 'local'
-			? { command: LOCAL_COMMAND[0], args: LOCAL_COMMAND.slice(1) }
-			: {
-					url: MCP_REMOTE_URL,
-					headers: {
-						Authorization: `Bearer ${API_KEY_PLACEHOLDER}`
-					}
-				};
-
-	return updateJsonConfig(filePath, (current) => upsertMcpServers(current, serverName, entry));
+	const entry = { command: LOCAL_COMMAND[0], args: LOCAL_COMMAND.slice(1) };
+	return updateJsonConfig(filePath, (current) => upsertMcpServers(current, 'btca-local', entry));
 };
 
-const writeOpenCodeConfig = async (mode: McpMode) => {
+const writeOpenCodeConfig = async () => {
 	const filePath = path.join(process.cwd(), 'opencode.json');
-	const serverName = mode === 'local' ? 'btca-local' : 'btca';
-	const entry =
-		mode === 'local'
-			? {
-					type: 'local',
-					command: LOCAL_COMMAND,
-					enabled: true
-				}
-			: {
-					type: 'remote',
-					url: MCP_REMOTE_URL,
-					enabled: true,
-					headers: {
-						Authorization: `Bearer ${API_KEY_PLACEHOLDER}`
-					}
-				};
-
-	return updateJsonConfig(filePath, (current) => upsertOpenCode(current, serverName, entry));
+	const entry = {
+		type: 'local',
+		command: LOCAL_COMMAND,
+		enabled: true
+	};
+	return updateJsonConfig(filePath, (current) => upsertOpenCode(current, 'btca-local', entry));
 };
 
-const writeClaudeConfig = async (mode: McpMode) => {
+const writeClaudeConfig = async () => {
 	const filePath = path.join(process.cwd(), '.mcp.json');
-	const serverName = mode === 'local' ? 'btca-local' : 'btca';
-	const entry =
-		mode === 'local'
-			? {
-					type: 'stdio',
-					command: LOCAL_COMMAND[0],
-					args: LOCAL_COMMAND.slice(1)
-				}
-			: {
-					type: 'http',
-					url: MCP_REMOTE_URL,
-					headers: {
-						Authorization: `Bearer ${API_KEY_PLACEHOLDER}`
-					}
-				};
-
-	return updateJsonConfig(filePath, (current) => upsertMcpServers(current, serverName, entry));
+	const entry = {
+		type: 'stdio',
+		command: LOCAL_COMMAND[0],
+		args: LOCAL_COMMAND.slice(1)
+	};
+	return updateJsonConfig(filePath, (current) => upsertMcpServers(current, 'btca-local', entry));
 };
 
-const configureEditor = async (mode: McpMode, editor: McpEditor) => {
+const configureEditor = async (editor: McpEditor) => {
 	switch (editor) {
 		case 'cursor':
-			return writeCursorConfig(mode);
+			return writeCursorConfig();
 		case 'opencode':
-			return writeOpenCodeConfig(mode);
+			return writeOpenCodeConfig();
 		case 'codex':
-			return writeCodexConfig(mode);
+			return writeCodexConfig();
 		case 'claude':
-			return writeClaudeConfig(mode);
+			return writeClaudeConfig();
 	}
 
 	throw new Error(`Unsupported editor: ${editor}`);
@@ -398,7 +355,8 @@ const runLocalServer = async (command: Command) => {
 	mcpServer.tool(
 		{
 			name: 'ask',
-			description: 'Ask a question about local resources.',
+			description:
+				'Ask a question about local resources, or any HTTPS GitHub repository URL passed in as a resource.',
 			schema: askSchema
 		},
 		async (args: AskInput) => {
@@ -419,31 +377,24 @@ const runLocalServer = async (command: Command) => {
 	transport.listen();
 };
 
-const configureMcp = (mode: McpMode) =>
-	new Command(mode)
-		.description(`Configure ${mode} MCP settings for your editor`)
-		.action(async () => {
-			const result = await Result.tryPromise(async () => {
-				const editor = await promptEditor();
-				const filePath = await configureEditor(mode, editor);
-				const modeLabel = mode === 'local' ? 'Local' : 'Remote';
-				console.log(`\n${modeLabel} MCP configured for ${editor} in: ${filePath}\n`);
-
-				if (mode === 'remote') {
-					console.log('Replace the stubbed API key in your config.');
-					console.log(`Get a key here: ${MCP_API_KEY_URL}\n`);
-				}
-			});
-
-			if (Result.isError(result)) {
-				if (result.error instanceof Error && result.error.message === 'Invalid selection') {
-					console.error('\nError: Invalid selection. Please try again.');
-				} else {
-					console.error(formatError(result.error));
-				}
-				process.exit(1);
-			}
+const configureLocalMcp = new Command('local')
+	.description('Configure local MCP settings for your editor')
+	.action(async () => {
+		const result = await Result.tryPromise(async () => {
+			const editor = await promptEditor();
+			const filePath = await configureEditor(editor);
+			console.log(`\nLocal MCP configured for ${editor} in: ${filePath}\n`);
 		});
+
+		if (Result.isError(result)) {
+			if (result.error instanceof Error && result.error.message === 'Invalid selection') {
+				console.error('\nError: Invalid selection. Please try again.');
+			} else {
+				console.error(formatError(result.error));
+			}
+			process.exit(1);
+		}
+	});
 
 export const mcpCommand = new Command('mcp')
 	.description('Run the local MCP server or configure editor MCP settings')
@@ -454,5 +405,4 @@ export const mcpCommand = new Command('mcp')
 			process.exit(1);
 		}
 	})
-	.addCommand(configureMcp('local'))
-	.addCommand(configureMcp('remote'));
+	.addCommand(configureLocalMcp);

@@ -329,7 +329,7 @@ export const connectCommand = new Command('connect')
 
 				const result = await updateModel(server.url, provider, modelId, { baseURL, name });
 				console.log(`\nModel configured: ${result.provider}/${result.model}`);
-				console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
+				console.log(`\nSaved to: ${result.savedTo} config`);
 				server.stop();
 				return;
 			}
@@ -373,7 +373,7 @@ export const connectCommand = new Command('connect')
 			console.log(`\nModel configured: ${result.provider}/${result.model}`);
 
 			// Show where it was saved
-			console.log(`\nSaved to: ${options.global ? 'global' : 'project'} config`);
+			console.log(`\nSaved to: ${result.savedTo} config`);
 
 			server.stop();
 		});

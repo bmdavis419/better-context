@@ -71,6 +71,7 @@ const StoredConfigSchema = z.object({
 type StoredConfig = z.infer<typeof StoredConfigSchema>;
 type ProviderOptionsConfig = z.infer<typeof ProviderOptionsSchema>;
 type ProviderOptionsMap = z.infer<typeof ProviderOptionsMapSchema>;
+type ConfigScope = 'project' | 'global';
 
 // Legacy config schemas (btca.json format from old CLI)
 // There are two legacy formats:
@@ -137,7 +138,7 @@ export namespace Config {
 			provider: string,
 			model: string,
 			providerOptions?: ProviderOptionsConfig
-		) => Promise<{ provider: string; model: string }>;
+		) => Promise<{ provider: string; model: string; savedTo: ConfigScope }>;
 		addResource: (resource: ResourceDefinition) => Promise<ResourceDefinition>;
 		removeResource: (name: string) => Promise<void>;
 		clearResources: () => Promise<{ cleared: number }>;
@@ -689,7 +690,11 @@ export namespace Config {
 				setMutableConfig(updated);
 				await saveConfig(configPath, updated);
 				Metrics.info('config.model.updated', { provider, model });
-				return { provider, model };
+				return {
+					provider,
+					model,
+					savedTo: currentProjectConfig ? 'project' : 'global'
+				};
 			},
 
 			addResource: async (resource: ResourceDefinition) => {

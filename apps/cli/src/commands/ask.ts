@@ -254,8 +254,16 @@ export const askCommand = new Command('ask')
 							}
 							console.log(`[${tool}]`);
 						},
-						onError: (message) => {
+						onError: (message, tag, hint) => {
 							console.error(`\nError: ${message}`);
+							if (hint) {
+								console.error(`\nHint: ${hint}`);
+							} else if (
+								tag === 'ProviderNotAuthenticatedError' ||
+								message === 'Unhandled exception: Provider "opencode" is not authenticated.'
+							) {
+								console.error('\nHint: run btca connect to authenticate and pick a model.');
+							}
 						}
 					});
 				}
@@ -305,7 +313,7 @@ interface StreamHandlers {
 	onReasoningDelta?: (delta: string) => void;
 	onTextDelta?: (delta: string) => void;
 	onToolCall?: (tool: string) => void;
-	onError?: (message: string) => void;
+	onError?: (message: string, tag?: string, hint?: string) => void;
 }
 
 function handleStreamEvent(event: BtcaStreamEvent, handlers: StreamHandlers): void {
@@ -325,7 +333,7 @@ function handleStreamEvent(event: BtcaStreamEvent, handlers: StreamHandlers): vo
 			}
 			break;
 		case 'error':
-			handlers.onError?.(event.message);
+			handlers.onError?.(event.message, event.tag, event.hint);
 			break;
 		case 'done':
 			break;

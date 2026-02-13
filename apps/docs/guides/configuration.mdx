@@ -1,6 +1,6 @@
 ---
 title: 'Configuration'
-description: 'Local and remote config files, defaults, and validation limits'
+description: 'Local config files, defaults, and validation limits'
 ---
 
 ## Local config: `btca.config.jsonc`
@@ -64,37 +64,6 @@ Defaults if the global config is missing:
 If `dataDirectory` is missing and a legacy `.btca/` exists, the project config is
 migrated to use `.btca`.
 
-## Remote config: `btca.remote.config.jsonc`
-
-Location:
-
-- Project: `./btca.remote.config.jsonc`
-
-Notes:
-
-- Remote supports **git resources only**.
-- Remote model list: `claude-sonnet`, `claude-haiku`, `gpt-4o`, `gpt-4o-mini`.
-
-Example:
-
-```jsonc
-{
-	"$schema": "https://btca.dev/btca.remote.schema.json",
-	"project": "my-project",
-	"model": "claude-sonnet",
-	"resources": [
-		{
-			"type": "git",
-			"name": "svelte",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"specialNotes": "Focus on docs"
-		}
-	]
-}
-```
-
 ## Validation limits
 
 - Resource name: max 64 chars, regex `^@?[a-zA-Z0-9][a-zA-Z0-9._-]*(/[a-zA-Z0-9][a-zA-Z0-9._-]*)*$`, no `..`, no `//`, no trailing `/`
@@ -114,6 +83,5 @@ Example:
   - btca tries `main`, `master`, `trunk`, then `dev` by default.
   - If your repo uses a different default branch, add it as a named resource instead of using a one-off URL.
 
-- `btca remote add` defaults differ between paths. Interactive path uses model `claude-haiku`. Non-interactive path uses model `claude-sonnet`.
 - `--global` flags exist on several commands, but the effective target is determined
   by whether a project config exists; there is no strict global override.

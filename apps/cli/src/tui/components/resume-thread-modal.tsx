@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import { useKeyboard } from '@opentui/react';
 
 import { colors } from '../theme.ts';
 import { listThreads, type ThreadSummary } from '../thread-store.ts';
+import { getVisibleRangeStart, normalizeResumeThreadLabel } from './resume-thread-modal.lib.ts';
 
 interface ResumeThreadModalProps {
 	onSelect: (threadId: string) => void;
@@ -15,35 +16,18 @@ export const ResumeThreadModal = (props: ResumeThreadModalProps) => {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const maxVisibleItems = Math.max(1, props.maxVisibleItems);
-	const terminalDimensions = useTerminalDimensions();
 
 	const visibleRange = useMemo(() => {
-		const start = Math.max(
-			0,
-			Math.min(
-				selectedIndex - Math.floor(maxVisibleItems / 2),
-				Math.max(threads.length - maxVisibleItems, 0)
-			)
-		);
+		const start = getVisibleRangeStart({
+			selectedIndex,
+			maxVisibleItems,
+			totalItems: threads.length
+		});
 		return {
 			start,
 			threads: threads.slice(start, start + maxVisibleItems)
 		};
 	}, [maxVisibleItems, selectedIndex, threads]);
-
-	const truncate = (value: string, maxLength: number) => {
-		if (value.length <= maxLength) return value;
-		if (maxLength <= 1) return '…';
-		return `${value.slice(0, maxLength - 1)}…`;
-	};
-
-	// Terminal UIs often need explicit padding to overwrite prior longer lines.
-	// Some renderers trim trailing ASCII spaces, so we pad with NBSPs to force full-width overwrites.
-	const fit = (value: string, width: number) => truncate(value, width).padEnd(width, '\u00A0');
-
-	const contentWidth = Math.max(1, terminalDimensions.width - 4); // border + padding (approx)
-	const titleWidth = Math.max(10, Math.floor(contentWidth * 0.6));
-	const dateWidth = Math.max(10, contentWidth - titleWidth);
 
 	useEffect(() => {
 		let canceled = false;
@@ -102,7 +86,6 @@ export const ResumeThreadModal = (props: ResumeThreadModalProps) => {
 				backgroundColor: colors.bgSubtle,
 				border: true,
 				borderColor: colors.accent,
-				height: maxVisibleItems + 3,
 				flexDirection: 'column',
 				padding: 1
 			}}
@@ -113,20 +96,24 @@ export const ResumeThreadModal = (props: ResumeThreadModalProps) => {
 				visibleRange.threads.map((thread, i) => {
 					const actualIndex = visibleRange.start + i;
 					const isSelected = actualIndex === selectedIndex;
-					const label = thread.title?.trim() ? thread.title.trim() : 'Untitled thread';
+					const label = normalizeResumeThreadLabel(thread.title);
 					const lastActive = new Date(thread.lastActivityAt).toLocaleString();
-					const prefix = isSelected ? '▸ ' : '  ';
+					const prefix = isSelected ? '> ' : '  ';
 					return (
 						<box key={thread.id} style={{ flexDirection: 'row' }}>
 							<text
 								fg={isSelected ? colors.accent : colors.text}
-								content={fit(prefix + label, titleWidth)}
-								style={{ width: titleWidth }}
+								content={`${prefix}${label}`}
+								wrapMode="none"
+								truncate
+								style={{ width: '60%' }}
 							/>
 							<text
 								fg={colors.textSubtle}
-								content={fit(` ${lastActive}`, dateWidth)}
-								style={{ width: dateWidth }}
+								content={` ${lastActive}`}
+								wrapMode="none"
+								truncate
+								style={{ flexGrow: 1 }}
 							/>
 						</box>
 					);

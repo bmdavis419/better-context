@@ -1,11 +1,10 @@
-# btca API + CLI Spec (Local + Remote)
+# btca API + CLI Spec (Local + Cloud APIs)
 
 This document is an audit‑ready reference for btca v2 covering:
 
 - Local server HTTP API (btca-server)
 - Local CLI commands (btca)
-- Remote CLI commands (btca remote)
-- Remote cloud APIs used by the CLI
+- Cloud APIs used by hosted integrations
 - Authentication and installation
 - Configuration files, validation, and limits
 
@@ -78,24 +77,9 @@ Environment variable overrides:
 
 - Removes provider entry from OpenCode auth file (env vars remain).
 
-### 2.3 Remote (cloud) auth
+### 2.3 Cloud API auth
 
-Remote commands require an API key stored at:
-
-```
-~/.config/btca/remote-auth.json
-```
-
-Structure:
-
-```json
-{
-	"apiKey": "btca_xxxxxxxxxxxx",
-	"linkedAt": 1706000000000
-}
-```
-
-All remote requests include:
+Cloud API requests include:
 
 ```
 Authorization: Bearer <apiKey>
@@ -156,40 +140,6 @@ Data storage:
 
 - Resources are stored in `${dataDirectory}/resources`.
 - If `dataDirectory` is missing and a legacy `.btca/` directory exists, the project config is migrated to use `.btca`.
-
-### 3.2 Remote config: `btca.remote.config.jsonc`
-
-- File: `./btca.remote.config.jsonc`
-- Remote supports **git resources only**.
-
-Example:
-
-```jsonc
-{
-	"$schema": "https://btca.dev/btca.remote.schema.json",
-	"project": "my-project",
-	"model": "claude-sonnet",
-	"resources": [
-		{
-			"type": "git",
-			"name": "svelte",
-			"url": "https://github.com/sveltejs/svelte.dev",
-			"branch": "main",
-			"searchPath": "apps/svelte.dev",
-			"specialNotes": "Focus on docs"
-		}
-	]
-}
-```
-
-Remote model list (fixed):
-
-- `claude-sonnet`
-- `claude-haiku`
-- `gpt-4o`
-- `gpt-4o-mini`
-
----
 
 ## 4. CLI Spec (Local)
 
@@ -325,13 +275,9 @@ Options:
 
 Behavior:
 
-- Prompts for setup type: **MCP** (remote) or **CLI** (local)
-- MCP path:
-  - Prompts for API key (if missing), validates it
-  - Creates `btca.remote.config.jsonc`
-- CLI path:
-  - Creates `btca.config.jsonc`
-  - Handles `.btca/` and `.gitignore`
+- Creates `btca.config.jsonc`
+- Prompts for storage mode (`local` `.btca/` or global)
+- Handles `.btca/` and `.gitignore` when local storage is selected
 
 ### 4.11 `btca clear`
 
@@ -367,112 +313,6 @@ Behavior:
 
 - Prompts for an editor (Cursor, OpenCode, Codex, Claude Code).
 - Writes a project config entry for that editor.
-
-### 4.15 `btca mcp remote`
-
-Scaffolds MCP configuration for the remote btca server.
-
-Behavior:
-
-- Prompts for an editor (Cursor, OpenCode, Codex, Claude Code).
-- Writes a project config entry with a stub API key.
-- Prints a link to fetch a real API key.
-
-## 5. CLI Spec (Remote)
-
-All remote commands require authentication via `btca remote link`.
-
-### 5.1 `btca remote link`
-
-Authenticate with btca cloud API.
-
-Options:
-
-- `--key <apiKey>`
-
-Behavior:
-
-- Prompts for API key if not provided.
-- Validates key by calling MCP listResources.
-
-### 5.2 `btca remote unlink`
-
-Removes stored API key.
-
-### 5.3 `btca remote status`
-
-Shows sandbox state, plan, version, and current project info.
-
-### 5.4 `btca remote wake`
-
-Pre‑warms sandbox and returns when ready.
-
-### 5.5 `btca remote add [url]`
-
-Adds a git resource to local remote config and syncs to cloud.
-
-Options:
-
-- `-n, --name <name>`
-- `-b, --branch <branch>`
-- `-s, --search-path <path...>`
-- `--notes <notes>`
-
-Behavior:
-
-- Creates local config if missing (prompts for project name).
-- Normalizes GitHub URLs.
-- Syncs resource to cloud; warns if sync fails.
-
-### 5.6 `btca remote sync`
-
-Syncs local remote config with cloud.
-
-Options:
-
-- `--force` — overwrite cloud on conflicts
-
-Behavior:
-
-- Detects conflicts (same resource name but different config).
-
-### 5.7 `btca remote ask`
-
-Ask a question via cloud sandbox.
-
-Options:
-
-- `-q, --question <text>` **required**
-- `-r, --resource <name...>`
-
-Behavior:
-
-- Validates resources by calling `listResources` first.
-- If none specified, uses all available resources.
-
-### 5.8 `btca remote grab <threadId>`
-
-Fetch full thread transcript.
-
-Options:
-
-- `--json`
-- `--markdown` (default)
-
-### 5.9 `btca remote init`
-
-Creates `btca.remote.config.jsonc`.
-
-Options:
-
-- `-p, --project <name>`
-
-### 5.10 `btca remote mcp [agent]`
-
-Outputs MCP configuration snippet:
-
-- `opencode`: JSON config block
-- `claude`: CLI command for Claude Code
 
 ---
 
@@ -810,7 +650,7 @@ Git URL validation:
 
 ---
 
-## 9. Remote Cloud API (used by CLI)
+## 9. Remote Cloud API
 
 All remote API calls require:
 
@@ -881,8 +721,5 @@ Response shape:
 ## 10. Known Gaps / Audit Notes
 
 - `--global` flags exist on several commands, but the effective target is determined by whether a project config exists; there is no strict global override path.
-- `btca remote add` defaults differ between paths:
-  - Interactive path uses model `claude-haiku`.
-  - Non‑interactive path uses model `claude-sonnet`.
 
 ---

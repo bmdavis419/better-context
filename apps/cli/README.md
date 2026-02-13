@@ -161,7 +161,7 @@ Download the official OpenCode MCP config template and add your API key:
 curl -fsSL https://btca.dev/opencode-mcp.json -o opencode.json
 ```
 
-Then replace `YOUR_API_KEY` with your MCP API key (see `btca remote mcp` or the web dashboard).
+Then replace `YOUR_API_KEY` with your MCP API key from the web dashboard.
 
 ## TUI Commands
 
