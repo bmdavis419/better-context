@@ -32,6 +32,7 @@ if (!binaryName) {
 const __dirname = path.dirname(Bun.fileURLToPath(import.meta.url));
 const binPath = path.join(__dirname, 'dist', binaryName);
 const binFile = Bun.file(binPath);
+const standaloneWorkerPath = path.join(__dirname, 'dist', 'tree-sitter-worker.js');
 
 if (!(await binFile.exists())) {
 	const glob = new Bun.Glob('dist/*');
@@ -63,10 +64,16 @@ if (process.platform !== 'win32') {
 	}
 }
 
+const env = { ...process.env };
+if (!env.OTUI_TREE_SITTER_WORKER_PATH && (await Bun.file(standaloneWorkerPath).exists())) {
+	env.OTUI_TREE_SITTER_WORKER_PATH = standaloneWorkerPath;
+}
+
 const result = Bun.spawnSync([binPath, ...process.argv.slice(2)], {
 	stdout: 'inherit',
 	stderr: 'inherit',
-	stdin: 'inherit'
+	stdin: 'inherit',
+	env
 });
 
 if (result.error) {

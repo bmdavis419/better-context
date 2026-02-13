@@ -5,12 +5,12 @@
     "": {
       "name": "@btca/repo",
       "devDependencies": {
-        "@types/bun": "^1.3.8",
-        "@typescript/native-preview": "^7.0.0-dev.20260204.1",
+        "@types/bun": "^1.3.9",
+        "@typescript/native-preview": "^7.0.0-dev.20260212.1",
         "prettier": "^3.8.1",
         "prettier-plugin-svelte": "^3.4.1",
         "prettier-plugin-tailwindcss": "^0.7.2",
-        "turbo": "^2.8.3",
+        "turbo": "^2.8.7",
         "typescript": "^5.9.3",
       },
     },
@@ -20,7 +20,7 @@
     },
     "apps/cli": {
       "name": "btca",
-      "version": "1.0.93",
+      "version": "1.0.931",
       "bin": {
         "btca": "bin.js",
       },
@@ -70,7 +70,7 @@
     },
     "apps/server": {
       "name": "btca-server",
-      "version": "1.0.93",
+      "version": "1.0.931",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.23",
         "@ai-sdk/google": "^3.0.13",

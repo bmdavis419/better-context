@@ -1,8 +1,15 @@
 import { $ } from 'bun';
+import { dirname, join } from 'node:path';
 import packageJson from '../package.json';
 import reactCompilerPlugin from './react-compiler-bun-plugin.ts';
 
 const VERSION = packageJson.version;
+const DIST_DIR = 'dist';
+const STANDALONE_TREE_SITTER_FILES = {
+	worker: 'tree-sitter-worker.js',
+	runtime: 'tree-sitter.js',
+	wasm: 'tree-sitter.wasm'
+} as const;
 
 const targets = [
 	'bun-darwin-arm64',
@@ -35,6 +42,55 @@ const outputNames: Record<(typeof targets)[number], string> = {
 	'bun-windows-x64': 'btca-windows-x64.exe'
 };
 
+const resolveModulePath = (specifier: string) => Bun.fileURLToPath(import.meta.resolve(specifier));
+
+const replaceExactlyOnce = (
+	source: string,
+	pattern: RegExp,
+	replacement: string,
+	description: string
+) => {
+	const matchCount = [...source.matchAll(pattern)].length;
+	if (matchCount !== 1) {
+		throw new Error(
+			`[btca] Expected exactly one ${description} in parser.worker.js, found ${matchCount}.`
+		);
+	}
+	return source.replace(pattern, replacement);
+};
+
+const packStandaloneTreeSitterAssets = async () => {
+	const opentuiEntryPath = resolveModulePath('@opentui/core');
+	const workerSourcePath = join(dirname(opentuiEntryPath), 'parser.worker.js');
+	const treeSitterRuntimePath = resolveModulePath('web-tree-sitter');
+	const treeSitterWasmPath = resolveModulePath('web-tree-sitter/tree-sitter.wasm');
+
+	const workerSource = await Bun.file(workerSourcePath).text();
+	const patchedWorkerImport = replaceExactlyOnce(
+		workerSource,
+		/from ["']web-tree-sitter["']/g,
+		'from "./tree-sitter.js"',
+		'"from web-tree-sitter" import'
+	);
+	const patchedWorker = replaceExactlyOnce(
+		patchedWorkerImport,
+		/import\(["']web-tree-sitter\/tree-sitter\.wasm["']/g,
+		'import("./tree-sitter.wasm"',
+		'"web-tree-sitter/tree-sitter.wasm" dynamic import'
+	);
+
+	await Bun.write(join(DIST_DIR, STANDALONE_TREE_SITTER_FILES.worker), patchedWorker);
+	await Bun.write(
+		join(DIST_DIR, STANDALONE_TREE_SITTER_FILES.runtime),
+		Bun.file(treeSitterRuntimePath)
+	);
+	await Bun.write(join(DIST_DIR, STANDALONE_TREE_SITTER_FILES.wasm), Bun.file(treeSitterWasmPath));
+
+	console.log(
+		`Packed standalone Tree-sitter assets: ${STANDALONE_TREE_SITTER_FILES.worker}, ${STANDALONE_TREE_SITTER_FILES.runtime}, ${STANDALONE_TREE_SITTER_FILES.wasm}`
+	);
+};
+
 async function main() {
 	// Install opentui for all platforms
 	const opentuiCoreVersion = packageJson.devDependencies['@opentui/core'];
@@ -46,10 +102,11 @@ async function main() {
 	await Bun.file('dist')
 		.exists()
 		.catch(() => false);
-	await $`mkdir -p dist`;
+	await $`mkdir -p ${DIST_DIR}`;
+	await packStandaloneTreeSitterAssets();
 
 	for (const target of parseTargets()) {
-		const outfile = `dist/${outputNames[target]}`;
+		const outfile = `${DIST_DIR}/${outputNames[target]}`;
 		console.log(`Building ${target} -> ${outfile} (v${VERSION})`);
 		const result = await Bun.build({
 			entrypoints: ['src/index.ts'],

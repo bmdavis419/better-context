@@ -1,7 +1,7 @@
 {
 	"name": "btca",
 	"author": "Ben Davis",
-	"version": "1.0.931",
+	"version": "1.0.932",
 	"homepage": "https://btca.dev",
 	"description": "CLI tool for asking questions about technologies using btca server",
 	"type": "module",
@@ -27,7 +27,10 @@
 		"dist/btca-darwin-x64",
 		"dist/btca-linux-arm64",
 		"dist/btca-linux-x64",
-		"dist/btca-windows-x64.exe"
+		"dist/btca-windows-x64.exe",
+		"dist/tree-sitter-worker.js",
+		"dist/tree-sitter.js",
+		"dist/tree-sitter.wasm"
 	],
 	"publishConfig": {
 		"access": "public"
