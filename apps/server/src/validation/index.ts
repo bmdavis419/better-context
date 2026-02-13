@@ -320,6 +320,12 @@ const toNpmReference = (parsed: { packageName: string; version?: string }): Pars
 	};
 };
 
+const safeDecodeUriComponent = (value: string): string | null =>
+	Result.try(() => decodeURIComponent(value)).match({
+		ok: (decoded) => decoded,
+		err: () => null
+	});
+
 const parseNpmSpecReference = (reference: string): ParsedNpmReference | null => {
 	if (!reference.startsWith('npm:')) return null;
 	const spec = reference.slice(4).trim();
@@ -348,13 +354,16 @@ const parseNpmUrlReference = (reference: string): ParsedNpmReference | null => {
 
 	const packageParts = segments[1]?.startsWith('@') ? segments.slice(1, 3) : segments.slice(1, 2);
 	if (packageParts.length === 0 || packageParts.some((part) => !part)) return null;
-	const packageName = packageParts.map(decodeURIComponent).join('/');
+	const decodedPackageParts = packageParts.map(safeDecodeUriComponent);
+	if (decodedPackageParts.some((part) => !part)) return null;
+	const packageName = decodedPackageParts.join('/');
 	if (!isValidNpmPackageName(packageName)) return null;
 
 	const remainder = segments.slice(1 + packageParts.length);
 	if (remainder.length === 0) return toNpmReference({ packageName });
 	if (remainder.length === 2 && remainder[0] === 'v') {
-		const version = decodeURIComponent(remainder[1]!);
+		const version = safeDecodeUriComponent(remainder[1]!);
+		if (!version) return null;
 		if (!isValidNpmVersionOrTag(version)) return null;
 		return toNpmReference({ packageName, version });
 	}
@@ -364,6 +373,18 @@ const parseNpmUrlReference = (reference: string): ParsedNpmReference | null => {
 
 export const parseNpmReference = (reference: string): ParsedNpmReference | null =>
 	parseNpmSpecReference(reference) ?? parseNpmUrlReference(reference);
+
+const isNpmPackageUrl = (reference: string): boolean => {
+	const parsedUrl = parseUrl(reference).match({
+		ok: (value) => value,
+		err: () => null
+	});
+	if (!parsedUrl || parsedUrl.protocol !== 'https:') return false;
+	const hostname = parsedUrl.hostname.toLowerCase();
+	if (hostname !== 'npmjs.com' && hostname !== 'www.npmjs.com') return false;
+	const segments = parsedUrl.pathname.split('/').filter((segment) => segment.length > 0);
+	return segments[0] === 'package';
+};
 
 /**
  * Validate a git sparse-checkout search path to prevent injection attacks.
@@ -534,6 +555,11 @@ export const validateResourceReference = (reference: string): ValidationResultWi
 
 	const npmReference = parseNpmReference(reference);
 	if (npmReference) return okWithValue(npmReference.normalizedReference);
+	if (isNpmPackageUrl(reference)) {
+		return failWithValue(
+			`Invalid npm reference: "${reference}". Use npm:<package> or a valid npmjs package URL.`
+		);
+	}
 
 	const gitUrlResult = validateGitUrl(reference);
 	if (gitUrlResult.valid) return gitUrlResult;

@@ -85,6 +85,12 @@ const splitNpmSpec = (spec: string): NpmReferenceParts | null => {
 	return version ? { packageName, version } : null;
 };
 
+const safeDecodeUriComponent = (value: string) =>
+	Result.try(() => decodeURIComponent(value)).match({
+		ok: (decoded) => decoded,
+		err: () => null
+	});
+
 const parseNpmFromUrl = (reference: string): NpmReferenceParts | null => {
 	const parsed = Result.try(() => new URL(reference)).match({
 		ok: (value) => value,
@@ -103,13 +109,16 @@ const parseNpmFromUrl = (reference: string): NpmReferenceParts | null => {
 	const packageParts = segments[1]?.startsWith('@') ? segments.slice(1, 3) : segments.slice(1, 2);
 	if (packageParts.length === 0 || packageParts.some((part) => !part)) return null;
 
-	const packageName = packageParts.map(decodeURIComponent).join('/');
+	const decodedPackageParts = packageParts.map(safeDecodeUriComponent);
+	if (decodedPackageParts.some((part) => !part)) return null;
+	const packageName = decodedPackageParts.join('/');
 	if (!isValidNpmPackageName(packageName)) return null;
 
 	const remainder = segments.slice(1 + packageParts.length);
 	if (remainder.length === 0) return { packageName };
 	if (remainder.length === 2 && remainder[0] === 'v') {
-		const version = decodeURIComponent(remainder[1]!);
+		const version = safeDecodeUriComponent(remainder[1]!);
+		if (!version) return null;
 		if (!NPM_VERSION_OR_TAG_REGEX.test(version)) return null;
 		return { packageName, version };
 	}
@@ -138,6 +147,12 @@ const isLikelyPath = (value: string) =>
 	value.startsWith('../') ||
 	value.startsWith('~/') ||
 	/^[a-zA-Z]:\\/.test(value);
+
+const isLikelyGitUrl = (value: string) =>
+	Result.try(() => new URL(value)).match({
+		ok: (parsed) => parsed.protocol === 'https:',
+		err: () => false
+	});
 
 const isDirectory = async (value: string) => {
 	const resolved = path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
@@ -474,6 +489,7 @@ const inferResourceType = async (value: string): Promise<'git' | 'local' | 'npm'
 	if (await isDirectory(value)) return 'local';
 	if (isLikelyPath(value)) return 'local';
 	if (parseNpmReference(value)) return 'npm';
+	if (isLikelyGitUrl(value)) return 'git';
 	return 'local';
 };
 

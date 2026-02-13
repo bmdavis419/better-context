@@ -37,6 +37,14 @@ describe('validateResourceReference', () => {
 		}
 	});
 
+	it('rejects malformed npm package URLs without throwing', () => {
+		const result = validateResourceReference('https://www.npmjs.com/package/%');
+		expect(result.valid).toBe(false);
+		if (!result.valid) {
+			expect(result.error).toContain('Invalid npm reference');
+		}
+	});
+
 	it('rejects invalid resource references', () => {
 		const result = validateResourceReference('not a resource');
 		expect(result.valid).toBe(false);
