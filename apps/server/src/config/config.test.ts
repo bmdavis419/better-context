@@ -3,7 +3,13 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import { Config, DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_RESOURCES } from './index.ts';
+import {
+	Config,
+	DEFAULT_MAX_STEPS,
+	DEFAULT_MODEL,
+	DEFAULT_PROVIDER,
+	DEFAULT_RESOURCES
+} from './index.ts';
 
 describe('Config', () => {
 	let testDir: string;
@@ -32,6 +38,7 @@ describe('Config', () => {
 
 			expect(config.provider).toBe(DEFAULT_PROVIDER);
 			expect(config.model).toBe(DEFAULT_MODEL);
+			expect(config.maxSteps).toBe(DEFAULT_MAX_STEPS);
 			expect(config.resources.length).toBe(DEFAULT_RESOURCES.length);
 			expect(config.getResource('svelte')).toBeDefined();
 		});
@@ -93,6 +100,30 @@ describe('Config', () => {
 			expect(config.model).toBe('commented-model');
 		});
 
+		it('loads maxSteps when provided in config', async () => {
+			const projectConfig = {
+				$schema: 'https://btca.dev/btca.schema.json',
+				provider: 'test-provider',
+				model: 'test-model',
+				maxSteps: 80,
+				resources: [
+					{
+						name: 'test-resource',
+						type: 'git',
+						url: 'https://github.com/test/repo',
+						branch: 'main'
+					}
+				]
+			};
+
+			await fs.writeFile(path.join(testDir, 'btca.config.jsonc'), JSON.stringify(projectConfig));
+			process.chdir(testDir);
+
+			const config = await Config.load();
+
+			expect(config.maxSteps).toBe(80);
+		});
+
 		it('getResource returns undefined for unknown resource', async () => {
 			process.chdir(testDir);
 
@@ -112,6 +143,28 @@ describe('Config', () => {
 			const invalidConfig = {
 				provider: 'test'
 				// missing required fields
+			};
+
+			await fs.writeFile(path.join(testDir, 'btca.config.jsonc'), JSON.stringify(invalidConfig));
+			process.chdir(testDir);
+
+			expect(Config.load()).rejects.toThrow('Invalid config');
+		});
+
+		it('throws ConfigError for invalid maxSteps', async () => {
+			const invalidConfig = {
+				$schema: 'https://btca.dev/btca.schema.json',
+				provider: 'test-provider',
+				model: 'test-model',
+				maxSteps: 0,
+				resources: [
+					{
+						name: 'test-resource',
+						type: 'git',
+						url: 'https://github.com/test/repo',
+						branch: 'main'
+					}
+				]
 			};
 
 			await fs.writeFile(path.join(testDir, 'btca.config.jsonc'), JSON.stringify(invalidConfig));

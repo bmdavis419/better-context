@@ -149,6 +149,7 @@ export namespace Agent {
 					const stream = AgentLoop.stream({
 						providerId: config.provider,
 						modelId: config.model,
+						maxSteps: config.maxSteps,
 						collectionPath: collection.path,
 						vfsId: collection.vfsId,
 						agentInstructions: collection.agentInstructions,
@@ -207,6 +208,7 @@ export namespace Agent {
 				AgentLoop.run({
 					providerId: config.provider,
 					modelId: config.model,
+					maxSteps: config.maxSteps,
 					collectionPath: collection.path,
 					vfsId: collection.vfsId,
 					agentInstructions: collection.agentInstructions,

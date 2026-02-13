@@ -268,6 +268,7 @@ const createApp = (deps: {
 				provider: config.provider,
 				model: config.model,
 				providerTimeoutMs: config.providerTimeoutMs ?? null,
+				maxSteps: config.maxSteps,
 				resourcesDirectory: config.resourcesDirectory,
 				resourceCount: config.resources.length
 			});
@@ -501,6 +502,7 @@ export const startServer = async (options: StartServerOptions = {}): Promise<Ser
 	Metrics.info('config.ready', {
 		provider: config.provider,
 		model: config.model,
+		maxSteps: config.maxSteps,
 		resources: config.resources.map((r) => r.name),
 		resourcesDirectory: config.resourcesDirectory
 	});

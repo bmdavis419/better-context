@@ -19,6 +19,7 @@ export const CONFIG_SCHEMA_URL = 'https://btca.dev/btca.schema.json';
 export const DEFAULT_MODEL = 'claude-haiku-4-5';
 export const DEFAULT_PROVIDER = 'opencode';
 export const DEFAULT_PROVIDER_TIMEOUT_MS = 300_000;
+export const DEFAULT_MAX_STEPS = 40;
 
 export const DEFAULT_RESOURCES: ResourceDefinition[] = [
 	{
@@ -61,6 +62,7 @@ const StoredConfigSchema = z.object({
 	$schema: z.string().optional(),
 	dataDirectory: z.string().optional(),
 	providerTimeoutMs: z.number().int().positive().optional(),
+	maxSteps: z.number().int().positive().optional(),
 	resources: z.array(ResourceDefinitionSchema),
 	// Provider and model are optional - defaults are applied when loading
 	model: z.string().optional(),
@@ -130,6 +132,7 @@ export namespace Config {
 		model: string;
 		provider: string;
 		providerTimeoutMs?: number;
+		maxSteps: number;
 		configPath: string;
 		getProviderOptions: (providerId: string) => ProviderOptionsConfig | undefined;
 		getResource: (name: string) => ResourceDefinition | undefined;
@@ -506,7 +509,8 @@ export namespace Config {
 			resources: DEFAULT_RESOURCES,
 			model: DEFAULT_MODEL,
 			provider: DEFAULT_PROVIDER,
-			providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS
+			providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+			maxSteps: DEFAULT_MAX_STEPS
 		};
 
 		const result = await Result.gen(async function* () {
@@ -638,6 +642,9 @@ export namespace Config {
 			},
 			get providerTimeoutMs() {
 				return getActiveConfig().providerTimeoutMs;
+			},
+			get maxSteps() {
+				return getActiveConfig().maxSteps ?? DEFAULT_MAX_STEPS;
 			},
 			getProviderOptions: (providerId: string) => getMergedProviderOptions()[providerId],
 			getResource: (name: string) => getMergedResources().find((r) => r.name === name),

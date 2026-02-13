@@ -48,5 +48,6 @@
       "name": "lmstudio"
     }
   },
-  "providerTimeoutMs": 300000
+  "providerTimeoutMs": 300000,
+  "maxSteps": 40
 }

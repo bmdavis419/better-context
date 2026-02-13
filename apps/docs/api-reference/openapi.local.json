@@ -331,6 +331,7 @@
 					"provider",
 					"model",
 					"providerTimeoutMs",
+					"maxSteps",
 					"resourcesDirectory",
 					"resourceCount"
 				],
@@ -342,6 +343,9 @@
 						"type": "string"
 					},
 					"providerTimeoutMs": {
+						"type": "integer"
+					},
+					"maxSteps": {
 						"type": "integer"
 					},
 					"resourcesDirectory": {

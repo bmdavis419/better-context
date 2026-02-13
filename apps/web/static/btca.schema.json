@@ -29,6 +29,12 @@
 			"description": "Timeout in milliseconds for provider requests (optional)",
 			"default": 300000
 		},
+		"maxSteps": {
+			"type": "integer",
+			"minimum": 1,
+			"description": "Maximum number of agent steps before stopping (optional)",
+			"default": 40
+		},
 		"providerOptions": {
 			"type": "object",
 			"description": "Per-provider options (e.g., baseURL and name for openai-compat)",

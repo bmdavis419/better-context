@@ -24,6 +24,7 @@ Example:
 	"$schema": "https://btca.dev/btca.schema.json",
 	"provider": "opencode",
 	"model": "claude-haiku-4-5",
+	"maxSteps": 40,
 	"dataDirectory": ".btca",
 	"providerOptions": {
 		// OpenAI-compatible providers (e.g., LM Studio)
@@ -59,6 +60,7 @@ Defaults if the global config is missing:
 - `provider`: `opencode`
 - `model`: `claude-haiku-4-5`
 - `providerTimeoutMs`: `300000`
+- `maxSteps`: `40`
 - Default resources: `svelte`, `tailwindcss`, `nextjs`
 
 If `dataDirectory` is missing and a legacy `.btca/` exists, the project config is
