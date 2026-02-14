@@ -48,8 +48,11 @@ const cachedResourceValidator = v.object({
 	instanceId: v.id('instances'),
 	projectId: v.optional(v.id('projects')),
 	name: v.string(),
-	url: v.string(),
-	branch: v.string(),
+	type: v.optional(v.union(v.literal('git'), v.literal('npm'))),
+	url: v.optional(v.string()),
+	branch: v.optional(v.string()),
+	package: v.optional(v.string()),
+	version: v.optional(v.string()),
 	sizeBytes: v.optional(v.number()),
 	cachedAt: v.number(),
 	lastUsedAt: v.number()
