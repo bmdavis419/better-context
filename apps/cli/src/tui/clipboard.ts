@@ -15,6 +15,10 @@ const isWsl = async () => {
 	}
 };
 
+const isWayland = () => {
+	return !!process.env.WAYLAND_DISPLAY;
+};
+
 export async function copyToClipboard(text: string) {
 	const platform = process.platform;
 
@@ -42,6 +46,11 @@ export async function copyToClipboard(text: string) {
 			if (!clipResult.isErr()) return;
 			const clipPathResult = await runClipboard(['/mnt/c/Windows/System32/clip.exe']);
 			if (!clipPathResult.isErr()) return;
+		}
+
+		if (isWayland()) {
+			const wlCopyResult = await runClipboard(['wl-copy']);
+			if (!wlCopyResult.isErr()) return;
 		}
 
 		// Try xclip first, fall back to xsel
