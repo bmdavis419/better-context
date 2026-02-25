@@ -706,7 +706,6 @@ Supported tools:
 - `listResources`
 - `ask`
 - `addResource`
-- `sync`
 
 Example payload:
 

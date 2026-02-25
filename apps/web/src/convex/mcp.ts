@@ -17,75 +17,22 @@ const instanceMutations = instances.mutations;
 type AskResult = { ok: true; text: string } | { ok: false; error: string };
 type McpActionResult<T> = Result<T, WebError>;
 
-function stripJsonComments(content: string): string {
-	let result = '';
-	let inString = false;
-	let inLineComment = false;
-	let inBlockComment = false;
-	let i = 0;
+const NPM_PACKAGE_SEGMENT_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
+const NPM_VERSION_OR_TAG_REGEX = /^[^\s/]+$/;
 
-	while (i < content.length) {
-		const char = content[i];
-		const next = content[i + 1];
-
-		if (inLineComment) {
-			if (char === '\n') {
-				inLineComment = false;
-				result += char;
-			}
-			i++;
-			continue;
-		}
-
-		if (inBlockComment) {
-			if (char === '*' && next === '/') {
-				inBlockComment = false;
-				i += 2;
-				continue;
-			}
-			i++;
-			continue;
-		}
-
-		if (inString) {
-			result += char;
-			if (char === '\\' && i + 1 < content.length) {
-				result += content[i + 1];
-				i += 2;
-				continue;
-			}
-			if (char === '"') {
-				inString = false;
-			}
-			i++;
-			continue;
-		}
-
-		if (char === '"') {
-			inString = true;
-			result += char;
-			i++;
-			continue;
-		}
-
-		if (char === '/' && next === '/') {
-			inLineComment = true;
-			i += 2;
-			continue;
-		}
-
-		if (char === '/' && next === '*') {
-			inBlockComment = true;
-			i += 2;
-			continue;
-		}
-
-		result += char;
-		i++;
+const isValidNpmPackage = (value: string) => {
+	if (!value) return false;
+	if (value.startsWith('@')) {
+		const parts = value.split('/');
+		return (
+			parts.length === 2 &&
+			parts[0] !== '@' &&
+			NPM_PACKAGE_SEGMENT_REGEX.test(parts[0]!.slice(1)) &&
+			NPM_PACKAGE_SEGMENT_REGEX.test(parts[1]!)
+		);
 	}
-
-	return result.replace(/,(\s*[}\]])/g, '$1');
-}
+	return !value.includes('/') && NPM_PACKAGE_SEGMENT_REGEX.test(value);
+};
 
 /**
  * Get or create a project by name for an instance.
@@ -299,16 +246,27 @@ type ListResourcesResult =
 	| { ok: false; error: string }
 	| {
 			ok: true;
-			resources: {
-				name: string;
-				displayName: string;
-				type: string;
-				url: string;
-				branch: string;
-				searchPath: string | undefined;
-				specialNotes: string | undefined;
-				isGlobal: false;
-			}[];
+			resources: Array<
+				| {
+						name: string;
+						displayName: string;
+						type: 'git';
+						url: string;
+						branch: string;
+						searchPath?: string;
+						specialNotes?: string;
+						isGlobal: false;
+				  }
+				| {
+						name: string;
+						displayName: string;
+						type: 'npm';
+						package: string;
+						version?: string;
+						specialNotes?: string;
+						isGlobal: false;
+				  }
+			>;
 	  };
 
 /**
@@ -327,16 +285,27 @@ export const listResources = action({
 		v.object({
 			ok: v.literal(true),
 			resources: v.array(
-				v.object({
-					name: v.string(),
-					displayName: v.string(),
-					type: v.string(),
-					url: v.string(),
-					branch: v.string(),
-					searchPath: v.optional(v.string()),
-					specialNotes: v.optional(v.string()),
-					isGlobal: v.literal(false)
-				})
+				v.union(
+					v.object({
+						name: v.string(),
+						displayName: v.string(),
+						type: v.literal('git'),
+						url: v.string(),
+						branch: v.string(),
+						searchPath: v.optional(v.string()),
+						specialNotes: v.optional(v.string()),
+						isGlobal: v.literal(false)
+					}),
+					v.object({
+						name: v.string(),
+						displayName: v.string(),
+						type: v.literal('npm'),
+						package: v.string(),
+						version: v.optional(v.string()),
+						specialNotes: v.optional(v.string()),
+						isGlobal: v.literal(false)
+					})
+				)
 			)
 		})
 	),
@@ -374,15 +343,24 @@ type AddResourceResult =
 	| { ok: false; error: string }
 	| {
 			ok: true;
-			resource: {
-				name: string;
-				displayName: string;
-				type: string;
-				url: string;
-				branch: string;
-				searchPath: string | undefined;
-				specialNotes: string | undefined;
-			};
+			resource:
+				| {
+						name: string;
+						displayName: string;
+						type: 'git';
+						url: string;
+						branch: string;
+						searchPath?: string;
+						specialNotes?: string;
+				  }
+				| {
+						name: string;
+						displayName: string;
+						type: 'npm';
+						package: string;
+						version?: string;
+						specialNotes?: string;
+				  };
 	  };
 
 /**
@@ -391,11 +369,14 @@ type AddResourceResult =
 export const addResource = action({
 	args: {
 		apiKey: v.string(),
-		url: v.string(),
+		type: v.optional(v.union(v.literal('git'), v.literal('npm'))),
 		name: v.string(),
-		branch: v.string(),
+		url: v.optional(v.string()),
+		branch: v.optional(v.string()),
 		searchPath: v.optional(v.string()),
 		searchPaths: v.optional(v.array(v.string())),
+		package: v.optional(v.string()),
+		version: v.optional(v.string()),
 		notes: v.optional(v.string()),
 		project: v.optional(v.string())
 	},
@@ -403,25 +384,38 @@ export const addResource = action({
 		v.object({ ok: v.literal(false), error: v.string() }),
 		v.object({
 			ok: v.literal(true),
-			resource: v.object({
-				name: v.string(),
-				displayName: v.string(),
-				type: v.string(),
-				url: v.string(),
-				branch: v.string(),
-				searchPath: v.optional(v.string()),
-				specialNotes: v.optional(v.string())
-			})
+			resource: v.union(
+				v.object({
+					name: v.string(),
+					displayName: v.string(),
+					type: v.literal('git'),
+					url: v.string(),
+					branch: v.string(),
+					searchPath: v.optional(v.string()),
+					specialNotes: v.optional(v.string())
+				}),
+				v.object({
+					name: v.string(),
+					displayName: v.string(),
+					type: v.literal('npm'),
+					package: v.string(),
+					version: v.optional(v.string()),
+					specialNotes: v.optional(v.string())
+				})
+			)
 		})
 	),
 	handler: async (ctx, args): Promise<AddResourceResult> => {
 		const {
 			apiKey,
+			type,
 			url,
 			name,
 			branch,
 			searchPath,
 			searchPaths,
+			package: packageName,
+			version,
 			notes,
 			project: projectName
 		} = args;
@@ -446,10 +440,21 @@ export const addResource = action({
 
 		// Note: Usage tracking is handled in the validate action via touchUsage
 
-		// Validate URL (basic check)
-		if (!url.startsWith('https://')) {
-			return { ok: false as const, error: 'URL must be an HTTPS URL' };
+		const hasGitFields =
+			typeof url === 'string' ||
+			typeof branch === 'string' ||
+			typeof searchPath === 'string' ||
+			typeof searchPaths !== 'undefined';
+		const hasNpmFields = typeof packageName === 'string' || typeof version === 'string';
+
+		if (!type && hasGitFields && hasNpmFields) {
+			return {
+				ok: false as const,
+				error:
+					'Ambiguous resource payload. Set type to "git" or "npm" when sending both git and npm fields.'
+			};
 		}
+		const resolvedType = type ?? (hasNpmFields ? 'npm' : 'git');
 
 		// Check if resource with this name already exists in this project
 		const exists = await ctx.runQuery(internal.resources.resourceExistsInProject, {
@@ -460,15 +465,72 @@ export const addResource = action({
 			return { ok: false as const, error: `Resource "${name}" already exists in this project` };
 		}
 
-		// Add the resource
-		const finalSearchPath = searchPath ?? searchPaths?.[0];
+		if (resolvedType === 'git') {
+			if (hasNpmFields) {
+				return {
+					ok: false as const,
+					error: 'Git resources cannot include npm package/version fields'
+				};
+			}
+			if (!url?.trim()) {
+				return { ok: false as const, error: 'Git URL is required' };
+			}
+			if (!url.startsWith('https://')) {
+				return { ok: false as const, error: 'URL must be an HTTPS URL' };
+			}
+			const finalSearchPath = searchPath ?? searchPaths?.[0];
+			const resolvedBranch = branch?.trim() || 'main';
+			await ctx.runMutation(internal.mcpInternal.addResourceInternal, {
+				instanceId,
+				projectId,
+				name,
+				type: 'git',
+				url,
+				branch: resolvedBranch,
+				searchPath: finalSearchPath,
+				specialNotes: notes
+			});
+
+			return {
+				ok: true as const,
+				resource: {
+					name,
+					displayName: name,
+					type: 'git',
+					url,
+					branch: resolvedBranch,
+					searchPath: finalSearchPath,
+					specialNotes: notes
+				}
+			};
+		}
+
+		if (hasGitFields) {
+			return {
+				ok: false as const,
+				error: 'npm resources cannot include git URL/branch/searchPath fields'
+			};
+		}
+		if (!packageName?.trim()) {
+			return { ok: false as const, error: 'npm package is required' };
+		}
+		if (!isValidNpmPackage(packageName.trim())) {
+			return {
+				ok: false as const,
+				error: 'npm package must be a valid package name (for example react or @types/node)'
+			};
+		}
+		if (version && !NPM_VERSION_OR_TAG_REGEX.test(version)) {
+			return { ok: false as const, error: 'npm version/tag must not contain spaces or "/"' };
+		}
+		const resolvedVersion = version?.trim() || undefined;
 		await ctx.runMutation(internal.mcpInternal.addResourceInternal, {
 			instanceId,
 			projectId,
 			name,
-			url,
-			branch,
-			searchPath: finalSearchPath,
+			type: 'npm',
+			package: packageName.trim(),
+			version: resolvedVersion,
 			specialNotes: notes
 		});
 
@@ -477,213 +539,11 @@ export const addResource = action({
 			resource: {
 				name,
 				displayName: name,
-				type: 'git',
-				url,
-				branch,
-				searchPath: finalSearchPath,
+				type: 'npm',
+				package: packageName.trim(),
+				version: resolvedVersion,
 				specialNotes: notes
 			}
 		};
-	}
-});
-
-type SyncResult = {
-	ok: boolean;
-	errors?: string[];
-	synced: string[];
-	conflicts?: Array<{
-		name: string;
-		local: { url: string; branch: string };
-		remote: { url: string; branch: string };
-	}>;
-};
-
-/**
- * Sync remote config with cloud - authenticated via API key
- */
-export const sync = action({
-	args: {
-		apiKey: v.string(),
-		config: v.string(),
-		force: v.boolean()
-	},
-	returns: v.object({
-		ok: v.boolean(),
-		errors: v.optional(v.array(v.string())),
-		synced: v.array(v.string()),
-		conflicts: v.optional(
-			v.array(
-				v.object({
-					name: v.string(),
-					local: v.object({ url: v.string(), branch: v.string() }),
-					remote: v.object({ url: v.string(), branch: v.string() })
-				})
-			)
-		)
-	}),
-	handler: async (ctx, args): Promise<SyncResult> => {
-		const { apiKey, config: configStr, force } = args;
-
-		// Validate API key with Clerk
-		const validation = (await ctx.runAction(api.clerkApiKeys.validate, {
-			apiKey
-		})) as ApiKeyValidationResult;
-		if (!validation.valid) {
-			return { ok: false, errors: [validation.error], synced: [] };
-		}
-
-		const instanceId = validation.instanceId;
-
-		// Note: Usage tracking is handled in the validate action via touchUsage
-
-		// Parse the config
-		let config: {
-			project: string;
-			model?: string;
-			resources: Array<{
-				type?: string;
-				name: string;
-				url: string;
-				branch: string;
-				searchPath?: string;
-				searchPaths?: string[];
-				specialNotes?: string;
-			}>;
-		};
-
-		try {
-			const stripped = stripJsonComments(configStr);
-			config = JSON.parse(stripped);
-		} catch (e) {
-			const errorMsg = e instanceof Error ? e.message : 'Unknown parse error';
-			return {
-				ok: false,
-				errors: [`Invalid JSON in config: ${errorMsg}`],
-				synced: []
-			};
-		}
-
-		if (!config.project || typeof config.project !== 'string') {
-			return {
-				ok: false,
-				errors: ['Missing or invalid "project" field in config (must be a string)'],
-				synced: []
-			};
-		}
-
-		if (!Array.isArray(config.resources)) {
-			return {
-				ok: false,
-				errors: ['Missing or invalid "resources" field in config (must be an array)'],
-				synced: []
-			};
-		}
-
-		const resourceErrors: string[] = [];
-		for (let i = 0; i < config.resources.length; i++) {
-			const r = config.resources[i];
-			if (!r || typeof r !== 'object') {
-				resourceErrors.push(`resources[${i}]: must be an object`);
-				continue;
-			}
-			if (!r.name || typeof r.name !== 'string') {
-				resourceErrors.push(`resources[${i}]: missing or invalid "name" (must be a string)`);
-			}
-			if (!r.url || typeof r.url !== 'string') {
-				resourceErrors.push(`resources[${i}]: missing or invalid "url" (must be a string)`);
-			}
-			if (!r.branch || typeof r.branch !== 'string') {
-				resourceErrors.push(`resources[${i}]: missing or invalid "branch" (must be a string)`);
-			}
-		}
-
-		if (resourceErrors.length > 0) {
-			return { ok: false, errors: resourceErrors, synced: [] };
-		}
-
-		// Get or create the project
-		const projectIdResult = await getOrCreateProject(ctx, instanceId, config.project);
-		if (Result.isError(projectIdResult)) {
-			return { ok: false, errors: [projectIdResult.error.message], synced: [] };
-		}
-		const projectId = projectIdResult.value;
-
-		// Get current resources for this project
-		const existingResources = await ctx.runQuery(internal.resources.listByProject, {
-			projectId
-		});
-
-		const synced: string[] = [];
-		const errors: string[] = [];
-		const conflicts: SyncResult['conflicts'] = [];
-
-		// Process each resource in the config
-		for (const localResource of config.resources) {
-			const existingResource = existingResources.find(
-				(r: { name: string; url: string; branch: string }) =>
-					r.name.toLowerCase() === localResource.name.toLowerCase()
-			);
-
-			if (existingResource) {
-				// Check for conflicts
-				const urlMatch = existingResource.url === localResource.url;
-				const branchMatch = existingResource.branch === localResource.branch;
-
-				if (!urlMatch || !branchMatch) {
-					if (force) {
-						// Update the resource
-						await ctx.runMutation(internal.mcpInternal.updateResourceInternal, {
-							instanceId,
-							projectId,
-							name: localResource.name,
-							url: localResource.url,
-							branch: localResource.branch,
-							searchPath: localResource.searchPath ?? localResource.searchPaths?.[0],
-							specialNotes: localResource.specialNotes
-						});
-						synced.push(localResource.name);
-					} else {
-						conflicts.push({
-							name: localResource.name,
-							local: { url: localResource.url, branch: localResource.branch },
-							remote: { url: existingResource.url, branch: existingResource.branch }
-						});
-					}
-				}
-				// If they match, nothing to do
-			} else {
-				// Add new resource
-				try {
-					await ctx.runMutation(internal.mcpInternal.addResourceInternal, {
-						instanceId,
-						projectId,
-						name: localResource.name,
-						url: localResource.url,
-						branch: localResource.branch,
-						searchPath: localResource.searchPath ?? localResource.searchPaths?.[0],
-						specialNotes: localResource.specialNotes
-					});
-					synced.push(localResource.name);
-				} catch (err) {
-					errors.push(
-						`Failed to add "${localResource.name}": ${err instanceof Error ? err.message : String(err)}`
-					);
-				}
-			}
-		}
-
-		// Update project model if specified
-		if (config.model) {
-			await ctx.runMutation(internal.mcpInternal.updateProjectModelInternal, {
-				projectId,
-				model: config.model
-			});
-		}
-
-		if (conflicts.length > 0) {
-			return { ok: false, errors, synced, conflicts };
-		}
-
-		return { ok: errors.length === 0, errors: errors.length > 0 ? errors : undefined, synced };
 	}
 });

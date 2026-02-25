@@ -72,18 +72,21 @@ const askSchema = z.object({
 });
 
 const addResourceSchema = z.object({
-	url: z.string().describe('GitHub repository URL (https://github.com/owner/repo)'),
 	name: z.string().describe('Resource name for reference'),
+	type: z
+		.enum(['git', 'npm'])
+		.optional()
+		.describe(
+			'Resource type. Optional for backward compatibility; inferred from provided fields when omitted.'
+		),
+	url: z.string().optional().describe('GitHub repository URL (https://github.com/owner/repo)'),
 	branch: z.string().optional().describe('Git branch (default: main)'),
-	searchPath: z.string().optional().describe('Subdirectory to focus on'),
-	searchPaths: z.array(z.string()).optional().describe('Multiple subdirectories to focus on'),
+	searchPath: z.string().optional().describe('Git subdirectory to focus on'),
+	searchPaths: z.array(z.string()).optional().describe('Multiple git subdirectories to focus on'),
+	package: z.string().optional().describe('npm package name (for example react or @types/node)'),
+	version: z.string().optional().describe('npm package version or tag (optional)'),
 	notes: z.string().optional().describe('Special notes for the agent'),
 	project: z.string().optional().describe('Project name (optional, defaults to "default")')
-});
-
-const syncSchema = z.object({
-	config: z.string().describe('Full text of local btca.remote.config.jsonc'),
-	force: z.boolean().optional().describe('Force push local config, overwriting cloud on conflicts')
 });
 
 mcpServer.tool(
@@ -127,10 +130,21 @@ mcpServer.tool(
 	{
 		name: 'addResource',
 		description:
-			'Add a new git resource to your instance. The resource will be cloned and made available for querying.',
+			'Add a new git repo or npm package resource to your instance. The resource will be available for querying.',
 		schema: addResourceSchema
 	},
-	async ({ url, name, branch, searchPath, searchPaths, notes, project }) => {
+	async ({
+		type,
+		url,
+		name,
+		branch,
+		searchPath,
+		searchPaths,
+		package: packageName,
+		version,
+		notes,
+		project
+	}) => {
 		const ctx = mcpServer.ctx.custom;
 		if (!ctx) {
 			return {
@@ -142,11 +156,14 @@ mcpServer.tool(
 		const convex = getConvexClient();
 		const result = await convex.action(api.mcp.addResource, {
 			apiKey: ctx.apiKey,
+			type,
 			url,
 			name,
-			branch: branch ?? 'main',
+			branch,
 			searchPath,
 			searchPaths,
+			package: packageName,
+			version,
 			notes,
 			project
 		});
@@ -160,36 +177,6 @@ mcpServer.tool(
 
 		return {
 			content: [{ type: 'text' as const, text: JSON.stringify(result.resource, null, 2) }]
-		};
-	}
-);
-
-mcpServer.tool(
-	{
-		name: 'sync',
-		description:
-			'Sync a local btca.remote.config.jsonc with the cloud. Creates/updates resources to match the local config.',
-		schema: syncSchema
-	},
-	async ({ config, force }) => {
-		const ctx = mcpServer.ctx.custom;
-		if (!ctx) {
-			return {
-				content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Not authenticated' }) }],
-				isError: true
-			};
-		}
-
-		const convex = getConvexClient();
-		const result = await convex.action(api.mcp.sync, {
-			apiKey: ctx.apiKey,
-			config,
-			force: force ?? false
-		});
-
-		return {
-			content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-			isError: !result.ok
 		};
 	}
 );

@@ -29,7 +29,7 @@ const BTCA_PACKAGE_NAME = 'btca@latest';
 
 const instanceArgs = { instanceId: v.id('instances') };
 
-type ResourceConfig = {
+type GitResourceConfig = {
 	name: string;
 	type: 'git';
 	url: string;
@@ -37,6 +37,16 @@ type ResourceConfig = {
 	searchPath?: string;
 	specialNotes?: string;
 };
+
+type NpmResourceConfig = {
+	name: string;
+	type: 'npm';
+	package: string;
+	version?: string;
+	specialNotes?: string;
+};
+
+type ResourceConfig = GitResourceConfig | NpmResourceConfig;
 
 type InstalledVersions = {
 	btcaVersion?: string;
@@ -94,14 +104,24 @@ function generateBtcaConfig(resources: ResourceConfig[]): string {
 	return JSON.stringify(
 		{
 			$schema: 'https://btca.dev/btca.schema.json',
-			resources: resources.map((resource) => ({
-				name: resource.name,
-				type: resource.type,
-				url: resource.url,
-				branch: resource.branch,
-				searchPath: resource.searchPath,
-				specialNotes: resource.specialNotes
-			})),
+			resources: resources.map((resource) =>
+				resource.type === 'git'
+					? {
+							name: resource.name,
+							type: resource.type,
+							url: resource.url,
+							branch: resource.branch,
+							searchPath: resource.searchPath,
+							specialNotes: resource.specialNotes
+						}
+					: {
+							name: resource.name,
+							type: resource.type,
+							package: resource.package,
+							version: resource.version,
+							specialNotes: resource.specialNotes
+						}
+			),
 			model: DEFAULT_MODEL,
 			provider: DEFAULT_PROVIDER
 		},
@@ -167,15 +187,11 @@ const attachErrorContext = (error: unknown, context: Record<string, unknown>) =>
 	return error;
 };
 
-const throwInstanceError = (error: WebError): never => {
-	throw error;
-};
-
 const unwrapInstance = <T>(result: InstanceActionResult<T>): T => {
-	return Result.match(result, {
-		ok: (value) => value,
-		err: (error) => throwInstanceError(error)
-	});
+	if (Result.isError(result)) {
+		throw result.error;
+	}
+	return result.value;
 };
 
 const withStep = async <T>(
@@ -233,17 +249,32 @@ async function getResourceConfigs(
 
 	const merged = new Map<string, ResourceConfig>();
 	for (const resource of [...resources.global, ...resources.custom]) {
+		if (resource.type === 'npm') {
+			merged.set(resource.name, {
+				name: resource.name,
+				type: 'npm',
+				package: resource.package,
+				version: resource.version ?? undefined,
+				specialNotes: resource.specialNotes ?? undefined
+			});
+			continue;
+		}
+
+		if (!resource.url) continue;
 		merged.set(resource.name, {
 			name: resource.name,
 			type: 'git',
 			url: resource.url,
-			branch: resource.branch,
+			branch: resource.branch ?? 'main',
 			searchPath: resource.searchPath ?? undefined,
 			specialNotes: resource.specialNotes ?? undefined
 		});
 	}
 	return [...merged.values()];
 }
+
+const hasNpmResources = (resources: ResourceConfig[]) =>
+	resources.some((resource) => resource.type === 'npm');
 
 async function requireInstance(
 	ctx: ActionCtx,
@@ -423,6 +454,10 @@ export const provision = action({
 
 			step = 'upload_config';
 			unwrapInstance(await withStep(step, () => uploadBtcaConfig(createdSandbox, resources)));
+			if (hasNpmResources(resources)) {
+				step = 'update_packages';
+				unwrapInstance(await withStep(step, () => updatePackages(createdSandbox)));
+			}
 
 			step = 'start_btca';
 			unwrapInstance(await withStep(step, () => startBtcaServer(createdSandbox)));
@@ -653,6 +688,10 @@ async function createSandboxFromScratch(
 
 	step = 'upload_config';
 	unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
+	if (hasNpmResources(resources)) {
+		step = 'update_packages';
+		unwrapInstance(await withStep(step, () => updatePackages(sandbox)));
+	}
 	step = 'start_btca';
 	const serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
 	step = 'get_versions';
@@ -724,6 +763,10 @@ async function wakeInstanceInternal(
 			unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
 			step = 'upload_config';
 			unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
+			if (hasNpmResources(resources)) {
+				step = 'update_packages';
+				unwrapInstance(await withStep(step, () => updatePackages(sandbox)));
+			}
 			step = 'start_btca';
 			serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
 			sandboxId = instance.sandboxId;
@@ -1027,12 +1070,23 @@ export const syncResources = internalAction({
 	}
 });
 
-type CachedResourceInfo = {
+type CachedGitResourceInfo = {
 	name: string;
+	type: 'git';
 	url: string;
 	branch: string;
 	sizeBytes?: number;
 };
+
+type CachedNpmResourceInfo = {
+	name: string;
+	type: 'npm';
+	package: string;
+	version?: string;
+	sizeBytes?: number;
+};
+
+type CachedResourceInfo = CachedGitResourceInfo | CachedNpmResourceInfo;
 
 type SyncResult = {
 	storageUsedBytes: number;
@@ -1059,6 +1113,43 @@ async function getSandboxStatus(sandbox: Sandbox): Promise<SyncResult> {
 	const cachedResources: CachedResourceInfo[] = [];
 
 	for (const dir of resourceDirs) {
+		const npmMetaPath = `${RESOURCES_DIR}/${dir}/.btca-npm-meta.json`;
+		const npmMetaResult = await sandbox.process.executeCommand(
+			`cat "${npmMetaPath}" 2>/dev/null || echo ""`
+		);
+		const npmMetaText = npmMetaResult.result.trim();
+		let npmPackage: string | undefined;
+		let npmVersion: string | undefined;
+		if (npmMetaText) {
+			try {
+				const npmMeta = JSON.parse(npmMetaText) as {
+					packageName?: string;
+					resolvedVersion?: string;
+				};
+				npmPackage = npmMeta.packageName?.trim();
+				npmVersion = npmMeta.resolvedVersion?.trim();
+			} catch {
+				// Ignore malformed metadata and fall back to git metadata detection.
+			}
+		}
+
+		const sizeResult = await sandbox.process.executeCommand(
+			`du -sb "${RESOURCES_DIR}/${dir}" 2>/dev/null || echo "0"`
+		);
+		const sizeMatch = sizeResult.result.trim().match(/^(\d+)/);
+		const sizeBytes = sizeMatch ? parseInt(sizeMatch[1], 10) : undefined;
+
+		if (npmPackage) {
+			cachedResources.push({
+				name: dir,
+				type: 'npm',
+				package: npmPackage,
+				version: npmVersion,
+				sizeBytes
+			});
+			continue;
+		}
+
 		const gitConfigPath = `${RESOURCES_DIR}/${dir}/.git/config`;
 		const gitConfigResult = await sandbox.process.executeCommand(
 			`cat "${gitConfigPath}" 2>/dev/null || echo ""`
@@ -1077,15 +1168,10 @@ async function getSandboxStatus(sandbox: Sandbox): Promise<SyncResult> {
 			branch = branchMatch[1];
 		}
 
-		const sizeResult = await sandbox.process.executeCommand(
-			`du -sb "${RESOURCES_DIR}/${dir}" 2>/dev/null || echo "0"`
-		);
-		const sizeMatch = sizeResult.result.trim().match(/^(\d+)/);
-		const sizeBytes = sizeMatch ? parseInt(sizeMatch[1], 10) : undefined;
-
 		if (url) {
 			cachedResources.push({
 				name: dir,
+				type: 'git',
 				url,
 				branch,
 				sizeBytes
@@ -1102,12 +1188,22 @@ export const syncSandboxStatus = internalAction({
 		v.object({
 			storageUsedBytes: v.number(),
 			cachedResources: v.array(
-				v.object({
-					name: v.string(),
-					url: v.string(),
-					branch: v.string(),
-					sizeBytes: v.optional(v.number())
-				})
+				v.union(
+					v.object({
+						name: v.string(),
+						type: v.literal('git'),
+						url: v.string(),
+						branch: v.string(),
+						sizeBytes: v.optional(v.number())
+					}),
+					v.object({
+						name: v.string(),
+						type: v.literal('npm'),
+						package: v.string(),
+						version: v.optional(v.string()),
+						sizeBytes: v.optional(v.number())
+					})
+				)
 			)
 		}),
 		v.null()

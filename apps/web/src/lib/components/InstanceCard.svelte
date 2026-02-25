@@ -180,6 +180,18 @@
 		}
 	}
 
+	function isNpmCachedResource(resource: (typeof instanceStore.cachedResources)[number]) {
+		return resource.type === 'npm' || (!!resource.package && !resource.url);
+	}
+
+	function getCachedResourceDetail(resource: (typeof instanceStore.cachedResources)[number]) {
+		if (isNpmCachedResource(resource)) {
+			const packageName = resource.package ?? resource.name;
+			return resource.version ? `${packageName}@${resource.version}` : packageName;
+		}
+		return resource.branch ?? 'main';
+	}
+
 	async function runAction(action: InstanceAction) {
 		if (pendingAction) return;
 		pendingAction = action;
@@ -468,7 +480,10 @@
 								>
 									<div class="flex flex-wrap items-center gap-2">
 										<span class="bc-badge">@{resource.name}</span>
-										<span class="bc-muted">{resource.branch}</span>
+										<span class="bc-muted">{getCachedResourceDetail(resource)}</span>
+										<span class="bc-badge">
+											{isNpmCachedResource(resource) ? 'npm' : 'git'}
+										</span>
 									</div>
 									<span class="bc-muted">
 										Last used: {formatDateTime(resource.lastUsedAt)}
