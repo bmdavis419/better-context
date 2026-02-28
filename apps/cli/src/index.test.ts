@@ -27,6 +27,12 @@ describe('cli dispatch', () => {
 		expect(result.output).toContain('Usage: btca add');
 	});
 
+	test('keeps nested subcommand help contextual for btca config model', () => {
+		const result = runCli(['config', 'model', '--help']);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain('Usage: btca config model');
+	});
+
 	test('rejects unknown top-level commands with a suggestion', () => {
 		const result = runCli(['remoev'], 250);
 		expect(result.exitCode).toBe(1);

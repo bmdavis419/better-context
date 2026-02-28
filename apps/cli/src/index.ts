@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { addCommand } from './commands/add.ts';
 import { askCommand } from './commands/ask.ts';
 import { clearCommand } from './commands/clear.ts';
+import { configCommand } from './commands/config.ts';
 import { connectCommand } from './commands/connect.ts';
 import { disconnectCommand } from './commands/disconnect.ts';
 import { initCommand } from './commands/init.ts';
@@ -53,6 +54,7 @@ program.addCommand(askCommand);
 
 // Configuration commands
 program.addCommand(connectCommand);
+program.addCommand(configCommand);
 program.addCommand(disconnectCommand);
 program.addCommand(initCommand);
 program.addCommand(statusCommand);

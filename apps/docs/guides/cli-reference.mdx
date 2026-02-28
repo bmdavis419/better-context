@@ -58,7 +58,7 @@ Options:
 
 - `-g, --global` sets the flag, but target resolution still depends on whether a project config exists.
 - `-n, --name <name>` sets a resource name.
-- `-b, --branch <branch>` sets a branch (default `main`).
+- `-b, --branch <branch>` sets a branch (auto-detected when omitted).
 - `-s, --search-path <path...>` sets one or more search paths.
 - `--notes <notes>` sets special notes.
 - `-t, --type <git|local|npm>` forces the resource type.
@@ -167,6 +167,16 @@ For `openai-compat`, the interactive flow additionally prompts for:
 - Provider name (required): AI SDK provider identifier.
 - Model ID (required): saved as `model` in `btca.config.jsonc`.
 - API key (optional): only if your server requires auth, stored in OpenCode auth.
+
+## `btca config model` (compatibility alias)
+
+Backward-compatible alias for model updates:
+
+```bash
+btca config model --provider <id> --model <id>
+```
+
+This command delegates to the same update path as `btca connect` and prints a deprecation notice.
 
 ## `btca status`
 
