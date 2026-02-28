@@ -28,6 +28,38 @@ const throwResourceError = (error: WebError): never => {
 	throw error;
 };
 
+const hasCloudGitToken = () => Boolean(process.env.BTCA_GIT_TOKEN?.trim());
+
+const isGitHubUrl = (url: string) => {
+	const parsed = Result.try(() => new URL(url)).match({
+		ok: (value) => value,
+		err: () => null
+	});
+	return parsed?.hostname.toLowerCase() === 'github.com';
+};
+
+const preflightResourceUrlAccess = async (
+	url: string
+): Promise<{ ok: true } | { ok: false; error: string }> => {
+	if (hasCloudGitToken()) return { ok: true };
+	if (!isGitHubUrl(url)) return { ok: true };
+
+	const result = await Result.tryPromise(() =>
+		fetch(url, { method: 'HEAD', redirect: 'manual' as RequestRedirect })
+	);
+	if (Result.isError(result)) return { ok: true };
+
+	if (result.value.status === 401 || result.value.status === 403 || result.value.status === 404) {
+		return {
+			ok: false,
+			error:
+				'Repository appears private or inaccessible from cloud mode. Configure BTCA_GIT_TOKEN for private repository access, or use local CLI mode.'
+		};
+	}
+
+	return { ok: true };
+};
+
 // Resource validators
 const globalResourceValidator = v.object({
 	name: v.string(),
@@ -303,6 +335,11 @@ export const addCustomResource = mutation({
 		const nameResult = validateResourceNameResult(args.name);
 		if (Result.isError(nameResult)) {
 			throwResourceError(nameResult.error);
+		}
+
+		const preflight = await preflightResourceUrlAccess(args.url);
+		if (!preflight.ok) {
+			throwResourceError(new WebValidationError({ message: preflight.error, field: 'url' }));
 		}
 
 		const resourceId = await ctx.db.insert('userResources', {
