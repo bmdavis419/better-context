@@ -57,6 +57,14 @@ const directoryExists = async (path: string): Promise<boolean> => {
 	});
 };
 
+const pathExists = async (pathToCheck: string): Promise<boolean> => {
+	const result = await Result.tryPromise(() => fs.stat(pathToCheck));
+	return result.match({
+		ok: () => true,
+		err: () => false
+	});
+};
+
 /**
  * Git error patterns and their user-friendly messages.
  */
@@ -127,7 +135,7 @@ const getGitErrorDetails = (
 				message: context.branch
 					? `Branch "${context.branch}" not found in the repository`
 					: 'The specified branch was not found',
-				hint: `${CommonHints.CHECK_BRANCH} You can check available branches at ${context.url ?? 'the repository URL'}.`
+				hint: `${CommonHints.CHECK_BRANCH} Try re-adding the resource without "--branch" so btca can auto-detect the default branch.`
 			};
 
 		case 'REPO_NOT_FOUND':
@@ -139,7 +147,7 @@ const getGitErrorDetails = (
 		case 'AUTH_REQUIRED':
 			return {
 				message: 'Authentication required or access denied',
-				hint: CommonHints.CHECK_PERMISSIONS
+				hint: `${CommonHints.CHECK_PERMISSIONS} For cloud/sandbox workflows, set BTCA_GIT_TOKEN so private repository clones can authenticate.`
 			};
 
 		case 'NETWORK_ERROR':
@@ -167,6 +175,16 @@ interface GitRunResult {
 	stderr: string;
 }
 
+const withGitAuth = (args: string[]) => {
+	const token = process.env.BTCA_GIT_TOKEN?.trim();
+	if (!token) return args;
+	return [
+		'-c',
+		'credential.helper=!f() { test "$1" = get && echo "username=x-access-token" && echo "password=$BTCA_GIT_TOKEN"; }; f',
+		...args
+	];
+};
+
 const runGitChecked = async (
 	args: string[],
 	options: { cwd?: string; quiet: boolean },
@@ -183,10 +201,14 @@ const runGit = async (
 	options: { cwd?: string; quiet: boolean }
 ): Promise<GitRunResult> => {
 	// Always capture stderr for error detection, but stdout can be ignored
-	const proc = Bun.spawn(['git', ...args], {
+	const proc = Bun.spawn(['git', ...withGitAuth(args)], {
 		cwd: options.cwd,
 		stdout: options.quiet ? 'ignore' : 'inherit',
-		stderr: 'pipe'
+		stderr: 'pipe',
+		env: {
+			...process.env,
+			GIT_TERMINAL_PROMPT: '0'
+		}
 	});
 
 	const stderrChunks: Uint8Array[] = [];
@@ -421,16 +443,16 @@ const getSearchPathHint = (searchPath: string, repoPath: string): string => {
 
 	// Pattern: full URL included
 	if (searchPath.startsWith('http://') || searchPath.startsWith('https://')) {
-		return 'searchPath should be a relative path within the repo, not a URL. Extract just the directory path after the branch name.';
+		return 'searchPath should be a relative path within the repo, not a URL. Extract only the path after the branch name.';
 	}
 
 	// Pattern: starts with domain
 	if (searchPath.includes('github.com') || searchPath.includes('gitlab.com')) {
-		return "searchPath should be a relative path within the repo, not a URL. Use just the directory path, e.g., 'src/docs'";
+		return "searchPath should be a relative path within the repo, not a URL. Use only the path, e.g., 'src/docs' or 'README.md'";
 	}
 
 	// Default hint with helpful command
-	return `Verify the path exists in the repository. To see available directories, run:\n  ls ${repoPath}`;
+	return `Verify the path exists in the repository. To inspect available files and folders, run:\n  ls -la ${repoPath}`;
 };
 
 const ensureSearchPathsExist = async (
@@ -440,7 +462,7 @@ const ensureSearchPathsExist = async (
 ): Promise<void> => {
 	for (const repoSubPath of repoSubPaths) {
 		const subPath = path.join(localPath, repoSubPath);
-		const exists = await directoryExists(subPath);
+		const exists = await pathExists(subPath);
 		if (!exists) {
 			const hint = getSearchPathHint(repoSubPath, localPath);
 			throw new ResourceError({

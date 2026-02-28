@@ -69,6 +69,24 @@ describe('Git Resource', () => {
 				const stat = await fs.stat(resourcePath);
 				expect(stat.isDirectory()).toBe(true);
 			}, 60000);
+
+			it('accepts file search paths', async () => {
+				const args: BtcaGitResourceArgs = {
+					type: 'git',
+					name: 'file-path-test',
+					url: 'https://github.com/honojs/hono',
+					branch: 'main',
+					repoSubPaths: ['README.md'],
+					resourcesDirectoryPath: testDir,
+					specialAgentInstructions: '',
+					quiet: true
+				};
+
+				const resource = await loadGitResource(args);
+				const resourcePath = await resource.getAbsoluteDirectoryPath();
+				const readmeStat = await fs.stat(path.join(resourcePath, 'README.md'));
+				expect(readmeStat.isFile()).toBe(true);
+			}, 30000);
 		});
 
 		it('throws error for invalid git URL', async () => {
