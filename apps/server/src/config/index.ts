@@ -442,7 +442,7 @@ export namespace Config {
 		newConfigPath: string,
 		migratedCount: number
 	): Promise<StoredConfig> => {
-		const configDir = newConfigPath.slice(0, newConfigPath.lastIndexOf('/'));
+		const configDir = path.dirname(newConfigPath);
 		const result = await Result.gen(async function* () {
 			yield* Result.await(
 				Result.tryPromise({
@@ -503,7 +503,7 @@ export namespace Config {
 	};
 
 	const createDefaultConfig = async (configPath: string): Promise<StoredConfig> => {
-		const configDir = configPath.slice(0, configPath.lastIndexOf('/'));
+		const configDir = path.dirname(configPath);
 
 		const defaultStored: StoredConfig = {
 			$schema: CONFIG_SCHEMA_URL,
@@ -610,10 +610,17 @@ export namespace Config {
 		const getMergedProviderOptions = (): ProviderOptionsMap =>
 			mergeProviderOptions(currentGlobalConfig, currentProjectConfig);
 
-		// Get the config that should be used for model/provider
-		const getActiveConfig = (): StoredConfig => {
-			return currentProjectConfig ?? currentGlobalConfig;
-		};
+		const getEffectiveModel = (): string =>
+			currentProjectConfig?.model ?? currentGlobalConfig.model ?? DEFAULT_MODEL;
+
+		const getEffectiveProvider = (): string =>
+			currentProjectConfig?.provider ?? currentGlobalConfig.provider ?? DEFAULT_PROVIDER;
+
+		const getEffectiveProviderTimeoutMs = (): number | undefined =>
+			currentProjectConfig?.providerTimeoutMs ?? currentGlobalConfig.providerTimeoutMs;
+
+		const getEffectiveMaxSteps = (): number =>
+			currentProjectConfig?.maxSteps ?? currentGlobalConfig.maxSteps ?? DEFAULT_MAX_STEPS;
 
 		// Get the config that should be mutated
 		const getMutableConfig = (): StoredConfig => {
@@ -636,16 +643,16 @@ export namespace Config {
 				return getMergedResources();
 			},
 			get model() {
-				return getActiveConfig().model ?? DEFAULT_MODEL;
+				return getEffectiveModel();
 			},
 			get provider() {
-				return getActiveConfig().provider ?? DEFAULT_PROVIDER;
+				return getEffectiveProvider();
 			},
 			get providerTimeoutMs() {
-				return getActiveConfig().providerTimeoutMs;
+				return getEffectiveProviderTimeoutMs();
 			},
 			get maxSteps() {
-				return getActiveConfig().maxSteps ?? DEFAULT_MAX_STEPS;
+				return getEffectiveMaxSteps();
 			},
 			getProviderOptions: (providerId: string) => getMergedProviderOptions()[providerId],
 			getResource: (name: string) => getMergedResources().find((r) => r.name === name),
@@ -763,7 +770,7 @@ export namespace Config {
 						// We can't modify global config from project context, so throw an error
 						throw new ConfigError({
 							message: `Resource "${name}" is defined in the global config`,
-							hint: `To remove this resource globally, edit the global config at "${expandHome(GLOBAL_CONFIG_DIR)}/${GLOBAL_CONFIG_FILENAME}" or run the command without a project config present.`
+							hint: `To remove this resource globally, edit the global config at "${path.join(expandHome(GLOBAL_CONFIG_DIR), GLOBAL_CONFIG_FILENAME)}" or run the command without a project config present.`
 						});
 					}
 				} else {
@@ -797,7 +804,7 @@ export namespace Config {
 
 				for (const item of resourcesDir) {
 					const removeResult = await Result.tryPromise(() =>
-						fs.rm(`${resourcesDirectory}/${item}`, { recursive: true, force: true })
+						fs.rm(path.join(resourcesDirectory, item), { recursive: true, force: true })
 					);
 					const removed = removeResult.match({
 						ok: () => true,
@@ -845,8 +852,8 @@ export namespace Config {
 		const cwd = process.cwd();
 		Metrics.info('config.load.start', { cwd });
 
-		const globalConfigPath = `${expandHome(GLOBAL_CONFIG_DIR)}/${GLOBAL_CONFIG_FILENAME}`;
-		const projectConfigPath = `${cwd}/${PROJECT_CONFIG_FILENAME}`;
+		const globalConfigPath = path.join(expandHome(GLOBAL_CONFIG_DIR), GLOBAL_CONFIG_FILENAME);
+		const projectConfigPath = path.join(cwd, PROJECT_CONFIG_FILENAME);
 
 		// First, load or create the global config
 		let globalConfig: StoredConfig;
@@ -854,7 +861,7 @@ export namespace Config {
 
 		if (!globalExists) {
 			// Check for legacy config to migrate
-			const legacyConfigPath = `${expandHome(GLOBAL_CONFIG_DIR)}/${LEGACY_CONFIG_FILENAME}`;
+			const legacyConfigPath = path.join(expandHome(GLOBAL_CONFIG_DIR), LEGACY_CONFIG_FILENAME);
 			const migrated = await migrateLegacyConfig(legacyConfigPath, globalConfigPath);
 			if (migrated) {
 				Metrics.info('config.load.global', { source: 'migrated', path: globalConfigPath });
@@ -907,7 +914,7 @@ export namespace Config {
 			return makeService(
 				globalConfig,
 				projectConfig,
-				`${resolvedProjectDataDir}/resources`,
+				path.join(resolvedProjectDataDir, 'resources'),
 				projectConfigPath
 			);
 		}
@@ -919,6 +926,11 @@ export namespace Config {
 			globalDataDir,
 			expandHome(GLOBAL_CONFIG_DIR)
 		);
-		return makeService(globalConfig, null, `${resolvedGlobalDataDir}/resources`, globalConfigPath);
+		return makeService(
+			globalConfig,
+			null,
+			path.join(resolvedGlobalDataDir, 'resources'),
+			globalConfigPath
+		);
 	};
 }

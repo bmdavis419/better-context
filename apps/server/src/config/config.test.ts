@@ -321,6 +321,55 @@ describe('Config', () => {
 			expect(config.resources.length).toBe(1);
 			expect(config.getResource('global-resource')).toBeDefined();
 		});
+
+		it('inherits global provider/model/settings when project config omits them', async () => {
+			const globalConfigDir = path.join(testDir, '.config', 'btca');
+			await fs.mkdir(globalConfigDir, { recursive: true });
+			const globalConfig = {
+				$schema: 'https://btca.dev/btca.schema.json',
+				provider: 'global-provider',
+				model: 'global-model',
+				providerTimeoutMs: 123_000,
+				maxSteps: 55,
+				resources: [
+					{
+						name: 'global-resource',
+						type: 'git',
+						url: 'https://github.com/global/repo',
+						branch: 'main'
+					}
+				]
+			};
+			await fs.writeFile(
+				path.join(globalConfigDir, 'btca.config.jsonc'),
+				JSON.stringify(globalConfig)
+			);
+
+			const projectDir = path.join(testDir, 'my-project');
+			await fs.mkdir(projectDir, { recursive: true });
+			const projectConfig = {
+				$schema: 'https://btca.dev/btca.schema.json',
+				resources: [
+					{
+						name: 'project-resource',
+						type: 'git',
+						url: 'https://github.com/project/repo',
+						branch: 'main'
+					}
+				]
+			};
+			await fs.writeFile(path.join(projectDir, 'btca.config.jsonc'), JSON.stringify(projectConfig));
+			process.chdir(projectDir);
+
+			const config = await Config.load();
+
+			expect(config.provider).toBe('global-provider');
+			expect(config.model).toBe('global-model');
+			expect(config.providerTimeoutMs).toBe(123_000);
+			expect(config.maxSteps).toBe(55);
+			expect(config.getResource('global-resource')).toBeDefined();
+			expect(config.getResource('project-resource')).toBeDefined();
+		});
 	});
 
 	describe('Config mutations (resource leakage prevention)', () => {
