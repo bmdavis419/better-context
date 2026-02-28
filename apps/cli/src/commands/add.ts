@@ -286,7 +286,12 @@ async function addGitResourceWizard(
 	const result = await Result.tryPromise(async () => {
 		const finalUrl = await promptInput(rl, 'URL', normalizedUrl);
 		const name = await promptInput(rl, 'Name', urlParts.repo);
-		const branch = await promptInput(rl, 'Branch', 'main');
+		const branchInput = await promptInput(
+			rl,
+			'Branch (optional, auto-detect default if empty)',
+			''
+		);
+		const branch = branchInput.trim();
 		const wantSearchPaths = await promptConfirm(
 			rl,
 			'Do you want to add search paths (subdirectories to focus on)?'
@@ -300,7 +305,7 @@ async function addGitResourceWizard(
 		console.log('  Type:    git');
 		console.log(`  Name:    ${name}`);
 		console.log(`  URL:     ${finalUrl}`);
-		console.log(`  Branch:  ${branch}`);
+		console.log(`  Branch:  ${branch || '(auto-detect remote default branch)'}`);
 		if (searchPaths.length > 0) console.log(`  Search:  ${searchPaths.join(', ')}`);
 		if (notes) console.log(`  Notes:   ${notes}`);
 		console.log(`  Config:  ${options.global ? 'global' : 'project'}`);
@@ -325,7 +330,7 @@ async function addGitResourceWizard(
 			type: 'git',
 			name,
 			url: finalUrl,
-			branch,
+			...(branch ? { branch } : {}),
 			...(searchPaths.length === 1 && { searchPath: searchPaths[0] }),
 			...(searchPaths.length > 1 && { searchPaths }),
 			...(notes && { specialNotes: notes })
@@ -336,6 +341,9 @@ async function addGitResourceWizard(
 		console.log(`\nAdded resource: ${name}`);
 		if (resource.type === 'git' && resource.url !== finalUrl) {
 			console.log(`  URL normalized: ${resource.url}`);
+		}
+		if (resource.type === 'git' && !branch) {
+			console.log(`  Auto-detected branch: ${resource.branch}`);
 		}
 		console.log('\nYou can now use this resource:');
 		console.log(`  btca ask -r ${name} -q "your question"`);
@@ -498,7 +506,7 @@ export const addCommand = new Command('add')
 	.argument('[reference]', 'Repository URL, local path, or npm package reference')
 	.option('-g, --global', 'Add to global config instead of project config')
 	.option('-n, --name <name>', 'Resource name')
-	.option('-b, --branch <branch>', 'Git branch (default: main)')
+	.option('-b, --branch <branch>', 'Git branch (auto-detected when omitted)')
 	.option('-s, --search-path <path...>', 'Search paths within repo (can specify multiple)')
 	.option('--notes <notes>', 'Special notes for the agent')
 	.option('-t, --type <type>', 'Resource type: git, local, or npm (auto-detected if not specified)')
@@ -585,7 +593,7 @@ export const addCommand = new Command('add')
 						type: 'git',
 						name: options.name,
 						url: normalizedUrl,
-						branch: options.branch ?? 'main',
+						...(options.branch ? { branch: options.branch } : {}),
 						...(searchPaths.length === 1 && { searchPath: searchPaths[0] }),
 						...(searchPaths.length > 1 && { searchPaths }),
 						...(options.notes && { specialNotes: options.notes })
@@ -596,6 +604,9 @@ export const addCommand = new Command('add')
 					console.log(`Added git resource: ${options.name}`);
 					if (resource.type === 'git' && resource.url !== normalizedUrl) {
 						console.log(`  URL normalized: ${resource.url}`);
+					}
+					if (resource.type === 'git' && !options.branch) {
+						console.log(`  Auto-detected branch: ${resource.branch}`);
 					}
 					return;
 				}

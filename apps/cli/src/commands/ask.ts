@@ -39,6 +39,17 @@ function getErrorDisplayDetails(error: unknown): { message: string; hint?: strin
 		const stripped = message.slice('Unhandled exception:'.length).trim();
 		return stripped.length > 0 ? stripped : message;
 	};
+	const fallbackWrapperMessage = (message: string) => {
+		if (
+			message === 'match err handler threw' ||
+			message === 'match ok handler threw' ||
+			message.endsWith('handler threw') ||
+			message.endsWith('callback threw')
+		) {
+			return 'Internal error while processing a result. Check server logs for details.';
+		}
+		return normalizeMessage(message);
+	};
 
 	const chain: unknown[] = [];
 	const visited = new Set<unknown>();
@@ -69,7 +80,7 @@ function getErrorDisplayDetails(error: unknown): { message: string; hint?: strin
 		for (const entry of chain) {
 			const entryMessage = readStringField(entry, 'message');
 			if (entryMessage) {
-				message = normalizeMessage(entryMessage);
+				message = fallbackWrapperMessage(entryMessage);
 				break;
 			}
 		}

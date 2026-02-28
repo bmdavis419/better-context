@@ -90,6 +90,48 @@ const normalizeQuestionResourceReference = (reference: string): string => {
 	return reference;
 };
 
+const withGitAuthArgs = (args: string[]) => {
+	const token = process.env.BTCA_GIT_TOKEN?.trim();
+	if (!token) return args;
+	return [
+		'-c',
+		'credential.helper=!f() { test "$1" = get && echo "username=x-access-token" && echo "password=$BTCA_GIT_TOKEN"; }; f',
+		...args
+	];
+};
+
+const detectDefaultBranchForRepository = async (repoUrl: string): Promise<string | undefined> => {
+	const proc = Bun.spawn(['git', ...withGitAuthArgs(['ls-remote', '--symref', repoUrl, 'HEAD'])], {
+		stdout: 'pipe',
+		stderr: 'pipe',
+		env: {
+			...process.env,
+			GIT_TERMINAL_PROMPT: '0'
+		}
+	});
+
+	const [stdoutText, stderrText, exitCode] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited
+	]);
+	if (exitCode !== 0) {
+		Metrics.info('resource.git.default_branch.detect_failed', {
+			url: repoUrl,
+			error: stderrText.trim().slice(0, 300)
+		});
+		return undefined;
+	}
+
+	const line = stdoutText
+		.split('\n')
+		.find((entry) => entry.trim().startsWith('ref:') && entry.includes('\tHEAD'));
+	if (!line) return undefined;
+
+	const match = line.match(/^ref:\s+refs\/heads\/([^\s]+)\s+HEAD$/);
+	return match?.[1];
+};
+
 const QuestionRequestSchema = z.object({
 	question: z
 		.string()
@@ -135,7 +177,7 @@ const AddGitResourceRequestSchema = z.object({
 	type: z.literal('git'),
 	name: GitResourceSchema.shape.name,
 	url: GitResourceSchema.shape.url,
-	branch: GitResourceSchema.shape.branch.optional().default('main'),
+	branch: GitResourceSchema.shape.branch.optional(),
 	searchPath: GitResourceSchema.shape.searchPath,
 	searchPaths: GitResourceSchema.shape.searchPaths,
 	specialNotes: GitResourceSchema.shape.specialNotes
@@ -448,11 +490,13 @@ const createApp = (deps: {
 			if (decoded.type === 'git') {
 				// Normalize GitHub URLs (e.g., /blob/main/file.txt → base repo URL)
 				const normalizedUrl = normalizeGitHubUrl(decoded.url);
+				const branch =
+					decoded.branch ?? (await detectDefaultBranchForRepository(normalizedUrl)) ?? 'main';
 				const resource = {
 					type: 'git' as const,
 					name: decoded.name,
 					url: normalizedUrl,
-					branch: decoded.branch ?? 'main',
+					branch,
 					...(decoded.searchPath && { searchPath: decoded.searchPath }),
 					...(decoded.searchPaths && { searchPaths: decoded.searchPaths }),
 					...(decoded.specialNotes && { specialNotes: decoded.specialNotes })

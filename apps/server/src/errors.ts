@@ -41,6 +41,18 @@ const normalizeMessage = (message: string) => {
 	return stripped.length > 0 ? stripped : message;
 };
 
+const fallbackWrapperMessage = (message: string) => {
+	if (
+		message === 'match err handler threw' ||
+		message === 'match ok handler threw' ||
+		/handler threw$/u.test(message) ||
+		/callback threw$/u.test(message)
+	) {
+		return 'Internal error while processing a result. Check logs for details.';
+	}
+	return normalizeMessage(message);
+};
+
 const isWrapperEntry = (entry: unknown) => {
 	const tag = readStringField(entry, '_tag');
 	const message = readStringField(entry, 'message');
@@ -101,7 +113,7 @@ export const getErrorMessage = (error: unknown): string => {
 
 	for (const entry of chain) {
 		const message = readStringField(entry, 'message');
-		if (message) return normalizeMessage(message);
+		if (message) return fallbackWrapperMessage(message);
 	}
 
 	return String(error);

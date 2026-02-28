@@ -59,7 +59,9 @@ describe('errors', () => {
 		cyclic.cause = cyclic;
 
 		expect(getErrorTag(cyclic)).toBe('Panic');
-		expect(getErrorMessage(cyclic)).toBe('match err handler threw');
+		expect(getErrorMessage(cyclic)).toBe(
+			'Internal error while processing a result. Check logs for details.'
+		);
 		expect(getErrorHint(cyclic)).toBeUndefined();
 	});
 });
