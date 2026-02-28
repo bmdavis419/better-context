@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Support and triage policy
+    url: https://github.com/davis7dotsh/better-context/blob/main/SUPPORT.md
+    about: Review support scope, priorities, and reproduction requirements.

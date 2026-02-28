@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible bug in btca
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please include complete reproduction details so maintainers can investigate quickly.
+  - type: input
+    id: btca_version
+    attributes:
+      label: btca version
+      description: Output of `btca --version`
+      placeholder: 1.2.3
+    validations:
+      required: true
+  - type: input
+    id: bun_version
+    attributes:
+      label: Bun version
+      placeholder: 1.x.x
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and shell
+      placeholder: macOS 14 + zsh
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command(s) run
+      description: Include the exact command and flags
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Include complete error output
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Include config/resource snippets as needed
+    validations:
+      required: true

@@ -33,6 +33,10 @@ Set up btca for this project: scan package.json for major dependencies (framewor
 
 See the full [Getting Started guide](https://docs.btca.dev/guides/quickstart) for more details.
 
+## Support
+
+Review [SUPPORT.md](./SUPPORT.md) for triage priorities, expected response targets, and bug report requirements.
+
 ## Development
 
 This is a Bun monorepo using Turborepo. **Only use `bun`** - never npm/yarn.
