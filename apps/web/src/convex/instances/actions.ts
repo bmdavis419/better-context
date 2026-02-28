@@ -204,6 +204,7 @@ const formatUserMessage = (operation: string, step: string | undefined, detail?:
 	const stepLabel = step
 		? {
 				load_resources: 'loading resources',
+				configure_git_auth: 'configuring git authentication',
 				create_sandbox: 'creating the sandbox',
 				get_sandbox: 'locating the sandbox',
 				start_sandbox: 'starting the sandbox',
@@ -219,6 +220,17 @@ const formatUserMessage = (operation: string, step: string | undefined, detail?:
 	const trimmed = truncate(detail, 160);
 	return `${base}${trimmed ? ` ${trimmed}` : ''} Please retry.`;
 };
+
+const getGitToken = () => process.env.BTCA_GIT_TOKEN?.trim();
+
+async function configureSandboxGitAuth(sandbox: Sandbox): Promise<void> {
+	const token = getGitToken();
+	if (!token) return;
+	const basicToken = Buffer.from(`x-access-token:${token}`).toString('base64');
+	await sandbox.process.executeCommand(
+		`git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic ${basicToken}"`
+	);
+}
 
 async function getResourceConfigs(
 	ctx: ActionCtx,
@@ -339,6 +351,21 @@ async function startBtcaServer(sandbox: Sandbox): Promise<string> {
 	}
 }
 
+async function startBtcaServerWithRetry(sandbox: Sandbox, attempts = 2): Promise<string> {
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= attempts; attempt += 1) {
+		const result = await Result.tryPromise(() => startBtcaServer(sandbox));
+		if (Result.isOk(result)) return result.value;
+		lastError = result.error;
+		if (attempt < attempts) {
+			await Result.tryPromise(() =>
+				sandbox.process.executeCommand('pkill -f "btca serve" || true')
+			);
+		}
+	}
+	throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function stopSandboxIfRunning(sandbox: Sandbox): Promise<void> {
 	if (sandbox.state === 'started') {
 		await sandbox.stop(60);
@@ -421,11 +448,14 @@ export const provision = action({
 			);
 			sandbox = createdSandbox;
 
+			step = 'configure_git_auth';
+			unwrapInstance(await withStep(step, () => configureSandboxGitAuth(createdSandbox)));
+
 			step = 'upload_config';
 			unwrapInstance(await withStep(step, () => uploadBtcaConfig(createdSandbox, resources)));
 
 			step = 'start_btca';
-			unwrapInstance(await withStep(step, () => startBtcaServer(createdSandbox)));
+			unwrapInstance(await withStep(step, () => startBtcaServerWithRetry(createdSandbox)));
 
 			step = 'get_versions';
 			const versions = unwrapInstance(
@@ -473,7 +503,24 @@ export const provision = action({
 			const errorDetails = getErrorDetails(error);
 			const context = getErrorContext(error);
 			const contextStep = typeof context?.step === 'string' ? context.step : step;
-			const message = formatUserMessage('provision', contextStep, errorDetails.message);
+			const health = context?.healthCheck as
+				| { attempts?: unknown; lastStatus?: unknown; lastError?: unknown }
+				| undefined;
+			const healthDetail =
+				contextStep === 'health_check'
+					? `attempts=${String(health?.attempts ?? 'unknown')}, status=${String(
+							health?.lastStatus ?? 'none'
+						)}, error=${String(health?.lastError ?? 'none')}`
+					: undefined;
+			const logTail = typeof context?.btcaLogTail === 'string' ? context.btcaLogTail : undefined;
+			const detail = [
+				errorDetails.message,
+				healthDetail,
+				logTail ? `log tail: ${logTail}` : undefined
+			]
+				.filter(Boolean)
+				.join(' | ');
+			const message = formatUserMessage('provision', contextStep, detail);
 			const durationMs = Date.now() - provisionStartedAt;
 
 			console.error('Provisioning failed', {
@@ -651,10 +698,13 @@ async function createSandboxFromScratch(
 		)
 	);
 
+	step = 'configure_git_auth';
+	unwrapInstance(await withStep(step, () => configureSandboxGitAuth(sandbox)));
+
 	step = 'upload_config';
 	unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
 	step = 'start_btca';
-	const serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
+	const serverUrl = unwrapInstance(await withStep(step, () => startBtcaServerWithRetry(sandbox)));
 	step = 'get_versions';
 	const versions = unwrapInstance(await withStep(step, () => getInstalledVersions(sandbox)));
 
@@ -722,10 +772,12 @@ async function wakeInstanceInternal(
 
 			step = 'start_sandbox';
 			unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
+			step = 'configure_git_auth';
+			unwrapInstance(await withStep(step, () => configureSandboxGitAuth(sandbox)));
 			step = 'upload_config';
 			unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
 			step = 'start_btca';
-			serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox)));
+			serverUrl = unwrapInstance(await withStep(step, () => startBtcaServerWithRetry(sandbox)));
 			sandboxId = instance.sandboxId;
 		}
 
@@ -750,7 +802,24 @@ async function wakeInstanceInternal(
 		const errorDetails = getErrorDetails(error);
 		const context = getErrorContext(error);
 		const contextStep = typeof context?.step === 'string' ? context.step : step;
-		const message = formatUserMessage('wake', contextStep, errorDetails.message);
+		const health = context?.healthCheck as
+			| { attempts?: unknown; lastStatus?: unknown; lastError?: unknown }
+			| undefined;
+		const healthDetail =
+			contextStep === 'health_check'
+				? `attempts=${String(health?.attempts ?? 'unknown')}, status=${String(
+						health?.lastStatus ?? 'none'
+					)}, error=${String(health?.lastError ?? 'none')}`
+				: undefined;
+		const logTail = typeof context?.btcaLogTail === 'string' ? context.btcaLogTail : undefined;
+		const detail = [
+			errorDetails.message,
+			healthDetail,
+			logTail ? `log tail: ${logTail}` : undefined
+		]
+			.filter(Boolean)
+			.join(' | ');
+		const message = formatUserMessage('wake', contextStep, detail);
 
 		console.error('Wake failed', {
 			instanceId,
@@ -813,6 +882,8 @@ async function updateInstanceInternal(
 		const wasRunning = unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
 
 		await updatePackages(sandbox);
+		step = 'configure_git_auth';
+		unwrapInstance(await withStep(step, () => configureSandboxGitAuth(sandbox)));
 		step = 'upload_config';
 		unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
 		step = 'get_versions';
@@ -839,7 +910,7 @@ async function updateInstanceInternal(
 		if (wasRunning) {
 			await sandbox.process.executeCommand('pkill -f "btca serve" || true');
 			const serverUrl = unwrapInstance(
-				await withStep('start_btca', () => startBtcaServer(sandbox))
+				await withStep('start_btca', () => startBtcaServerWithRetry(sandbox))
 			);
 			await ctx.runMutation(instanceMutations.setServerUrl, { instanceId, serverUrl });
 			await ctx.runMutation(instanceMutations.updateState, { instanceId, state: 'running' });
