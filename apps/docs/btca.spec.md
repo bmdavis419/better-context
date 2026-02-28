@@ -48,7 +48,7 @@ Supported providers:
 - `openai` — OAuth (no API keys)
 - `openai-compat` — optional API key (requires baseURL + name in config)
 - `anthropic` — API key
-- `google` — API key or OAuth
+- `google` — API key
 - `minimax` — API key
 
 Environment variable overrides:
@@ -202,7 +202,7 @@ Options:
 
 - `-g, --global` — (flag exists; config target is still resolved by presence of project config)
 - `-n, --name <name>`
-- `-b, --branch <branch>` (default `main`)
+- `-b, --branch <branch>` (auto-detected when omitted)
 - `-s, --search-path <path...>`
 - `--notes <notes>`
 - `-t, --type <git|local|npm>`
@@ -275,6 +275,7 @@ Behavior:
 - If provider/model specified, updates config.
 - Otherwise, interactive provider selection (connected providers listed first), then model selection.
 - Prompts for auth if required.
+- Backward-compatible alias: `btca config model --provider <id> --model <id>` (deprecated).
 
 ### 4.8 `btca disconnect`
 

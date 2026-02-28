@@ -159,7 +159,7 @@ BTCA supports the following providers only:
 - `opencode` — API key required
 - `openrouter` — API key required
 - `openai` — OAuth only
-- `google` — API key or OAuth
+- `google` — API key required
 - `anthropic` — API key required
 
 Authenticate providers via OpenCode:
@@ -173,7 +173,7 @@ opencode auth --provider <provider>
 - OpenCode and OpenRouter can use environment variables or OpenCode auth.
 - OpenAI requires OAuth (API keys are not supported).
 - Anthropic requires an API key.
-- Google supports API key or OAuth.
+- Google requires an API key.
 
 ## Environment Variables
 

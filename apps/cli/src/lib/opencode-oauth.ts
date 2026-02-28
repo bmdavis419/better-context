@@ -243,7 +243,9 @@ const readAuthFile = async (): Promise<Record<string, unknown>> => {
 	const file = Bun.file(filepath);
 	if (!(await file.exists())) return {};
 	try {
-		const content = await file.json();
+		const text = await file.text();
+		if (text.trim().length === 0) return {};
+		const content = JSON.parse(text) as unknown;
 		return content && typeof content === 'object' ? (content as Record<string, unknown>) : {};
 	} catch {
 		return {};

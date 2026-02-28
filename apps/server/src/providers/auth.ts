@@ -27,7 +27,7 @@ export namespace Auth {
 		openai: ['oauth'],
 		'openai-compat': ['api'],
 		anthropic: ['api'],
-		google: ['api', 'oauth'],
+		google: ['api'],
 		minimax: ['api']
 	};
 
@@ -103,7 +103,11 @@ export namespace Auth {
 			return {};
 		}
 
-		const result = await Result.tryPromise(() => file.json());
+		const result = await Result.tryPromise(async () => {
+			const text = await file.text();
+			if (text.trim().length === 0) return {};
+			return JSON.parse(text) as unknown;
+		});
 		return result.match({
 			ok: (content) => {
 				const parsed = AuthFileSchema.safeParse(content);
@@ -172,7 +176,7 @@ export namespace Auth {
 			case 'anthropic':
 				return 'Run "opencode auth --provider anthropic" and enter an API key.';
 			case 'google':
-				return 'Run "opencode auth --provider google" and enter an API key or OAuth.';
+				return 'Run "btca connect -p google" and enter an API key.';
 			case 'openrouter':
 				return 'Set OPENROUTER_API_KEY or run "opencode auth --provider openrouter".';
 			case 'opencode':
