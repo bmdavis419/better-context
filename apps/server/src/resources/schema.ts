@@ -119,7 +119,7 @@ const SearchPathSchema = z
 	.refine((path) => !path.includes('..'), {
 		message: 'Search path must not contain path traversal sequences (..)'
 	})
-	.refine((path) => !path.startsWith('/') && !path.match(/^[a-zA-Z]:\\/), {
+	.refine((path) => !path.startsWith('/') && !path.match(/^[a-zA-Z]:[\\/]/), {
 		message: 'Search path must not be an absolute path'
 	});
 
@@ -161,7 +161,7 @@ const LocalPathSchema = z
 	.refine((path) => !path.includes('\0'), {
 		message: 'Path must not contain null bytes'
 	})
-	.refine((path) => path.startsWith('/') || path.match(/^[a-zA-Z]:\\/), {
+	.refine((path) => path.startsWith('/') || path.match(/^[a-zA-Z]:[\\/]/), {
 		message: 'Local path must be an absolute path'
 	});
 

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 
-import { validateResourceReference, validateResourcesArray } from './index.ts';
+import {
+	validateLocalPath,
+	validateResourceReference,
+	validateResourcesArray,
+	validateSearchPath
+} from './index.ts';
 
 describe('validateResourceReference', () => {
 	it('accepts configured resource names', () => {
@@ -70,5 +75,20 @@ describe('validateResourcesArray', () => {
 			'npm:react'
 		]);
 		expect(result.valid).toBe(true);
+	});
+});
+
+describe('windows path handling', () => {
+	it('accepts absolute windows local paths with forward slashes', () => {
+		const result = validateLocalPath('C:/Users/test/project');
+		expect(result.valid).toBe(true);
+	});
+
+	it('rejects absolute windows search paths as searchPath', () => {
+		const result = validateSearchPath('C:/Users/test/project');
+		expect(result.valid).toBe(false);
+		if (!result.valid) {
+			expect(result.error).toContain('absolute path');
+		}
 	});
 });

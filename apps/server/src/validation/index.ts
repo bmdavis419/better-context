@@ -416,7 +416,7 @@ export const validateSearchPath = (searchPath: string | undefined): ValidationRe
 	}
 
 	// Reject absolute paths
-	if (searchPath.startsWith('/') || searchPath.match(/^[a-zA-Z]:\\/)) {
+	if (searchPath.startsWith('/') || searchPath.match(/^[a-zA-Z]:[\\/]/)) {
 		return fail('Search path must not be an absolute path');
 	}
 
@@ -456,7 +456,7 @@ export const validateLocalPath = (path: string): ValidationResult => {
 	}
 
 	// Must be absolute path (starts with / on Unix or drive letter on Windows)
-	if (!normalizedPath.startsWith('/') && !normalizedPath.match(/^[a-zA-Z]:\\/)) {
+	if (!normalizedPath.startsWith('/') && !normalizedPath.match(/^[a-zA-Z]:[\\/]/)) {
 		return fail('Local path must be an absolute path');
 	}
 

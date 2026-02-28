@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 const POSTHOG_KEY = 'phc_aUZcaccxNs56PokvsvIInqHCrwjUjvpiMWih9P86cTV';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 const TELEMETRY_ENV_FLAG = 'BTCA_TELEMETRY';
@@ -11,7 +13,7 @@ const expandHome = (filePath: string) => {
 	return filePath;
 };
 
-const getTelemetryPath = () => `${expandHome(TELEMETRY_CONFIG_DIR)}/${TELEMETRY_FILENAME}`;
+const getTelemetryPath = () => path.join(expandHome(TELEMETRY_CONFIG_DIR), TELEMETRY_FILENAME);
 
 type TelemetryConfig = {
 	enabled: boolean;
@@ -78,11 +80,11 @@ const ensureConfigDir = async (configDir: string) => {
 };
 
 const saveTelemetryConfig = async (config: TelemetryConfig) => {
-	const path = getTelemetryPath();
-	const configDir = path.slice(0, path.lastIndexOf('/'));
+	const telemetryPath = getTelemetryPath();
+	const configDir = path.dirname(telemetryPath);
 	await ensureConfigDir(configDir);
-	await Bun.write(`${configDir}/.keep`, '');
-	await Bun.write(path, JSON.stringify(config, null, 2));
+	await Bun.write(path.join(configDir, '.keep'), '');
+	await Bun.write(telemetryPath, JSON.stringify(config, null, 2));
 };
 
 const getOrCreateTelemetryConfig = async () => {
