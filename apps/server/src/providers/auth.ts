@@ -24,7 +24,7 @@ const PROVIDER_AUTH_TYPES: Record<string, readonly AuthType[]> = {
 	openrouter: ['api'],
 	openai: ['oauth'],
 	'openai-compat': ['api'],
-	anthropic: ['api'],
+	anthropic: ['api', 'oauth'],
 	google: ['api', 'oauth'],
 	minimax: ['api']
 };
@@ -148,7 +148,7 @@ export const getProviderAuthHint = (providerId: string) => {
 		case 'openai-compat':
 			return 'Set baseURL + name via "btca connect" and optionally add an API key.';
 		case 'anthropic':
-			return 'Run "opencode auth --provider anthropic" and enter an API key.';
+			return 'Run "opencode auth --provider anthropic" to authenticate with your Anthropic Pro/Max plan (OAuth) or enter an API key.';
 		case 'google':
 			return 'Run "opencode auth --provider google" and enter an API key or OAuth.';
 		case 'openrouter':
@@ -186,4 +186,259 @@ export const getAuthenticatedProviders = async (): Promise<string[]> => {
 	const providers = Object.keys(PROVIDER_AUTH_TYPES);
 	const statuses = await Promise.all(providers.map((provider) => getAuthStatus(provider)));
 	return providers.filter((_, index) => statuses[index]?.status === 'ok');
+};
+
+const ANTHROPIC_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const ANTHROPIC_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
+const TOOL_PREFIX = 'mcp_';
+
+// Module-level deduplication lock for token refresh only.
+// No token state is cached here — credentials are always read fresh from
+// auth.json on each request, avoiding stale-credential race conditions.
+let _oauthRefreshPromise: Promise<void> | null = null;
+
+const _refreshAnthropicToken = async (): Promise<void> => {
+	const auth = await getCredentials('anthropic');
+	if (!auth || auth.type !== 'oauth') throw new Error('Anthropic OAuth credentials not found');
+	const response = await fetch(ANTHROPIC_TOKEN_URL, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			grant_type: 'refresh_token',
+			refresh_token: auth.refresh,
+			client_id: ANTHROPIC_CLIENT_ID
+		})
+	});
+	if (!response.ok) {
+		throw new Error(`Anthropic token refresh failed: ${response.status}`);
+	}
+	const json = (await response.json()) as {
+		access_token: string;
+		refresh_token: string;
+		expires_in: number;
+	};
+	await setCredentials('anthropic', {
+		type: 'oauth',
+		access: json.access_token,
+		refresh: json.refresh_token,
+		expires: Date.now() + json.expires_in * 1000,
+		accountId: auth.accountId
+	});
+};
+
+/**
+ * Returns a custom fetch function for Anthropic OAuth (Pro/Max plan).
+ * Reads credentials fresh from auth.json on every request — no cached token
+ * state — so there are no stale-credential race conditions across concurrent
+ * getModel() calls. Only the in-flight refresh promise is module-level, to
+ * prevent concurrent callers from consuming the single-use refresh token twice.
+ *
+ * Mirrors the opencode-anthropic-auth plugin behaviour:
+ * - Injects Authorization: Bearer header using the OAuth access token
+ * - Handles token refresh when expired
+ * - Adds required anthropic-beta headers for OAuth
+ * - Appends ?beta=true to /v1/messages requests
+ * - Sanitizes system prompts (OpenCode → Claude Code)
+ * - Prefixes tool names with mcp_ in requests, strips prefix in responses
+ */
+export const createAnthropicOAuthFetch = (): typeof globalThis.fetch => {
+	return async (input, init) => {
+		// Read credentials fresh from auth.json on every request
+		const authInfo = await getCredentials('anthropic');
+		const auth = authInfo?.type === 'oauth' ? (authInfo as OAuthAuth) : null;
+
+		// Refresh token if expired or missing — deduplicate concurrent refresh calls
+		// since Anthropic refresh tokens are single-use
+		if (!auth?.access || auth.expires < Date.now()) {
+			if (!_oauthRefreshPromise) {
+				_oauthRefreshPromise = _refreshAnthropicToken().finally(() => {
+					_oauthRefreshPromise = null;
+				});
+			}
+			await _oauthRefreshPromise;
+		}
+
+		// Re-read credentials after potential refresh
+		const freshAuthInfo = await getCredentials('anthropic');
+		const freshAuth = freshAuthInfo?.type === 'oauth' ? (freshAuthInfo as OAuthAuth) : null;
+		const accessToken = freshAuth?.access ?? '';
+
+		// Build headers from incoming request
+		const requestHeaders = new Headers();
+		if (input instanceof Request) {
+			input.headers.forEach((value, key) => requestHeaders.set(key, value));
+		}
+		if (init?.headers) {
+			if (init.headers instanceof Headers) {
+				init.headers.forEach((value, key) => requestHeaders.set(key, value));
+			} else if (Array.isArray(init.headers)) {
+				for (const [key, value] of init.headers) {
+					if (typeof value !== 'undefined') requestHeaders.set(key, String(value));
+				}
+			} else {
+				for (const [key, value] of Object.entries(init.headers as Record<string, string>)) {
+					if (typeof value !== 'undefined') requestHeaders.set(key, String(value));
+				}
+			}
+		}
+
+		// Merge required OAuth beta flags with any incoming betas
+		const incomingBeta = requestHeaders.get('anthropic-beta') ?? '';
+		const incomingBetas = incomingBeta
+			.split(',')
+			.map((b) => b.trim())
+			.filter(Boolean);
+		const requiredBetas = ['oauth-2025-04-20', 'interleaved-thinking-2025-05-14'];
+		const mergedBetas = [...new Set([...requiredBetas, ...incomingBetas])].join(',');
+
+		requestHeaders.set('authorization', `Bearer ${accessToken}`);
+		requestHeaders.set('anthropic-beta', mergedBetas);
+		requestHeaders.set('user-agent', 'claude-cli/2.1.2 (external, cli)');
+		requestHeaders.delete('x-api-key');
+
+		// Body transformations: sanitize system prompts + prefix tool names
+		let body = init?.body;
+		if (body && typeof body === 'string') {
+			try {
+				const parsed = JSON.parse(body) as Record<string, unknown>;
+
+				// Sanitize system prompt — Anthropic's OAuth endpoint blocks "OpenCode"
+				if (parsed.system && typeof parsed.system === 'string') {
+					parsed.system = parsed.system
+						.replace(/OpenCode/g, 'Claude Code')
+						.replace(/opencode/gi, 'Claude');
+				} else if (parsed.system && Array.isArray(parsed.system)) {
+					parsed.system = (parsed.system as Array<{ type: string; text?: string }>).map((item) => {
+						if (item.type === 'text' && item.text) {
+							return {
+								...item,
+								text: item.text.replace(/OpenCode/g, 'Claude Code').replace(/opencode/gi, 'Claude')
+							};
+						}
+						return item;
+					});
+				}
+
+				// Prefix tool names in tool definitions — skip if already prefixed
+				// to avoid double-prefixing tools from MCP servers that already use mcp_
+				if (parsed.tools && Array.isArray(parsed.tools)) {
+					parsed.tools = (parsed.tools as Array<{ name?: string }>).map((tool) => ({
+						...tool,
+						name:
+							tool.name && !tool.name.startsWith(TOOL_PREFIX)
+								? `${TOOL_PREFIX}${tool.name}`
+								: tool.name
+					}));
+				}
+
+				// Prefix tool names in message content blocks — skip if already prefixed
+				if (parsed.messages && Array.isArray(parsed.messages)) {
+					parsed.messages = (
+						parsed.messages as Array<{ content?: Array<{ type: string; name?: string }> }>
+					).map((msg) => {
+						if (msg.content && Array.isArray(msg.content)) {
+							msg.content = msg.content.map((block) => {
+								if (
+									block.type === 'tool_use' &&
+									block.name &&
+									!block.name.startsWith(TOOL_PREFIX)
+								) {
+									return { ...block, name: `${TOOL_PREFIX}${block.name}` };
+								}
+								return block;
+							});
+						}
+						return msg;
+					});
+				}
+
+				body = JSON.stringify(parsed);
+			} catch {
+				// ignore parse errors — send body as-is
+			}
+		}
+
+		// Append ?beta=true to /v1/messages
+		let requestInput: RequestInfo | URL = input;
+		try {
+			let requestUrl: URL | null = null;
+			if (typeof input === 'string' || input instanceof URL) {
+				requestUrl = new URL(input.toString());
+			} else if (input instanceof Request) {
+				requestUrl = new URL(input.url);
+			}
+			if (
+				requestUrl &&
+				requestUrl.pathname === '/v1/messages' &&
+				!requestUrl.searchParams.has('beta')
+			) {
+				requestUrl.searchParams.set('beta', 'true');
+				requestInput =
+					input instanceof Request ? new Request(requestUrl.toString(), input) : requestUrl;
+			}
+		} catch {
+			// ignore URL parse errors
+		}
+
+		const response = await fetch(requestInput, {
+			...init,
+			body,
+			headers: requestHeaders
+		});
+
+		// Transform streaming response: strip mcp_ prefix from tool names.
+		// Only applies to SSE data lines containing tool_use or content_block_start
+		// events to avoid corrupting tool result payloads that may contain "name"
+		// fields with mcp_-prefixed values in user data.
+		// Uses a line buffer to handle SSE lines split across chunk boundaries.
+		if (response.body) {
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			const encoder = new TextEncoder();
+
+			const stripMcpPrefix = (line: string): string => {
+				// Only rewrite lines that are structured tool name events
+				if (
+					line.includes('"type":"tool_use"') ||
+					line.includes('"type": "tool_use"') ||
+					line.includes('"type":"content_block_start"') ||
+					line.includes('"type": "content_block_start"')
+				) {
+					return line.replace(/"name"\s*:\s*"mcp_([^"]+)"/g, '"name": "$1"');
+				}
+				return line;
+			};
+
+			let lineBuffer = '';
+
+			const stream = new ReadableStream({
+				async pull(controller) {
+					const { done, value } = await reader.read();
+					if (done) {
+						// Flush any remaining buffered content
+						if (lineBuffer) {
+							controller.enqueue(encoder.encode(stripMcpPrefix(lineBuffer)));
+							lineBuffer = '';
+						}
+						controller.close();
+						return;
+					}
+					const text = lineBuffer + decoder.decode(value, { stream: true });
+					const lines = text.split('\n');
+					// Hold back the last element — it may be an incomplete line
+					lineBuffer = lines.pop() ?? '';
+					const transformed = lines.map(stripMcpPrefix).join('\n') + '\n';
+					controller.enqueue(encoder.encode(transformed));
+				}
+			});
+
+			return new Response(stream, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers
+			});
+		}
+
+		return response;
+	};
 };

@@ -80,7 +80,10 @@ const parseErrorResponse = (
 	};
 
 	return Effect.match(
-		Effect.tryPromise(() => res.json() as Promise<unknown>),
+		Effect.tryPromise({
+			try: () => res.json() as Promise<unknown>,
+			catch: () => null
+		}),
 		{
 			onFailure: () => new BtcaError(fallbackMessage),
 			onSuccess: (body) => {

@@ -8,7 +8,9 @@ import {
 	getAuthStatus,
 	getAuthenticatedProviders,
 	getProviderAuthHint,
-	isAuthenticated
+	isAuthenticated,
+	getCredentials,
+	createAnthropicOAuthFetch
 } from './auth.ts';
 import {
 	getProviderFactory,
@@ -116,6 +118,16 @@ export const getModel = async (
 
 	if (apiKey) {
 		providerOptions.apiKey = apiKey;
+	}
+
+	// For Anthropic OAuth (Pro/Max plan), inject a custom fetch that handles
+	// Bearer token auth, token refresh, and required header/body transformations.
+	if (normalizedProviderId === 'anthropic' && !options.skipAuth) {
+		const auth = await getCredentials('anthropic');
+		if (auth?.type === 'oauth') {
+			providerOptions.apiKey = '';
+			providerOptions.fetch = createAnthropicOAuthFetch();
+		}
 	}
 
 	if (normalizedProviderId === 'openai-compat') {

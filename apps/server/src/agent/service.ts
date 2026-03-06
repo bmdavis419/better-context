@@ -126,7 +126,7 @@ export const createAgentService = (config: ConfigServiceShape): AgentService => 
 
 	const ensureProviderConnected = async () => {
 		const isAuthed = await isAuthenticated(config.provider);
-		const requiresAuth = config.provider !== 'opencode' && config.provider !== 'openai-compat';
+		const requiresAuth = config.provider !== 'openai-compat';
 		if (isAuthed || !requiresAuth) return;
 		const authenticated = await getAuthenticatedProviders();
 		throw new ProviderNotConnectedError({
