@@ -21,6 +21,7 @@ export type ProviderOptions = {
 	name?: string; // Required for openai-compatible
 	instructions?: string;
 	sessionId?: string;
+	fetch?: typeof globalThis.fetch; // Custom fetch for OAuth providers
 };
 
 // Type for a provider factory function
