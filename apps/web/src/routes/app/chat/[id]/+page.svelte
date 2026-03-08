@@ -14,10 +14,10 @@
 	import { threadPreloadStore } from '$lib/stores/threadPreload.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
-	import { INSTANCE_DISK_FULL_MESSAGE } from '$lib/instanceErrors';
+	import { INSTANCE_DISK_FULL_MESSAGE } from '@btca/convex/instanceErrors';
 	import type { BtcaChunk, CancelState, MessageStats } from '$lib/types';
-	import { api } from '../../../../convex/_generated/api';
-	import type { Id } from '../../../../convex/_generated/dataModel';
+	import { api } from '@btca/convex/api';
+	import type { Id } from '@btca/convex/dataModel';
 
 	type ThreadMessageRecord = {
 		_id: Id<'messages'>;

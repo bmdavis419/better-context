@@ -4,7 +4,7 @@ import { ZodJsonSchemaAdapter } from '@tmcp/adapter-zod';
 import { ConvexHttpClient } from 'convex/browser';
 import { z } from 'zod';
 import { PUBLIC_CONVEX_URL } from '$env/static/public';
-import { api } from '../../../convex/_generated/api';
+import { api } from '@btca/convex/api';
 import type { RequestHandler } from './$types';
 import { extractApiKey, jsonError } from '../../../lib/result/http';
 

@@ -1,0 +1,42 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"productName": "btca Desktop",
+	"version": "0.0.1",
+	"identifier": "dev.btca.desktop",
+	"build": {
+		"frontendDist": "../build",
+		"devUrl": "http://localhost:1420",
+		"beforeDevCommand": "bun run dev:ui",
+		"beforeBuildCommand": "bun run build:ui"
+	},
+	"app": {
+		"windows": [
+			{
+				"label": "main",
+				"title": "btca",
+				"url": "/app",
+				"width": 1440,
+				"height": 960,
+				"minWidth": 1200,
+				"minHeight": 780,
+				"resizable": true,
+				"fullscreen": false,
+				"center": true
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
+}

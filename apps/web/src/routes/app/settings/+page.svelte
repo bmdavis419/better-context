@@ -13,7 +13,7 @@
 	} from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { api } from '../../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 	import { getAuthState, openUserProfile } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';

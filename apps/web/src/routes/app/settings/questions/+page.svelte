@@ -19,7 +19,7 @@
 	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
 	import { goto } from '$app/navigation';
-	import { api } from '../../../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 	import { getProjectStore } from '$lib/stores/project.svelte';
 	import Dropdown from '$lib/components/Dropdown.svelte';
 

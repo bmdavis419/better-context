@@ -15,7 +15,7 @@
 		trackEvent,
 		ClientAnalyticsEvents
 	} from '$lib/stores/analytics.svelte';
-	import { api } from '../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import ProvisioningModal from '$lib/components/ProvisioningModal.svelte';
 	import CreateProjectModal from '$lib/components/CreateProjectModal.svelte';

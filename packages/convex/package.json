@@ -1,0 +1,41 @@
+{
+	"name": "@btca/convex",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./api": "./src/api.ts",
+		"./apiHelpers": "./src/apiHelpers.ts",
+		"./dataModel": "./src/dataModel.ts",
+		"./errors": "./src/errors.ts",
+		"./instanceErrors": "./src/instanceErrors.ts",
+		"./webSandboxModels": "./src/webSandboxModels.ts",
+		"./aiBudget": "./src/aiBudget.ts"
+	},
+	"scripts": {
+		"dev": "convex dev",
+		"deploy:web": "convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'bun run --cwd ../../apps/web build'",
+		"check": "bunx tsc -p src/tsconfig.json --noEmit",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.10",
+		"prettier": "^3.8.1",
+		"typescript": "^5.9.3"
+	},
+	"dependencies": {
+		"@ai-sdk/openai-compatible": "^2.0.29",
+		"@btca/shared": "workspace:*",
+		"@clerk/backend": "^2.30.1",
+		"@convex-dev/migrations": "^0.3.1",
+		"@daytonaio/sdk": "^0.149.0",
+		"ai": "^6.0.81",
+		"autumn-js": "^0.1.82",
+		"better-result": "^2.7.0",
+		"btca-sandbox": "workspace:*",
+		"convex": "^1.31.7",
+		"nanoid": "^5.1.6",
+		"posthog-node": "^5.24.15",
+		"zod": "^4.3.6"
+	}
+}

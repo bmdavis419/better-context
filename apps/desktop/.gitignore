@@ -1,0 +1,13 @@
+node_modules
+
+# Output
+/.svelte-kit
+/build
+
+# Rust
+/src-tauri/target
+
+# Env
+.env
+.env.*
+!.env.example

@@ -19,8 +19,8 @@
 	import { goto } from '$app/navigation';
 	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { useConvexClient } from 'convex-svelte';
-	import { api } from '../../convex/_generated/api';
-	import type { Id } from '../../convex/_generated/dataModel';
+	import { api } from '@btca/convex/api';
+	import type { Id } from '@btca/convex/dataModel';
 	import { getAuthState, openSignIn, signOut } from '$lib/stores/auth.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';

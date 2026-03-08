@@ -22,7 +22,7 @@
 	import ResourceLogo from '$lib/components/ResourceLogo.svelte';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
-	import { api } from '../../../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 
 	const auth = getAuthState();
 	const client = useConvexClient();

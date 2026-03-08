@@ -42,6 +42,8 @@ This is a Bun monorepo using Turborepo. **Only use `bun`** - never npm/yarn.
 ```bash
 bun install
 bun run dev:web   # Start web app with Convex
+bun run dev:desktop   # Start desktop app, web app, and Convex
+bun run dev:convex   # Start Convex only
 bun run dev:cli   # Start CLI in watch mode
 bun run server    # Start server in watch mode
 bun run cli       # Run CLI (no watch)
@@ -70,6 +72,7 @@ All scripts use Turborepo for caching. Run from the repository root.
 | `bun run check:all`     | Type check all packages   |
 | `bun run check:cli`     | Type check CLI            |
 | `bun run check:web`     | Type check web app        |
+| `bun run check:convex`  | Type check Convex package |
 | `bun run check:server`  | Type check server         |
 | `bun run check:sandbox` | Type check sandbox        |
 | `bun run check:shared`  | Type check shared package |
@@ -81,6 +84,7 @@ All scripts use Turborepo for caching. Run from the repository root.
 | `bun run format:all`     | Format all packages   |
 | `bun run format:cli`     | Format CLI            |
 | `bun run format:web`     | Format web app        |
+| `bun run format:convex`  | Format Convex package |
 | `bun run format:server`  | Format server         |
 | `bun run format:sandbox` | Format sandbox        |
 | `bun run format:shared`  | Format shared package |
@@ -102,14 +106,16 @@ All scripts use Turborepo for caching. Run from the repository root.
 
 ### Packages
 
-| Package                 | Path                   | Description                  |
-| ----------------------- | ---------------------- | ---------------------------- |
-| `btca`                  | `apps/cli`             | CLI tool                     |
-| `btca-server`           | `apps/server`          | API server                   |
-| `@btca/web`             | `apps/web`             | Web app (SvelteKit + Convex) |
-| `btca-sandbox`          | `apps/sandbox`         | Sandbox environment          |
-| `@btca/shared`          | `packages/shared`      | Shared utilities             |
-| `@btca/analytics-proxy` | `apps/analytics-proxy` | PostHog analytics proxy      |
+| Package                 | Path                   | Description                     |
+| ----------------------- | ---------------------- | ------------------------------- |
+| `btca`                  | `apps/cli`             | CLI tool                        |
+| `btca-server`           | `apps/server`          | API server                      |
+| `@btca/web`             | `apps/web`             | Web app (SvelteKit)             |
+| `@btca/desktop`         | `apps/desktop`         | Desktop app (Tauri + SvelteKit) |
+| `@btca/convex`          | `packages/convex`      | Shared Convex backend           |
+| `btca-sandbox`          | `apps/sandbox`         | Sandbox environment             |
+| `@btca/shared`          | `packages/shared`      | Shared utilities                |
+| `@btca/analytics-proxy` | `apps/analytics-proxy` | PostHog analytics proxy         |
 
 ## model recs...
 

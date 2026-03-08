@@ -12,7 +12,7 @@
 		Square
 	} from '@lucide/svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
-	import { INSTANCE_DISK_FULL_MESSAGE } from '$lib/instanceErrors';
+	import { INSTANCE_DISK_FULL_MESSAGE } from '@btca/convex/instanceErrors';
 
 	type InstanceAction = 'wake' | 'stop' | 'update' | 'reset';
 	const instanceStore = getInstanceStore();

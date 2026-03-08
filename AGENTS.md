@@ -27,6 +27,7 @@ After making changes in a specific package, run its check script:
 | `apps/server`        | `bun run check:server`        | `bun run format:server`        |
 | `apps/sandbox`       | `bun run check:sandbox`       | `bun run format:sandbox`       |
 | `apps/server-simple` | `bun run check:server-simple` | `bun run format:server-simple` |
+| `packages/convex`    | `bun run check:convex`        | `bun run format:convex`        |
 | `packages/shared`    | `bun run check:shared`        | `bun run format:shared`        |
 
 ## Code Style

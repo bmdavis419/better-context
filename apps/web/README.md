@@ -1,6 +1,6 @@
 # @btca/web
 
-SvelteKit + Convex web app for btca.
+SvelteKit web app for btca. Convex now lives in `packages/convex`.
 
 ## Local development
 
@@ -12,6 +12,12 @@ bun run dev:web
 ```
 
 From `apps/web` directly:
+
+```sh
+bun run dev
+```
+
+From `packages/convex` directly:
 
 ```sh
 bun run dev
@@ -31,7 +37,7 @@ PUBLIC_POSTHOG_ID=
 PUBLIC_ANALYTICS_HOST=
 ```
 
-`PUBLIC_CONVEX_URL` is injected during the Vercel build by `convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL --cmd 'bun run build'`, so each deployment is built against the matching Convex deployment.
+`PUBLIC_CONVEX_URL` is still injected during the Vercel build by the shared Convex package, so each deployment is built against the matching Convex deployment.
 
 ## Env split
 

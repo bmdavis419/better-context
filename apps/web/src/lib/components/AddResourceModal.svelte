@@ -8,7 +8,7 @@
 		X
 	} from '@lucide/svelte';
 	import { useConvexClient } from 'convex-svelte';
-	import { api } from '../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
 

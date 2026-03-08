@@ -7,7 +7,7 @@
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { BILLING_PLAN } from '$lib/billing/plans';
 	import PricingPlans from '$lib/components/pricing/PricingPlans.svelte';
-	import { api } from '../../../../convex/_generated/api';
+	import { api } from '@btca/convex/api';
 
 	const auth = getAuthState();
 	const billingStore = getBillingStore();
