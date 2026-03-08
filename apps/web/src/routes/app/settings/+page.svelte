@@ -16,10 +16,12 @@
 	import { api } from '../../../convex/_generated/api';
 	import { getAuthState, openUserProfile } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
+	import { getProjectStore } from '$lib/stores/project.svelte';
 	import { getShikiStore } from '$lib/stores/ShikiStore.svelte';
 	import { getThemeStore } from '$lib/stores/theme.svelte';
 	import { BILLING_PLAN, SUPPORT_URL } from '$lib/billing/plans';
 	import PricingPlans from '$lib/components/pricing/PricingPlans.svelte';
+	import ProjectModelPicker from '$lib/components/ProjectModelPicker.svelte';
 	import CopyButton from '$lib/CopyButton.svelte';
 	import { getClerk } from '$lib/clerk';
 	import { ClientAnalyticsEvents, trackEvent } from '$lib/stores/analytics.svelte';
@@ -27,6 +29,7 @@
 	const auth = getAuthState();
 	const client = useConvexClient();
 	const billingStore = getBillingStore();
+	const projectStore = getProjectStore();
 	const shikiStore = getShikiStore();
 	const themeStore = getThemeStore();
 
@@ -252,16 +255,8 @@ The resources available are defined by the end user in their btca dashboard. If 
 `;
 
 	const usage = $derived(billingStore.summary?.usage);
-	const maxUsedPct = $derived(
-		usage
-			? Math.max(
-					usage.tokensIn.usedPct ?? 0,
-					usage.tokensOut.usedPct ?? 0,
-					usage.sandboxHours.usedPct ?? 0
-				)
-			: 0
-	);
-	const remainingPct = $derived(100 - maxUsedPct);
+	const selectedProject = $derived(projectStore.selectedProject);
+	const remainingPct = $derived(usage?.aiBudget.remainingPct ?? 100);
 
 	const formattedEndDate = $derived.by(() => {
 		const end = billingStore.summary?.currentPeriodEnd;
@@ -482,17 +477,32 @@ The resources available are defined by the end user in their btca dashboard. If 
 								<div class="flex items-center gap-3">
 									<HardDrive size={16} class="bc-muted" />
 									<div>
-										<p class="text-sm font-medium">Monthly Usage</p>
+										<p class="text-sm font-medium">Monthly AI usage</p>
 										<p class="bc-muted text-xs">{formatPercent(remainingPct)} remaining</p>
 									</div>
 								</div>
 								<div class="h-2 w-32 overflow-hidden rounded-full bg-[hsl(var(--bc-muted)/0.2)]">
 									<div
 										class="h-full transition-all"
-										style:width={`${maxUsedPct}%`}
+										style:width={`${remainingPct}%`}
 										style:background-color={tone(remainingPct)}
 									></div>
 								</div>
+							</div>
+							<p class="bc-muted mt-2 text-xs">Higher-end models use this faster.</p>
+						</div>
+					{/if}
+
+					{#if selectedProject}
+						<div class="bc-card p-4">
+							<div class="flex items-center justify-between">
+								<div>
+									<p class="text-sm font-medium">Model</p>
+									<p class="bc-muted text-xs">
+										Higher-end models use your monthly AI usage faster.
+									</p>
+								</div>
+								<ProjectModelPicker />
 							</div>
 						</div>
 					{/if}
@@ -755,8 +765,8 @@ The resources available are defined by the end user in their btca dashboard. If 
 										<HardDrive size={16} />
 									</div>
 									<div>
-										<h2 class="text-sm font-semibold">Monthly Usage</h2>
-										<p class="bc-muted text-xs">Usage across all resources</p>
+										<h2 class="text-sm font-semibold">Monthly AI usage</h2>
+										<p class="bc-muted text-xs">Higher-end models use this faster.</p>
 									</div>
 								</div>
 								<span class="text-sm font-medium">
@@ -766,7 +776,7 @@ The resources available are defined by the end user in their btca dashboard. If 
 							<div class="sandbox-progress-bar mt-4" style:width="100%">
 								<div
 									class="sandbox-progress-fill"
-									style:width={`${maxUsedPct}%`}
+									style:width={`${remainingPct}%`}
 									style:background-color={tone(remainingPct)}
 								></div>
 							</div>

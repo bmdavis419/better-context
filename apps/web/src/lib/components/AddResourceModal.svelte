@@ -10,6 +10,7 @@
 	import { useConvexClient } from 'convex-svelte';
 	import { api } from '../../convex/_generated/api';
 	import { getAuthState } from '$lib/stores/auth.svelte';
+	import { getProjectStore } from '$lib/stores/project.svelte';
 
 	interface Props {
 		isOpen: boolean;
@@ -29,6 +30,10 @@
 
 	const auth = getAuthState();
 	const client = useConvexClient();
+	const projectStore = getProjectStore();
+
+	const selectedProject = $derived(projectStore.selectedProject);
+	const selectedProjectId = $derived(selectedProject?._id);
 
 	let resourceType = $state<ResourceFormType>('git');
 	let gitUrl = $state('');
@@ -203,7 +208,8 @@
 				url: resourceType === 'git' ? parsed?.url : undefined,
 				branch: resourceType === 'git' ? branchName.trim() || 'main' : undefined,
 				package: resourceType === 'npm' ? packageName.trim() : undefined,
-				version: resourceType === 'npm' ? packageVersion.trim() || undefined : undefined
+				version: resourceType === 'npm' ? packageVersion.trim() || undefined : undefined,
+				projectId: selectedProjectId
 			});
 			closeModal();
 		} catch (error) {
@@ -413,7 +419,14 @@
 
 			<div class="mt-6 flex flex-wrap items-center justify-between gap-3">
 				<p class="bc-muted text-xs">
-					We'll sync this resource onto your instance after the next chat mention.
+					{#if selectedProject}
+						This resource will be added to <span class="font-medium text-[hsl(var(--bc-fg))]"
+							>{selectedProject.name}</span
+						>
+						and synced onto your instance after the next chat mention.
+					{:else}
+						We'll sync this resource onto your instance after the next chat mention.
+					{/if}
 				</p>
 				<div class="flex items-center gap-2">
 					<button type="button" class="bc-btn text-sm" onclick={closeModal} disabled={isSubmitting}>

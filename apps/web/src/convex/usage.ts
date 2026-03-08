@@ -4,15 +4,22 @@ import { Result } from 'better-result';
 
 import type { Doc } from './_generated/dataModel.js';
 import { internal } from './_generated/api.js';
-import { action, type ActionCtx } from './_generated/server.js';
+import { action, internalAction, type ActionCtx } from './_generated/server.js';
 import { AnalyticsEvents } from './analyticsEvents.js';
-import { instances } from './apiHelpers.js';
+import { instances, scheduled } from './apiHelpers.js';
 import { requireInstanceOwnershipActionResult, unwrapAuthResult } from './authHelpers.js';
 import { withPrivateApiKey } from './privateWrappers.js';
+import {
+	PRO_AI_BUDGET_MICROS,
+	getPreflightAiBudgetMicros,
+	totalAiBudgetMicros
+} from '../lib/billing/aiBudget';
+import { getWebSandboxModel } from '../lib/models/webSandboxModels';
 import {
 	WebConfigMissingError,
 	WebExternalDependencyError,
 	WebUnhandledError,
+	WebValidationError,
 	type WebError
 } from '../lib/result/errors.js';
 
@@ -28,18 +35,16 @@ type UsageCheckResult =
 			ok: boolean;
 			reason: string | null;
 			metrics: {
-				tokensIn: FeatureMetrics;
-				tokensOut: FeatureMetrics;
-				sandboxHours: FeatureMetrics;
+				aiBudget: FeatureMetrics;
 			};
 			inputTokens: number;
-			sandboxUsageHours: number;
+			requiredBudgetMicros: number;
+			modelId: string;
 			customerId: string;
 	  };
 
 type FinalizeUsageResult = {
-	outputTokens: number;
-	sandboxUsageHours: number;
+	chargedBudgetMicros: number;
 	customerId: string;
 };
 
@@ -54,12 +59,13 @@ type BillingSummaryResult = {
 	status: 'active' | 'trialing' | 'canceled' | 'none';
 	currentPeriodEnd: number | undefined;
 	canceledAt: number | undefined;
-	customer: { name: null; email: null };
+	customer: {
+		name: string | null;
+		email: string | null;
+	};
 	paymentMethod: unknown;
 	usage: {
-		tokensIn: UsageMetricDisplay;
-		tokensOut: UsageMetricDisplay;
-		sandboxHours: UsageMetricDisplay;
+		aiBudget: UsageMetricDisplay;
 	};
 	freeMessages?: {
 		used: number;
@@ -80,12 +86,9 @@ type SubscriptionSnapshot = {
 	canceledAt?: number | null;
 };
 
-const SANDBOX_IDLE_MINUTES = 2;
 const CHARS_PER_TOKEN = 4;
 const FEATURE_IDS = {
-	tokensIn: 'tokens_in',
-	tokensOut: 'tokens_out',
-	sandboxHours: 'sandbox_hours',
+	aiBudget: 'ai_budget',
 	chatMessages: 'chat_messages'
 } as const;
 
@@ -135,21 +138,6 @@ function estimateTokensFromText(text: string): number {
 	return Math.max(1, Math.ceil(trimmed.length / CHARS_PER_TOKEN));
 }
 
-function estimateTokensFromChars(chars: number): number {
-	if (!Number.isFinite(chars) || chars <= 0) return 0;
-	return Math.max(1, Math.ceil(chars / CHARS_PER_TOKEN));
-}
-
-function estimateSandboxUsageHours(params: { lastActiveAt?: number | null; now: number }): number {
-	const maxWindowMs = SANDBOX_IDLE_MINUTES * 60 * 1000;
-	if (!params.lastActiveAt) {
-		return maxWindowMs / (60 * 60 * 1000);
-	}
-	const deltaMs = Math.max(0, params.now - params.lastActiveAt);
-	const cappedMs = Math.min(deltaMs, maxWindowMs);
-	return cappedMs / (60 * 60 * 1000);
-}
-
 function clampPercent(value: number): number {
 	if (!Number.isFinite(value)) return 0;
 	return Math.min(100, Math.max(0, value));
@@ -157,6 +145,8 @@ function clampPercent(value: number): number {
 
 type AutumnCustomer = {
 	id: string;
+	name?: string | null;
+	email?: string | null;
 	products?: {
 		id?: string;
 		status?: string;
@@ -177,6 +167,77 @@ const unwrapUsage = <T>(result: UsageResult<T>): T => {
 	});
 };
 
+const toUsageMetric = (args: { usage: number; included: number; balance: number }) => {
+	const usedPct = args.included > 0 ? clampPercent((args.usage / args.included) * 100) : 0;
+	const remainingPct = clampPercent(100 - usedPct);
+	return {
+		usedPct,
+		remainingPct,
+		isDepleted: remainingPct <= 0 || args.balance <= 0
+	};
+};
+
+const customerExpand = ['payment_method'] as const;
+const checkoutSuccessPath = '/app/checkout/success';
+const checkoutCancelPath = '/app/checkout/cancel';
+const billingReturnPath = '/app/settings/billing';
+
+const isAutumnNotFound = (args: { message?: string; statusCode?: number }) =>
+	args.statusCode === 404 || args.message?.toLowerCase().includes('not found') === true;
+
+const toAutumnCustomer = (
+	customer: {
+		id: string | null;
+		name: string | null;
+		email: string | null;
+		products: {
+			id?: string;
+			status?: string;
+			current_period_end?: number | null;
+			canceled_at?: number | null;
+		}[];
+		payment_method?: unknown;
+	},
+	fallbackId: string
+): AutumnCustomer => ({
+	id: customer.id ?? fallbackId,
+	name: customer.name,
+	email: customer.email,
+	products: customer.products ?? [],
+	payment_method: customer.payment_method
+});
+
+async function resolveProUsageMetrics(args: {
+	customerId: string;
+	requiredBalance?: number;
+}): Promise<UsageResult<FeatureMetrics>> {
+	return await checkFeature({
+		customerId: args.customerId,
+		featureId: FEATURE_IDS.aiBudget,
+		requiredBalance: args.requiredBalance
+	});
+}
+
+async function getResolvedModelId(args: {
+	ctx: ActionCtx;
+	instanceId: Doc<'instances'>['_id'];
+	projectId?: Doc<'projects'>['_id'];
+}) {
+	if (!args.projectId) {
+		return getWebSandboxModel().id;
+	}
+
+	const project = await args.ctx.runQuery(internal.projects.getInternal, {
+		projectId: args.projectId
+	});
+
+	if (!project || project.instanceId !== args.instanceId) {
+		throw new WebValidationError({ message: 'Project not found', field: 'projectId' });
+	}
+
+	return getWebSandboxModel(project.model).id;
+}
+
 async function getOrCreateCustomer(user: {
 	clerkId: string;
 	email?: string | null;
@@ -189,12 +250,21 @@ async function getOrCreateCustomer(user: {
 
 	const autumn = autumnResult.value;
 
-	const fetchCustomer = async (customerId: string): Promise<UsageResult<AutumnCustomer>> => {
+	const fetchCustomer = async (): Promise<UsageResult<AutumnCustomer | null>> => {
 		try {
-			const customerPayload = await autumn.customers.get(customerId, {
-				expand: ['payment_method']
+			const customerPayload = await autumn.customers.get(user.clerkId, {
+				expand: customerExpand
 			});
 			if (customerPayload.error) {
+				if (
+					isAutumnNotFound({
+						message: customerPayload.error.message,
+						statusCode: customerPayload.statusCode
+					})
+				) {
+					return Result.ok(null);
+				}
+
 				return Result.err(
 					new WebExternalDependencyError({
 						message: customerPayload.error.message ?? 'Failed to fetch Autumn customer',
@@ -202,41 +272,44 @@ async function getOrCreateCustomer(user: {
 					})
 				);
 			}
-			const id = customerPayload.data?.id ?? customerId;
-			return Result.ok({
-				id,
-				products: customerPayload.data?.products ?? [],
-				payment_method: customerPayload.data?.payment_method
-			});
+
+			return Result.ok(toAutumnCustomer(customerPayload.data, user.clerkId));
 		} catch (error) {
 			return toExternalError(error, 'Failed to fetch Autumn customer', 'Autumn');
 		}
 	};
 
 	try {
+		const existingCustomerResult = await fetchCustomer();
+		if (Result.isError(existingCustomerResult)) {
+			return Result.err(existingCustomerResult.error);
+		}
+		if (existingCustomerResult.value) {
+			return Result.ok(existingCustomerResult.value);
+		}
+
 		const createPayload = await autumn.customers.create({
 			id: user.clerkId,
 			email: user.email ?? undefined,
-			name: user.name ?? undefined
+			name: user.name ?? undefined,
+			expand: customerExpand
 		});
 
 		if (!createPayload.error) {
-			const customerId = createPayload.data?.id ?? user.clerkId;
-			return await fetchCustomer(customerId);
+			return Result.ok(toAutumnCustomer(createPayload.data, user.clerkId));
 		}
 
-		const message = createPayload.error?.message ?? 'Failed to create Autumn customer';
-		const alreadyExists = message.toLowerCase().includes('already');
-		if (!alreadyExists) {
-			return Result.err(
-				new WebExternalDependencyError({
-					message,
-					dependency: 'Autumn'
-				})
-			);
+		const concurrentFetchResult = await fetchCustomer();
+		if (!Result.isError(concurrentFetchResult) && concurrentFetchResult.value) {
+			return Result.ok(concurrentFetchResult.value);
 		}
 
-		return await fetchCustomer(user.clerkId);
+		return Result.err(
+			new WebExternalDependencyError({
+				message: createPayload.error?.message ?? 'Failed to create Autumn customer',
+				dependency: 'Autumn'
+			})
+		);
 	} catch (error) {
 		return toExternalError(error, 'Failed to create Autumn customer', 'Autumn');
 	}
@@ -315,18 +388,59 @@ async function trackUsage(args: {
 	}
 }
 
+async function resetAiBudgetBalance(args: {
+	customerId: string;
+	remaining: number;
+}): Promise<UsageResult<void>> {
+	const autumnResult = getAutumnClientResult();
+	if (Result.isError(autumnResult)) {
+		return Result.err(autumnResult.error);
+	}
+	const autumn = autumnResult.value;
+	try {
+		const result = await autumn.v2.balances.update({
+			customer_id: args.customerId,
+			feature_id: FEATURE_IDS.aiBudget,
+			remaining: args.remaining
+		});
+		if (result.error) {
+			return Result.err(
+				new WebExternalDependencyError({
+					message: result.error.message ?? 'Failed to reset Autumn AI budget balance',
+					dependency: 'Autumn'
+				})
+			);
+		}
+		return Result.ok(undefined);
+	} catch (error) {
+		return toExternalError(error, 'Failed to reset Autumn AI budget balance', 'Autumn');
+	}
+}
+
 async function createCheckoutSessionUrl(args: {
 	autumnClient: Autumn;
 	baseUrl: string;
 	customerId: string;
+	customerData?: {
+		email?: string | null;
+		name?: string | null;
+	};
 }): Promise<UsageResult<string>> {
 	try {
-		const payload = await args.autumnClient.checkout({
+		const payload = await args.autumnClient.attach({
 			customer_id: args.customerId,
 			product_id: 'btca_pro',
-			success_url: `${args.baseUrl}/app/checkout/success`,
+			force_checkout: true,
+			success_url: `${args.baseUrl}${checkoutSuccessPath}`,
+			customer_data:
+				args.customerData?.email || args.customerData?.name
+					? {
+							email: args.customerData.email ?? undefined,
+							name: args.customerData.name ?? undefined
+						}
+					: undefined,
 			checkout_session_params: {
-				cancel_url: `${args.baseUrl}/app/checkout/cancel`
+				cancel_url: `${args.baseUrl}${checkoutCancelPath}`
 			}
 		});
 
@@ -339,36 +453,7 @@ async function createCheckoutSessionUrl(args: {
 			);
 		}
 
-		if (payload.data?.url) {
-			return Result.ok(payload.data.url);
-		}
-
-		const attachPayload = await args.autumnClient.attach({
-			customer_id: args.customerId,
-			product_id: 'btca_pro',
-			success_url: `${args.baseUrl}/app/checkout/success`
-		});
-
-		if (attachPayload.error) {
-			return Result.err(
-				new WebExternalDependencyError({
-					message: attachPayload.error.message ?? 'Failed to attach checkout session',
-					dependency: 'Autumn'
-				})
-			);
-		}
-
-		const checkoutUrl = attachPayload.data?.checkout_url;
-		if (!checkoutUrl) {
-			return Result.err(
-				new WebExternalDependencyError({
-					message: 'Checkout session created but no checkout URL was returned',
-					dependency: 'Autumn'
-				})
-			);
-		}
-
-		return Result.ok(checkoutUrl);
+		return Result.ok(payload.data?.checkout_url ?? `${args.baseUrl}${checkoutSuccessPath}`);
 	} catch (error) {
 		return toExternalError(error, 'Failed to create checkout session', 'Autumn');
 	}
@@ -381,7 +466,7 @@ async function createBillingPortalSessionUrl(args: {
 }): Promise<UsageResult<string>> {
 	try {
 		const payload = await args.autumnClient.customers.billingPortal(args.customerId, {
-			return_url: `${args.baseUrl}/app/settings/billing`
+			return_url: `${args.baseUrl}${billingReturnPath}`
 		});
 
 		if (payload.error) {
@@ -542,7 +627,8 @@ export const ensureUsageAvailable = action({
 	args: {
 		instanceId: v.id('instances'),
 		question: v.string(),
-		resources: v.array(v.string())
+		resources: v.array(v.string()),
+		projectId: v.optional(v.id('projects'))
 	},
 	returns: v.union(
 		v.object({
@@ -553,12 +639,11 @@ export const ensureUsageAvailable = action({
 			ok: v.boolean(),
 			reason: v.union(v.string(), v.null()),
 			metrics: v.object({
-				tokensIn: featureMetricsValidator,
-				tokensOut: featureMetricsValidator,
-				sandboxHours: featureMetricsValidator
+				aiBudget: featureMetricsValidator
 			}),
 			inputTokens: v.number(),
-			sandboxUsageHours: v.number(),
+			requiredBudgetMicros: v.number(),
+			modelId: v.string(),
 			customerId: v.string()
 		})
 	),
@@ -579,6 +664,11 @@ export const ensureUsageAvailable = action({
 						: undefined)
 			})
 		);
+		const modelId = await getResolvedModelId({
+			ctx,
+			instanceId: instance._id,
+			projectId: args.projectId
+		});
 		const activeProduct = getActiveProduct(autumnCustomer.products);
 		await syncSubscriptionState(ctx, instance, getSubscriptionSnapshot(activeProduct));
 		if (!activeProduct) {
@@ -621,71 +711,39 @@ export const ensureUsageAvailable = action({
 				ok: true,
 				reason: null,
 				metrics: {
-					tokensIn: { usage: 0, balance: 0, included: 0 },
-					tokensOut: { usage: 0, balance: 0, included: 0 },
-					sandboxHours: { usage: 0, balance: 0, included: 0 }
+					aiBudget: { usage: 0, balance: 0, included: PRO_AI_BUDGET_MICROS }
 				},
 				inputTokens: 0,
-				sandboxUsageHours: 0,
+				requiredBudgetMicros: 0,
+				modelId,
 				customerId: autumnCustomer.id ?? instance.clerkId
 			};
 		}
 
 		if (isProPlan) {
 			const inputTokens = estimateTokensFromText(args.question);
-			const now = Date.now();
-			const sandboxUsageHours = args.resources.length
-				? estimateSandboxUsageHours({ lastActiveAt: instance.lastActiveAt, now })
-				: 0;
-
-			const requiredTokensIn = inputTokens > 0 ? inputTokens : undefined;
-			const requiredTokensOut = 1;
-			const requiredSandboxHours = sandboxUsageHours > 0 ? sandboxUsageHours : undefined;
-
-			const [tokensInResult, tokensOutResult, sandboxHoursResult] = await Promise.all([
-				checkFeature({
+			const requiredBudgetMicros = getPreflightAiBudgetMicros({
+				modelId,
+				inputTokens
+			});
+			const aiBudget = unwrapUsage(
+				await resolveProUsageMetrics({
 					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.tokensIn,
-					requiredBalance: requiredTokensIn
-				}),
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.tokensOut,
-					requiredBalance: requiredTokensOut
-				}),
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.sandboxHours,
-					requiredBalance: requiredSandboxHours
+					requiredBalance: requiredBudgetMicros
 				})
-			]);
-			const tokensIn = unwrapUsage(tokensInResult);
-			const tokensOut = unwrapUsage(tokensOutResult);
-			const sandboxHours = unwrapUsage(sandboxHoursResult);
-
-			const hasEnough = (balance: number, required?: number) =>
-				required == null ? balance > 0 : balance >= required;
-
-			const ok =
-				hasEnough(tokensIn.balance, requiredTokensIn) &&
-				hasEnough(tokensOut.balance, requiredTokensOut) &&
-				hasEnough(sandboxHours.balance, requiredSandboxHours);
+			);
+			const ok = aiBudget.balance >= requiredBudgetMicros;
 
 			if (!ok) {
-				const limitTypes: string[] = [];
-				if (!hasEnough(tokensIn.balance, requiredTokensIn)) limitTypes.push('tokensIn');
-				if (!hasEnough(tokensOut.balance, requiredTokensOut)) limitTypes.push('tokensOut');
-				if (!hasEnough(sandboxHours.balance, requiredSandboxHours)) limitTypes.push('sandboxHours');
-
 				await ctx.scheduler.runAfter(0, internal.analytics.trackEvent, {
 					distinctId: instance.clerkId,
 					event: AnalyticsEvents.USAGE_LIMIT_REACHED,
 					properties: {
 						instanceId: args.instanceId,
-						limitTypes,
-						tokensInBalance: tokensIn.balance,
-						tokensOutBalance: tokensOut.balance,
-						sandboxHoursBalance: sandboxHours.balance
+						limitTypes: ['aiBudget'],
+						modelId,
+						requiredBudgetMicros,
+						aiBudgetBalance: aiBudget.balance
 					}
 				});
 			}
@@ -694,12 +752,11 @@ export const ensureUsageAvailable = action({
 				ok,
 				reason: ok ? null : 'limit_reached',
 				metrics: {
-					tokensIn,
-					tokensOut,
-					sandboxHours
+					aiBudget
 				},
 				inputTokens,
-				sandboxUsageHours,
+				requiredBudgetMicros,
+				modelId,
 				customerId: autumnCustomer.id ?? instance.clerkId
 			};
 		}
@@ -714,15 +771,16 @@ export const ensureUsageAvailable = action({
 export const finalizeUsage = action({
 	args: {
 		instanceId: v.id('instances'),
-		questionTokens: v.number(),
-		outputChars: v.number(),
-		reasoningChars: v.number(),
-		resources: v.array(v.string()),
-		sandboxUsageHours: v.optional(v.number())
+		modelId: v.string(),
+		inputTokens: v.number(),
+		outputTokens: v.number(),
+		reasoningTokens: v.optional(v.number()),
+		cacheReadTokens: v.optional(v.number()),
+		cacheWriteTokens: v.optional(v.number()),
+		chargedBudgetMicros: v.optional(v.number())
 	},
 	returns: v.object({
-		outputTokens: v.number(),
-		sandboxUsageHours: v.number(),
+		chargedBudgetMicros: v.number(),
 		customerId: v.string()
 	}),
 	handler: async (ctx, args): Promise<FinalizeUsageResult> => {
@@ -759,38 +817,30 @@ export const finalizeUsage = action({
 			);
 		}
 
-		const outputTokens = isProPlan
-			? estimateTokensFromChars(args.outputChars + args.reasoningChars)
+		const chargedBudgetMicros = isProPlan
+			? Math.max(
+					0,
+					args.chargedBudgetMicros ??
+						totalAiBudgetMicros({
+							modelId: args.modelId,
+							inputTokens: args.inputTokens,
+							outputTokens: args.outputTokens,
+							reasoningTokens: args.reasoningTokens,
+							cacheReadTokens: args.cacheReadTokens,
+							cacheWriteTokens: args.cacheWriteTokens
+						})
+				)
 			: 0;
-		const sandboxUsageHours = isProPlan ? (args.sandboxUsageHours ?? 0) : 0;
 
-		if (isProPlan) {
-			if (args.questionTokens > 0) {
-				tasks.push(
-					trackUsage({
-						customerId: autumnCustomer.id ?? instance.clerkId,
-						featureId: FEATURE_IDS.tokensIn,
-						value: args.questionTokens
-					})
-				);
-			}
-			if (outputTokens > 0) {
-				tasks.push(
-					trackUsage({
-						customerId: autumnCustomer.id ?? instance.clerkId,
-						featureId: FEATURE_IDS.tokensOut,
-						value: outputTokens
-					})
-				);
-			}
-			if (sandboxUsageHours > 0) {
-				tasks.push(
-					trackUsage({
-						customerId: autumnCustomer.id ?? instance.clerkId,
-						featureId: FEATURE_IDS.sandboxHours,
-						value: sandboxUsageHours
-					})
-				);
+		if (isProPlan && chargedBudgetMicros > 0) {
+			const trackAiBudgetResult = await trackUsage({
+				customerId: autumnCustomer.id ?? instance.clerkId,
+				featureId: FEATURE_IDS.aiBudget,
+				value: chargedBudgetMicros
+			});
+
+			if (Result.isError(trackAiBudgetResult)) {
+				throwUsageError(trackAiBudgetResult.error);
 			}
 		}
 
@@ -802,8 +852,7 @@ export const finalizeUsage = action({
 		}
 
 		return {
-			outputTokens,
-			sandboxUsageHours,
+			chargedBudgetMicros,
 			customerId: autumnCustomer.id ?? instance.clerkId
 		};
 	}
@@ -827,12 +876,13 @@ export const getBillingSummary = action({
 		),
 		currentPeriodEnd: v.optional(v.number()),
 		canceledAt: v.optional(v.number()),
-		customer: v.object({ name: v.null(), email: v.null() }),
+		customer: v.object({
+			name: v.union(v.string(), v.null()),
+			email: v.union(v.string(), v.null())
+		}),
 		paymentMethod: v.any(),
 		usage: v.object({
-			tokensIn: usageMetricDisplayValidator,
-			tokensOut: usageMetricDisplayValidator,
-			sandboxHours: usageMetricDisplayValidator
+			aiBudget: usageMetricDisplayValidator
 		}),
 		freeMessages: v.optional(
 			v.object({
@@ -876,39 +926,18 @@ export const getBillingSummary = action({
 			canceledAt: activeProduct?.canceled_at ?? undefined
 		});
 
-		const [tokensInResult, tokensOutResult, sandboxHoursResult, chatMessagesResult] =
-			await Promise.all([
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.tokensIn
-				}),
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.tokensOut
-				}),
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.sandboxHours
-				}),
-				checkFeature({
-					customerId: autumnCustomer.id ?? instance.clerkId,
-					featureId: FEATURE_IDS.chatMessages
-				})
-			]);
-		const tokensIn = unwrapUsage(tokensInResult);
-		const tokensOut = unwrapUsage(tokensOutResult);
-		const sandboxHours = unwrapUsage(sandboxHoursResult);
+		const [proUsageResult, chatMessagesResult] = await Promise.all([
+			resolveProUsageMetrics({
+				customerId: autumnCustomer.id ?? instance.clerkId
+			}),
+			checkFeature({
+				customerId: autumnCustomer.id ?? instance.clerkId,
+				featureId: FEATURE_IDS.chatMessages
+			})
+		]);
+		const aiBudget = unwrapUsage(proUsageResult);
 		const chatMessages = unwrapUsage(chatMessagesResult);
-
-		const toUsageMetric = (args: { usage: number; included: number; balance: number }) => {
-			const usedPct = args.included > 0 ? clampPercent((args.usage / args.included) * 100) : 0;
-			const remainingPct = clampPercent(100 - usedPct);
-			return {
-				usedPct,
-				remainingPct,
-				isDepleted: remainingPct <= 0 || args.balance <= 0
-			};
-		};
+		const aiBudgetUsage = toUsageMetric(aiBudget);
 
 		const result: BillingSummaryResult = {
 			plan,
@@ -916,14 +945,12 @@ export const getBillingSummary = action({
 			currentPeriodEnd: activeProduct?.current_period_end ?? undefined,
 			canceledAt: activeProduct?.canceled_at ?? undefined,
 			customer: {
-				name: null,
-				email: null
+				name: autumnCustomer.name ?? null,
+				email: autumnCustomer.email ?? null
 			},
 			paymentMethod: autumnCustomer.payment_method ?? null,
 			usage: {
-				tokensIn: toUsageMetric(tokensIn),
-				tokensOut: toUsageMetric(tokensOut),
-				sandboxHours: toUsageMetric(sandboxHours)
+				aiBudget: aiBudgetUsage
 			}
 		};
 
@@ -936,6 +963,59 @@ export const getBillingSummary = action({
 		}
 
 		return result;
+	}
+});
+
+export const resetProAiBudgetBalances = internalAction({
+	args: {},
+	returns: v.object({
+		checked: v.number(),
+		reset: v.number(),
+		skipped: v.number(),
+		failed: v.number()
+	}),
+	handler: async (ctx) => {
+		const allInstances = await ctx.runQuery(scheduled.queries.listInstances, {});
+		let reset = 0;
+		let skipped = 0;
+		let failed = 0;
+
+		for (const instance of allInstances) {
+			try {
+				const autumnCustomer = unwrapUsage(
+					await getOrCreateCustomer({
+						clerkId: instance.clerkId
+					})
+				);
+				const activeProduct = getActiveProduct(autumnCustomer.products);
+				if (activeProduct?.id !== 'btca_pro') {
+					skipped++;
+					continue;
+				}
+
+				unwrapUsage(
+					await resetAiBudgetBalance({
+						customerId: autumnCustomer.id ?? instance.clerkId,
+						remaining: PRO_AI_BUDGET_MICROS
+					})
+				);
+				reset++;
+			} catch (error) {
+				failed++;
+				console.error('Failed to reset AI budget balance', {
+					instanceId: instance._id,
+					clerkId: instance.clerkId,
+					error
+				});
+			}
+		}
+
+		return {
+			checked: allInstances.length,
+			reset,
+			skipped,
+			failed
+		};
 	}
 });
 
@@ -975,7 +1055,11 @@ export const createCheckoutSession = action({
 			await createCheckoutSessionUrl({
 				autumnClient: unwrapUsage(getAutumnClientResult()),
 				baseUrl: args.baseUrl,
-				customerId: autumnCustomer.id ?? instance.clerkId
+				customerId: autumnCustomer.id ?? instance.clerkId,
+				customerData: {
+					email: autumnCustomer.email,
+					name: autumnCustomer.name
+				}
 			})
 		);
 

@@ -6,6 +6,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { internalQuery, mutation, query } from './_generated/server';
 import { AnalyticsEvents } from './analyticsEvents';
 import { getAuthenticatedInstanceResult, unwrapAuthResult } from './authHelpers';
+import { isWebSandboxModelId } from '../lib/models/webSandboxModels.ts';
 import { WebConflictError, WebValidationError, type WebError } from '../lib/result/errors';
 
 // Project validator
@@ -27,6 +28,12 @@ const throwProjectError = (error: WebError): never => {
 
 const projectNotFoundError = (message: string): WebValidationError =>
 	new WebValidationError({ message, field: 'project' });
+
+const validateProjectModel = (model?: string) => {
+	if (model && !isWebSandboxModelId(model)) {
+		throwProjectError(new WebValidationError({ message: 'Unsupported model', field: 'model' }));
+	}
+};
 
 type ProjectDb = {
 	get(id: Id<'projects'>): Promise<Doc<'projects'> | null>;
@@ -138,6 +145,7 @@ export const create = mutation({
 	returns: v.id('projects'),
 	handler: async (ctx, args) => {
 		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
+		validateProjectModel(args.model);
 		const existing = await ctx.db
 			.query('projects')
 			.withIndex('by_instance_and_name', (q) =>
@@ -236,6 +244,7 @@ export const updateModel = mutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const instance = await unwrapAuthResult(await getAuthenticatedInstanceResult(ctx));
+		validateProjectModel(args.model);
 		const projectResult = await requireProjectOwnershipResult(ctx, args.projectId, instance._id);
 		const project = Result.match(projectResult, {
 			ok: (value) => value,

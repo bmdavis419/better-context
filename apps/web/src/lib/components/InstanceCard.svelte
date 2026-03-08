@@ -12,14 +12,12 @@
 		Square
 	} from '@lucide/svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
+	import { INSTANCE_DISK_FULL_MESSAGE } from '$lib/instanceErrors';
 
 	type InstanceAction = 'wake' | 'stop' | 'update' | 'reset';
 	const instanceStore = getInstanceStore();
 	let pendingAction = $state<InstanceAction | null>(null);
 	let isExpanded = $state(false);
-
-	const storageLimitBytes = 10 * 1024 * 1024 * 1024;
-	const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
 	const stateMeta: Record<
 		string,
@@ -87,6 +85,14 @@
 
 	const stateInfo = $derived.by(() => {
 		const state = instanceStore.state ?? 'unknown';
+		if (state === 'error' && instanceStore.errorKind === 'disk_full') {
+			return {
+				label: 'Cache full',
+				description: 'Your instance cache is full. Reset it to keep going.',
+				tone: 'error' as const,
+				icon: AlertTriangle
+			};
+		}
 		return (
 			stateMeta[state] ?? {
 				label: 'Checking',
@@ -123,9 +129,7 @@
 	const canStop = $derived.by(() => instanceStore.state === 'running');
 	const canUpdate = $derived.by(() => ['running', 'stopped'].includes(instanceStore.state ?? ''));
 	const canReset = $derived.by(() => instanceStore.state === 'error');
-
-	const storageUsed = $derived.by(() => instanceStore.storageUsedBytes ?? 0);
-	const storagePercent = $derived.by(() => Math.min((storageUsed / storageLimitBytes) * 100, 100));
+	const isDiskFullError = $derived.by(() => instanceStore.errorKind === 'disk_full');
 
 	const displayedResources = $derived.by(() => instanceStore.cachedResources.slice(0, 4));
 	const getCachedResourceMeta = (resource: {
@@ -153,22 +157,11 @@
 
 	const errorText = $derived.by(
 		() =>
+			(instanceStore.errorKind === 'disk_full' ? INSTANCE_DISK_FULL_MESSAGE : null) ??
 			instanceStore.instance?.errorMessage ??
 			instanceStore.error ??
 			'Instance failed to start. Please retry.'
 	);
-
-	function formatBytes(bytes: number) {
-		if (!bytes) return '0 B';
-		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-		let value = bytes;
-		let unitIndex = 0;
-		while (value >= 1024 && unitIndex < units.length - 1) {
-			value /= 1024;
-			unitIndex += 1;
-		}
-		return `${byteFormatter.format(value)} ${units[unitIndex]}`;
-	}
 
 	function formatDateTime(timestamp?: number | null) {
 		if (!timestamp) return 'Unknown';
@@ -302,6 +295,13 @@
 							<div class="min-w-0 flex-1">
 								<h3 class="text-sm font-semibold">Instance needs attention</h3>
 								<p class="mt-1 text-xs text-red-500">{errorText}</p>
+								<p class="bc-muted mt-2 text-xs">
+									{#if isDiskFullError}
+										Reset your instance to clear cached repos and keep going.
+									{:else}
+										Reset your instance to rebuild it from scratch.
+									{/if}
+								</p>
 								<button
 									type="button"
 									class="bc-btn mt-3 text-xs"
@@ -310,10 +310,10 @@
 								>
 									{#if pendingAction === 'reset'}
 										<Loader2 size={12} class="animate-spin" />
-										Retrying...
+										Resetting...
 									{:else}
 										<RefreshCcw size={12} />
-										Retry provisioning
+										Reset instance
 									{/if}
 								</button>
 							</div>
@@ -403,58 +403,35 @@
 					</div>
 				</div>
 
-				<div class="grid gap-4 md:grid-cols-2">
-					<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
-						<p class="bc-muted text-xs uppercase tracking-[0.2em]">Versions</p>
-						<div class="mt-3 grid gap-2 text-sm">
-							<div class="flex items-center justify-between gap-2">
-								<span class="bc-muted">btca</span>
-								<div class="flex items-center gap-2">
-									<span>{instanceStore.btcaVersion ?? 'Unknown'}</span>
-									{#if instanceStore.btcaUpdateAvailable}
-										<span class="text-xs text-[hsl(var(--bc-warning))]">
-											→ {instanceStore.latestBtcaVersion}
-										</span>
-									{/if}
-								</div>
-							</div>
-							<div class="flex items-center justify-between gap-2">
-								<span class="bc-muted">opencode</span>
-								<div class="flex items-center gap-2">
-									<span>{instanceStore.opencodeVersion ?? 'Unknown'}</span>
-									{#if instanceStore.opencodeUpdateAvailable}
-										<span class="text-xs text-[hsl(var(--bc-warning))]">
-											→ {instanceStore.latestOpencodeVersion}
-										</span>
-									{/if}
-								</div>
+				<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
+					<p class="bc-muted text-xs uppercase tracking-[0.2em]">Versions</p>
+					<div class="mt-3 grid gap-2 text-sm">
+						<div class="flex items-center justify-between gap-2">
+							<span class="bc-muted">btca</span>
+							<div class="flex items-center gap-2">
+								<span>{instanceStore.btcaVersion ?? 'Unknown'}</span>
+								{#if instanceStore.btcaUpdateAvailable}
+									<span class="text-xs text-[hsl(var(--bc-warning))]">
+										→ {instanceStore.latestBtcaVersion}
+									</span>
+								{/if}
 							</div>
 						</div>
-						<p class="bc-muted mt-2 text-xs">
-							Last check: {formatDateTime(instanceStore.instance?.lastVersionCheck)}
-						</p>
-					</div>
-
-					<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">
-						<p class="bc-muted text-xs uppercase tracking-[0.2em]">Storage</p>
-						<div class="mt-3 flex items-center justify-between text-xs">
-							<span class="bc-muted">Used</span>
-							<span>
-								{storageUsed
-									? `${formatBytes(storageUsed)} of ${formatBytes(storageLimitBytes)}`
-									: 'Usage pending'}
-							</span>
+						<div class="flex items-center justify-between gap-2">
+							<span class="bc-muted">opencode</span>
+							<div class="flex items-center gap-2">
+								<span>{instanceStore.opencodeVersion ?? 'Unknown'}</span>
+								{#if instanceStore.opencodeUpdateAvailable}
+									<span class="text-xs text-[hsl(var(--bc-warning))]">
+										→ {instanceStore.latestOpencodeVersion}
+									</span>
+								{/if}
+							</div>
 						</div>
-						<div
-							class="mt-2 h-2 w-full border border-[hsl(var(--bc-border))] bg-[hsl(var(--bc-surface))]"
-						>
-							<div
-								class="h-full bg-[hsl(var(--bc-accent))]"
-								style={`width: ${storagePercent}%`}
-							></div>
-						</div>
-						<p class="bc-muted mt-2 text-xs">Storage updates after provisioning completes.</p>
 					</div>
+					<p class="bc-muted mt-2 text-xs">
+						Last check: {formatDateTime(instanceStore.instance?.lastVersionCheck)}
+					</p>
 				</div>
 
 				<div class="bc-card bg-[hsl(var(--bc-surface-2))] p-4">

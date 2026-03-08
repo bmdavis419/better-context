@@ -9,7 +9,7 @@
 	import { setThemeStore } from '$lib/stores/theme.svelte';
 	import { initAnalytics } from '$lib/stores/analytics.svelte';
 	import { disposeChatHighlighter } from '../lib/shiki/chatHighlighter.ts';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	let { children } = $props();
 
@@ -20,14 +20,9 @@
 
 	onMount(() => {
 		initAnalytics();
-		window.addEventListener('pagehide', teardownShiki);
-		window.addEventListener('beforeunload', teardownShiki);
-		return () => {
-			window.removeEventListener('pagehide', teardownShiki);
-			window.removeEventListener('beforeunload', teardownShiki);
-			teardownShiki();
-		};
 	});
+
+	onDestroy(teardownShiki);
 
 	const isAppRoute = $derived(page.url.pathname.startsWith('/app'));
 	const fullBleed = $derived(page.url.pathname === '/og');

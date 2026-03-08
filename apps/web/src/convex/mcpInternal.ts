@@ -3,12 +3,21 @@ import { Result } from 'better-result';
 
 import type { Id } from './_generated/dataModel';
 import { internalMutation } from './_generated/server';
+import { isWebSandboxModelId } from '../lib/models/webSandboxModels.ts';
 import { WebConflictError, WebValidationError, type WebError } from '../lib/result/errors';
 
 type McpInternalResult<T> = Result<T, WebError>;
 
 const throwMcpInternalError = (error: WebError): never => {
 	throw error;
+};
+
+const getGitProvider = (url: string): 'github' | 'generic' => {
+	try {
+		return new URL(url).hostname.toLowerCase() === 'github.com' ? 'github' : 'generic';
+	} catch {
+		return 'generic';
+	}
 };
 
 /**
@@ -80,18 +89,15 @@ export const addResourceInternal = internalMutation({
 	},
 	returns: v.id('userResources'),
 	handler: async (ctx, args): Promise<Id<'userResources'>> => {
-		// Check if resource with this name already exists for this project using compound index
 		const existing = await ctx.db
 			.query('userResources')
-			.withIndex('by_project_and_name', (q) =>
-				q.eq('projectId', args.projectId).eq('name', args.name)
-			)
-			.first();
+			.withIndex('by_instance', (q) => q.eq('instanceId', args.instanceId))
+			.collect();
 
-		if (existing) {
+		if (existing.some((resource) => resource.name.toLowerCase() === args.name.toLowerCase())) {
 			const result: McpInternalResult<Id<'userResources'>> = Result.err(
 				new WebConflictError({
-					message: `Resource "${args.name}" already exists in this project`,
+					message: `Resource "${args.name}" already exists in this instance`,
 					conflict: args.name
 				})
 			);
@@ -107,7 +113,7 @@ export const addResourceInternal = internalMutation({
 			branch: args.branch,
 			searchPath: args.searchPath,
 			specialNotes: args.specialNotes,
-			gitProvider: 'github',
+			gitProvider: getGitProvider(args.url),
 			visibility: 'public',
 			createdAt: Date.now()
 		});
@@ -151,7 +157,7 @@ export const updateResourceInternal = internalMutation({
 			branch: args.branch,
 			searchPath: args.searchPath,
 			specialNotes: args.specialNotes,
-			gitProvider: 'github',
+			gitProvider: getGitProvider(args.url),
 			visibility: 'public',
 			authSource: undefined
 		});
@@ -169,6 +175,12 @@ export const updateProjectModelInternal = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
+		if (!isWebSandboxModelId(args.model)) {
+			throwMcpInternalError(
+				new WebValidationError({ message: 'Unsupported model', field: 'model' })
+			);
+		}
+
 		await ctx.db.patch(args.projectId, {
 			model: args.model
 		});

@@ -6,10 +6,16 @@ import { v } from 'convex/values';
 
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
-import { action } from './_generated/server';
+import { action, type ActionCtx } from './_generated/server';
 import { AnalyticsEvents } from './analyticsEvents';
 import { instances } from './apiHelpers';
-import { inspectGitHubConnectionForClerkUser } from './githubAuth';
+import {
+	ensureGitHubBranch,
+	fetchGitHubRepo,
+	getRepoFullName,
+	parseGitHubRepoRef,
+	resolveAccessibleRepo
+} from './githubApp';
 import { WebAuthError, WebUnhandledError, WebValidationError } from '../lib/result/errors';
 
 type InternalResources = {
@@ -29,7 +35,7 @@ type InternalResources = {
 			specialNotes?: string;
 			gitProvider?: 'github' | 'generic';
 			visibility?: 'public' | 'private';
-			authSource?: 'clerk_github_oauth';
+			authSource?: 'clerk_github_oauth' | 'github_app';
 		},
 		Id<'userResources'>
 	>;
@@ -50,30 +56,28 @@ type InternalAnalytics = {
 	>;
 };
 
+type GitHubInstallationRecord = {
+	installationId: number;
+	accountLogin: string;
+	repositorySelection: 'all' | 'selected';
+	repositoryNames: string[];
+	status: 'active' | 'suspended' | 'deleted';
+};
+
 const resourcesInternal = internal as unknown as {
 	resources: InternalResources;
 	githubConnections: {
-		upsertForInstance: FunctionReference<
-			'mutation',
+		getByOwner: FunctionReference<
+			'query',
 			'internal',
 			{
 				instanceId: Id<'instances'>;
-				clerkUserId: string;
-				githubUserId?: number;
-				githubLogin?: string;
-				scopes: string[];
-				status: 'connected' | 'missing_scope' | 'disconnected';
-				connectedAt?: number;
+				accountLogin: string;
 			},
-			Id<'githubConnections'>
+			GitHubInstallationRecord[]
 		>;
 	};
 	analytics: InternalAnalytics;
-};
-
-type RepoRef = {
-	owner: string;
-	repo: string;
 };
 
 type GitHubRepoResponse = {
@@ -83,28 +87,6 @@ type GitHubRepoResponse = {
 
 const NPM_PACKAGE_SEGMENT_REGEX = /^[a-z0-9][a-z0-9._-]*$/;
 const NPM_VERSION_OR_TAG_REGEX = /^[^\s/]+$/;
-
-const parseGitHubRepoRef = (url: string): RepoRef | null => {
-	try {
-		const parsed = new URL(url);
-		if (parsed.hostname.toLowerCase() !== 'github.com') return null;
-		const [owner, repo] = parsed.pathname
-			.split('/')
-			.filter(Boolean)
-			.slice(0, 2)
-			.map((segment) => segment.replace(/\.git$/, ''));
-		if (!owner || !repo) return null;
-		return { owner, repo };
-	} catch {
-		return null;
-	}
-};
-
-const getGitHubHeaders = (token?: string) => ({
-	Accept: 'application/vnd.github+json',
-	'User-Agent': 'btca-web',
-	...(token ? { Authorization: `Bearer ${token}` } : {})
-});
 
 const isValidNpmPackageName = (name: string) => {
 	if (name.startsWith('@')) {
@@ -120,33 +102,18 @@ const isValidNpmPackageName = (name: string) => {
 	return !name.includes('/') && NPM_PACKAGE_SEGMENT_REGEX.test(name);
 };
 
-const fetchGitHubRepo = async (repoRef: RepoRef, token?: string) =>
-	fetch(`https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}`, {
-		headers: getGitHubHeaders(token)
+const getOwnerInstallations = async (ctx: ActionCtx, instanceId: Id<'instances'>, owner: string) =>
+	await ctx.runQuery(resourcesInternal.githubConnections.getByOwner, {
+		instanceId,
+		accountLogin: owner.toLowerCase()
 	});
 
-const ensureGitHubBranch = async (repoRef: RepoRef, branch: string, token?: string) => {
-	const response = await fetch(
-		`https://api.github.com/repos/${repoRef.owner}/${repoRef.repo}/branches/${encodeURIComponent(branch)}`,
-		{
-			headers: getGitHubHeaders(token)
-		}
-	);
-
-	if (response.ok) return;
-	if (response.status === 404) {
-		throw new WebValidationError({
-			message: `Branch "${branch}" was not found on ${repoRef.owner}/${repoRef.repo}`,
-			field: 'branch'
-		});
-	}
-
-	throw new WebUnhandledError({
-		message: `GitHub branch lookup failed with status ${response.status}`
-	});
-};
-
-const resolveGitMetadata = async (clerkUserId: string, url: string, branch: string) => {
+const resolveGitMetadata = async (
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	url: string,
+	branch: string
+) => {
 	const repoRef = parseGitHubRepoRef(url);
 	if (!repoRef) {
 		return {
@@ -165,7 +132,7 @@ const resolveGitMetadata = async (clerkUserId: string, url: string, branch: stri
 			branch: resolvedBranch,
 			gitProvider: 'github' as const,
 			visibility: repo.private ? ('private' as const) : ('public' as const),
-			authSource: repo.private ? ('clerk_github_oauth' as const) : undefined
+			authSource: repo.private ? ('github_app' as const) : undefined
 		};
 	}
 
@@ -175,46 +142,47 @@ const resolveGitMetadata = async (clerkUserId: string, url: string, branch: stri
 		});
 	}
 
-	const connection = await inspectGitHubConnectionForClerkUser(clerkUserId);
-	if (connection.status === 'disconnected') {
+	const repoFullName = getRepoFullName(repoRef);
+	const activeInstallations = (await getOwnerInstallations(ctx, instanceId, repoRef.owner)).filter(
+		(installation) => installation.status === 'active'
+	);
+
+	if (activeInstallations.length === 0) {
 		throw new WebAuthError({
-			message: 'Connect GitHub in your profile before adding private GitHub repositories.',
+			message: `Connect GitHub and install the btca GitHub App on ${repoRef.owner} before adding private repositories.`,
 			code: 'UNAUTHORIZED'
 		});
 	}
 
-	if (connection.status === 'missing_scope') {
-		throw new WebAuthError({
-			message: 'Reconnect GitHub with private repository access before adding private repos.',
-			code: 'FORBIDDEN'
-		});
+	for (const installation of activeInstallations) {
+		if (
+			installation.repositorySelection === 'selected' &&
+			installation.repositoryNames.length > 0 &&
+			!installation.repositoryNames.includes(repoFullName)
+		) {
+			continue;
+		}
+
+		const accessibleRepo = await resolveAccessibleRepo(installation.installationId, repoRef);
+		if (!accessibleRepo) {
+			continue;
+		}
+
+		const resolvedBranch = branch.trim() || accessibleRepo.repo.default_branch;
+		await ensureGitHubBranch(repoRef, resolvedBranch, accessibleRepo.token);
+
+		return {
+			branch: resolvedBranch,
+			gitProvider: 'github' as const,
+			visibility: accessibleRepo.repo.private ? ('private' as const) : ('public' as const),
+			authSource: accessibleRepo.repo.private ? ('github_app' as const) : undefined
+		};
 	}
 
-	const response = await fetchGitHubRepo(repoRef, connection.token);
-	if (response.status === 404) {
-		throw new WebValidationError({
-			message: `Repository "${repoRef.owner}/${repoRef.repo}" was not found or you do not have access to it.`,
-			field: 'url'
-		});
-	}
-
-	if (!response.ok) {
-		throw new WebUnhandledError({
-			message: `GitHub repository lookup failed with status ${response.status}`
-		});
-	}
-
-	const repo = (await response.json()) as GitHubRepoResponse;
-	const resolvedBranch = branch.trim() || repo.default_branch;
-	await ensureGitHubBranch(repoRef, resolvedBranch, connection.token);
-
-	return {
-		connection,
-		branch: resolvedBranch,
-		gitProvider: 'github' as const,
-		visibility: repo.private ? ('private' as const) : ('public' as const),
-		authSource: repo.private ? ('clerk_github_oauth' as const) : undefined
-	};
+	throw new WebAuthError({
+		message: `Grant the ${repoFullName} repository to the btca GitHub App before adding it.`,
+		code: 'FORBIDDEN'
+	});
 };
 
 export const addCustomResource = action({
@@ -348,18 +316,7 @@ export const addCustomResource = action({
 			});
 		}
 
-		const metadata = await resolveGitMetadata(identity.subject, args.url, args.branch ?? 'main');
-		if ('connection' in metadata && metadata.connection) {
-			await ctx.runMutation(resourcesInternal.githubConnections.upsertForInstance, {
-				instanceId: instance._id,
-				clerkUserId: identity.subject,
-				githubUserId: metadata.connection.githubUserId,
-				githubLogin: metadata.connection.githubLogin,
-				scopes: metadata.connection.scopes,
-				status: metadata.connection.status,
-				connectedAt: metadata.connection.connectedAt
-			});
-		}
+		const metadata = await resolveGitMetadata(ctx, instance._id, args.url, args.branch ?? 'main');
 		const resourceId = await ctx.runMutation(
 			resourcesInternal.resources.addCustomResourceInternal,
 			{

@@ -11,6 +11,12 @@ import { instances } from './apiHelpers';
 import type { ApiKeyValidationResult } from './clerkApiKeys';
 import { getAvailableMcpResourceNames, toMcpVisibleResources } from './mcp/resourceContract.ts';
 import { withPrivateApiKey } from './privateWrappers';
+import {
+	INSTANCE_DISK_FULL_APP_MESSAGE,
+	getInstanceErrorKind,
+	getUserFacingInstanceError
+} from '../lib/instanceErrors';
+import { withInstanceRuntimeConfigLock } from './runtimeConfigLock.js';
 import { toWebError, type WebError } from '../lib/result/errors';
 
 const instanceActions = instances.actions;
@@ -221,7 +227,13 @@ export const ask = action({
 				...projectProperties,
 				instanceState: instance.state
 			});
-			return { ok: false as const, error: 'Instance is in an error state' };
+			return {
+				ok: false as const,
+				error:
+					instance.errorKind === 'disk_full'
+						? INSTANCE_DISK_FULL_APP_MESSAGE
+						: 'Instance is in an error state'
+			};
 		}
 
 		if (instance.state === 'provisioning' || instance.state === 'unprovisioned') {
@@ -232,67 +244,83 @@ export const ask = action({
 			return { ok: false as const, error: 'Instance is still provisioning' };
 		}
 
-		let serverUrl = instance.serverUrl;
-		if (instance.state !== 'running' || !serverUrl) {
-			if (!instance.sandboxId) {
-				await trackAskFailure('Instance does not have a sandbox', projectProperties);
-				return { ok: false as const, error: 'Instance does not have a sandbox' };
-			}
-			// Pass projectId to wake so it uses project-specific resources
-			const wakeResult = await ctx.runAction(
-				instanceActions.wake,
-				withPrivateApiKey({
+		const startedAt = Date.now();
+		let requestError: string | null = null;
+		const answerText = await withInstanceRuntimeConfigLock(instanceId.toString(), async () => {
+			let serverUrl = instance.serverUrl;
+			if (instance.state !== 'running' || !serverUrl) {
+				if (!instance.sandboxId) {
+					throw new Error('Instance does not have a sandbox');
+				}
+				const wakeResult = await ctx.runAction(
+					instanceActions.wake,
+					withPrivateApiKey({
+						instanceId,
+						projectId,
+						includePrivate: false
+					})
+				);
+				serverUrl = wakeResult.serverUrl;
+				if (!serverUrl) {
+					throw new Error('Failed to wake instance');
+				}
+			} else {
+				await ctx.runAction(internal.instances.actions.syncResources, {
 					instanceId,
 					projectId,
 					includePrivate: false
-				})
-			);
-			serverUrl = wakeResult.serverUrl;
-			if (!serverUrl) {
-				await trackAskFailure('Failed to wake instance', projectProperties);
-				return { ok: false as const, error: 'Failed to wake instance' };
+				});
 			}
-		} else {
-			// Sandbox is already running - sync project-specific resources and reload config
-			await ctx.runAction(internal.instances.actions.syncResources, {
-				instanceId,
-				projectId,
-				includePrivate: false
+
+			const previewAccess = await ctx.runAction(internal.instances.actions.getPreviewAccess, {
+				instanceId
 			});
-		}
+			const response = await fetch(`${previewAccess.serverUrl}/question`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(previewAccess.previewToken
+						? { 'x-daytona-preview-token': previewAccess.previewToken }
+						: {})
+				},
+				body: JSON.stringify({
+					question,
+					resources,
+					project: effectiveProjectName,
+					quiet: true
+				})
+			});
 
-		const previewAccess = await ctx.runAction(internal.instances.actions.getPreviewAccess, {
-			instanceId
-		});
-		const startedAt = Date.now();
-		const response = await fetch(`${previewAccess.serverUrl}/question`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(previewAccess.previewToken
-					? { 'x-daytona-preview-token': previewAccess.previewToken }
-					: {})
-			},
-			body: JSON.stringify({
-				question,
-				resources,
-				project: effectiveProjectName,
-				quiet: true
-			})
-		});
+			if (!response.ok) {
+				const errorText = await response.text();
+				if (getInstanceErrorKind(errorText) === 'disk_full') {
+					await ctx.runMutation(
+						instanceMutations.setError,
+						withPrivateApiKey({
+							instanceId,
+							errorKind: 'disk_full',
+							errorMessage: getUserFacingInstanceError(errorText, errorText)
+						})
+					);
+				}
+				throw new Error(errorText || `Server error: ${response.status}`);
+			}
 
-		if (!response.ok) {
-			const errorText = await response.text();
-			await trackAskFailure(errorText || `Server error: ${response.status}`, {
+			const result = (await response.json()) as { answer?: string; text?: string };
+			return result.answer ?? result.text ?? JSON.stringify(result);
+		}).catch(async (error) => {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			requestError = errorMessage;
+			await trackAskFailure(errorMessage, {
 				...projectProperties,
-				status: response.status,
 				durationMs: Date.now() - startedAt
 			});
-			return { ok: false as const, error: errorText || `Server error: ${response.status}` };
-		}
+			return null;
+		});
 
-		const result = (await response.json()) as { answer?: string; text?: string };
-		const answerText = result.answer ?? result.text ?? JSON.stringify(result);
+		if (answerText == null) {
+			return { ok: false as const, error: requestError ?? 'Instance request failed' };
+		}
 
 		// Record the question/answer for the project
 		await ctx.runMutation(internal.mcpInternal.recordQuestion, {
@@ -653,7 +681,10 @@ export const sync = action({
 			await ctx.runQuery(internal.resources.listByProject, {
 				projectId
 			})
-		).filter((resource) => resource.visibility !== 'private');
+		).filter(
+			(resource: { name: string; url?: string; branch?: string; visibility?: string }) =>
+				resource.visibility !== 'private'
+		);
 
 		const synced: string[] = [];
 		const errors: string[] = [];
@@ -662,7 +693,7 @@ export const sync = action({
 		// Process each resource in the config
 		for (const localResource of config.resources) {
 			const existingResource = existingResources.find(
-				(r) => r.name.toLowerCase() === localResource.name.toLowerCase()
+				(resource) => resource.name.toLowerCase() === localResource.name.toLowerCase()
 			);
 
 			if (existingResource && existingResource.url) {

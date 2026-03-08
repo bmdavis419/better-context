@@ -71,11 +71,7 @@ class BillingStore {
 		if (this._summary.plan === 'free') {
 			return (this._summary.freeMessages?.remaining ?? 0) <= 0;
 		}
-		return (
-			this._summary.usage.tokensIn.isDepleted ||
-			this._summary.usage.tokensOut.isDepleted ||
-			this._summary.usage.sandboxHours.isDepleted
-		);
+		return this._summary.usage.aiBudget.isDepleted;
 	}
 
 	get hasSummary() {

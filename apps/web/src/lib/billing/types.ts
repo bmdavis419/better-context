@@ -23,9 +23,7 @@ export type BillingSummary = {
 		};
 	} | null;
 	usage: {
-		tokensIn: UsageMetric;
-		tokensOut: UsageMetric;
-		sandboxHours: UsageMetric;
+		aiBudget: UsageMetric;
 	};
 	freeMessages?: {
 		used: number;

@@ -193,6 +193,9 @@ export const createSseStream = (args: {
 											inputTokens: event.usage?.inputTokens,
 											outputTokens: event.usage?.outputTokens,
 											reasoningTokens: event.usage?.reasoningTokens,
+											cachedTokens: event.usage?.cachedTokens,
+											cacheReadTokens: event.usage?.cacheReadTokens,
+											cacheWriteTokens: event.usage?.cacheWriteTokens,
 											totalTokens: event.usage?.totalTokens
 										}
 									: undefined;
@@ -233,8 +236,20 @@ export const createSseStream = (args: {
 												const input = costFor(usage.inputTokens, rates.input);
 												const output = costFor(usage.outputTokens, rates.output);
 												const reasoning = costFor(usage.reasoningTokens, rates.reasoning);
-												const hasAnyCostPart = input != null || output != null || reasoning != null;
-												const total = (input ?? 0) + (output ?? 0) + (reasoning ?? 0);
+												const cacheRead = costFor(usage.cacheReadTokens, rates.cacheRead);
+												const cacheWrite = costFor(usage.cacheWriteTokens, rates.cacheWrite);
+												const hasAnyCostPart =
+													input != null ||
+													output != null ||
+													reasoning != null ||
+													cacheRead != null ||
+													cacheWrite != null;
+												const total =
+													(input ?? 0) +
+													(output ?? 0) +
+													(reasoning ?? 0) +
+													(cacheRead ?? 0) +
+													(cacheWrite ?? 0);
 
 												return {
 													source: 'models.dev' as const,

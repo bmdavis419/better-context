@@ -59,8 +59,8 @@
 		"@effect/platform-bun": "4.0.0-beta.20",
 		"ai": "^6.0.49",
 		"effect": "4.0.0-beta.20",
-		"just-bash": "^2.7.0",
-		"opencode-ai": "^1.1.36",
+		"just-bash": "^2.12.4",
+		"opencode-ai": "^1.2.21",
 		"vercel-minimax-ai-provider": "^0.0.2",
 		"zod": "^3.25.76"
 	}

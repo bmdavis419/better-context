@@ -38,8 +38,8 @@ async function main(): Promise<void> {
 			name: BTCA_SNAPSHOT_NAME,
 			image,
 			resources: {
-				cpu: 2,
-				memory: 4,
+				cpu: 1,
+				memory: 3,
 				disk: 5
 			}
 		},

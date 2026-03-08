@@ -1,68 +1,73 @@
-import { feature, product, featureItem, priceItem } from 'atmn';
+import { feature, item, plan } from 'atmn';
+
+import { PRO_AI_BUDGET_MICROS } from './src/lib/billing/aiBudget.ts';
 
 // Features
-export const sandboxHours = feature({
+export const sandbox_hours = feature({
 	id: 'sandbox_hours',
 	name: 'Sandbox Hours',
-	type: 'single_use'
+	type: 'metered',
+	consumable: true
 });
 
-export const tokensOut = feature({
+export const tokens_out = feature({
 	id: 'tokens_out',
 	name: 'Tokens Out',
-	type: 'single_use'
+	type: 'metered',
+	consumable: true
 });
 
-export const tokensIn = feature({
+export const tokens_in = feature({
 	id: 'tokens_in',
 	name: 'Tokens In',
-	type: 'single_use'
+	type: 'metered',
+	consumable: true
 });
 
-export const chatMessages = feature({
+export const chat_messages = feature({
 	id: 'chat_messages',
 	name: 'Chat Messages',
-	type: 'single_use'
+	type: 'metered',
+	consumable: true
 });
 
-// Products
-export const freePlan = product({
+export const ai_budget = feature({
+	id: 'ai_budget',
+	name: 'AI Budget',
+	type: 'metered',
+	consumable: true
+});
+
+// Plans
+export const free_plan = plan({
 	id: 'free_plan',
 	name: 'Free Plan',
-	is_default: true,
+	autoEnable: true,
 	items: [
-		featureItem({
-			feature_id: chatMessages.id,
-			included_usage: 5
+		item({
+			featureId: chat_messages.id,
+			included: 5,
+			reset: {
+				interval: 'one_off'
+			}
 		})
 	]
 });
 
-export const btcaPro = product({
+export const btca_pro = plan({
 	id: 'btca_pro',
 	name: 'Pro Plan',
+	price: {
+		amount: 8,
+		interval: 'month'
+	},
 	items: [
-		priceItem({
-			price: 8,
-			interval: 'month'
-		}),
-
-		featureItem({
-			feature_id: sandboxHours.id,
-			included_usage: 6,
-			interval: 'month'
-		}),
-
-		featureItem({
-			feature_id: tokensIn.id,
-			included_usage: 1500000,
-			interval: 'month'
-		}),
-
-		featureItem({
-			feature_id: tokensOut.id,
-			included_usage: 300000,
-			interval: 'month'
+		item({
+			featureId: ai_budget.id,
+			included: PRO_AI_BUDGET_MICROS,
+			reset: {
+				interval: 'month'
+			}
 		})
 	]
 });

@@ -61,6 +61,7 @@ export const setProvisioned = privateMutation({
 	args: {
 		instanceId: v.id('instances'),
 		sandboxId: v.string(),
+		snapshotName: v.string(),
 		btcaVersion: v.optional(v.string()),
 		storageUsedBytes: v.optional(v.number())
 	},
@@ -68,22 +69,36 @@ export const setProvisioned = privateMutation({
 	handler: async (ctx, args) => {
 		const patch: {
 			sandboxId: string;
+			snapshotName: string;
 			state: 'stopped';
 			provisionedAt: number;
+			serverUrl: string;
+			errorKind: undefined;
+			errorMessage: undefined;
+			storageUsedBytes: number;
 			btcaVersion?: string;
-			storageUsedBytes?: number;
 		} = {
 			sandboxId: args.sandboxId,
+			snapshotName: args.snapshotName,
 			state: 'stopped',
-			provisionedAt: Date.now()
+			provisionedAt: Date.now(),
+			serverUrl: '',
+			errorKind: undefined,
+			errorMessage: undefined,
+			storageUsedBytes: args.storageUsedBytes ?? 0
 		};
 
 		if (args.btcaVersion !== undefined) {
 			patch.btcaVersion = args.btcaVersion;
 		}
 
-		if (args.storageUsedBytes !== undefined) {
-			patch.storageUsedBytes = args.storageUsedBytes;
+		const cachedResources = await ctx.db
+			.query('cachedResources')
+			.withIndex('by_instance', (q) => q.eq('instanceId', args.instanceId))
+			.collect();
+
+		for (const resource of cachedResources) {
+			await ctx.db.delete(resource._id);
 		}
 
 		await ctx.db.patch(args.instanceId, patch);
@@ -106,6 +121,7 @@ export const setServerUrl = privateMutation({
 export const setError = privateMutation({
 	args: {
 		instanceId: v.id('instances'),
+		errorKind: v.optional(v.union(v.literal('disk_full'), v.literal('generic'))),
 		errorMessage: v.string()
 	},
 	returns: v.null(),
@@ -115,6 +131,7 @@ export const setError = privateMutation({
 
 		await ctx.db.patch(args.instanceId, {
 			state: 'error',
+			errorKind: args.errorKind ?? 'generic',
 			errorMessage: args.errorMessage
 		});
 
@@ -137,7 +154,10 @@ export const clearError = privateMutation({
 	args: { instanceId: v.id('instances') },
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await ctx.db.patch(args.instanceId, { errorMessage: undefined });
+		await ctx.db.patch(args.instanceId, {
+			errorKind: undefined,
+			errorMessage: undefined
+		});
 		return null;
 	}
 });

@@ -9,10 +9,15 @@ const CLI_DIR = fileURLToPath(new URL('..', import.meta.url));
 const textFromProcessOutput = (value: Uint8Array | string | undefined) =>
 	typeof value === 'string' ? value : value ? new TextDecoder().decode(value) : '';
 
-const runCli = (argv: string[], timeout = 10_000, env?: Record<string, string>) => {
+const runCliAtCwd = (
+	argv: string[],
+	cwd: string,
+	timeout = 10_000,
+	env?: Record<string, string>
+) => {
 	const result = Bun.spawnSync({
-		cmd: ['bun', 'run', 'src/index.ts', ...argv],
-		cwd: CLI_DIR,
+		cmd: ['bun', 'run', path.join(CLI_DIR, 'src/index.ts'), ...argv],
+		cwd,
 		stdout: 'pipe',
 		stderr: 'pipe',
 		timeout,
@@ -25,6 +30,9 @@ const runCli = (argv: string[], timeout = 10_000, env?: Record<string, string>) 
 	};
 };
 
+const runCli = (argv: string[], timeout = 10_000, env?: Record<string, string>) =>
+	runCliAtCwd(argv, CLI_DIR, timeout, env);
+
 const withTempHome = async <T>(run: (tempHome: string) => Promise<T>): Promise<T> => {
 	const tempHome = mkdtempSync(path.join(tmpdir(), 'btca-cli-test-'));
 	const originalHome = process.env.HOME;
@@ -34,6 +42,15 @@ const withTempHome = async <T>(run: (tempHome: string) => Promise<T>): Promise<T
 	} finally {
 		process.env.HOME = originalHome;
 		rmSync(tempHome, { recursive: true, force: true });
+	}
+};
+
+const withTempDir = async <T>(run: (tempDir: string) => Promise<T>): Promise<T> => {
+	const tempDir = mkdtempSync(path.join(tmpdir(), 'btca-cli-cwd-'));
+	try {
+		return await run(tempDir);
+	} finally {
+		rmSync(tempDir, { recursive: true, force: true });
 	}
 };
 
@@ -102,6 +119,19 @@ describe('cli dispatch', () => {
 		const result = runCli(['telemetry', 'foo']);
 		expect(result.exitCode).toBe(1);
 		expect(result.output).toContain('Unknown subcommand "foo" for "btca telemetry"');
+	});
+
+	test('preserves helpful error when init config already exists', async () => {
+		await withTempDir(async (tempDir) => {
+			const configPath = path.join(tempDir, 'btca.config.jsonc');
+			await Bun.write(configPath, '{}');
+
+			const result = runCliAtCwd(['init'], tempDir);
+			expect(result.exitCode).toBe(1);
+			expect(result.output).toContain('btca.config.jsonc already exists at ');
+			expect(result.output).toContain('btca.config.jsonc. Use --force to overwrite.');
+			expect(result.output).not.toContain('An error occurred in Effect.tryPromise');
+		});
 	});
 
 	test('forwards subcommand --server to resources command', async () => {

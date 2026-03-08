@@ -3,6 +3,7 @@
 import { createClerkClient } from '@clerk/backend';
 import { Daytona, type Sandbox } from '@daytonaio/sdk';
 import { BTCA_SNAPSHOT_NAME } from 'btca-sandbox/shared';
+import type { FunctionReference } from 'convex/server';
 import { v } from 'convex/values';
 import { Result } from 'better-result';
 
@@ -11,8 +12,15 @@ import type { Doc, Id } from '../_generated/dataModel';
 import { action, internalAction, type ActionCtx } from '../_generated/server';
 import { AnalyticsEvents } from '../analyticsEvents';
 import { instances } from '../apiHelpers';
-import { inspectGitHubConnectionForClerkUser } from '../githubAuth';
+import {
+	createInstallationToken,
+	fetchGitHubRepo,
+	getRepoFullName,
+	parseGitHubRepoRef
+} from '../githubApp';
 import { privateAction, withPrivateApiKey } from '../privateWrappers';
+import { getInstanceErrorKind, getUserFacingInstanceError } from '../../lib/instanceErrors';
+import { getWebSandboxModel } from '../../lib/models/webSandboxModels.ts';
 import {
 	WebAuthError,
 	WebConfigMissingError,
@@ -20,13 +28,12 @@ import {
 	WebValidationError,
 	type WebError
 } from '../../lib/result/errors';
+import { withInstanceRuntimeConfigLock } from '../runtimeConfigLock.js';
 
 const instanceQueries = instances.queries;
 const instanceMutations = instances.mutations;
 const BTCA_SERVER_PORT = 3000;
 const SANDBOX_IDLE_MINUTES = 2;
-const DEFAULT_MODEL = 'claude-haiku-4-5';
-const DEFAULT_PROVIDER = 'opencode';
 const BTCA_SERVER_SESSION = 'btca-server-session';
 const BTCA_SERVER_LOG_PATH = '/tmp/btca-server.log';
 const BTCA_PACKAGE_NAME = 'btca@latest';
@@ -44,7 +51,7 @@ type ResourceConfig = {
 			searchPath?: string;
 			gitProvider?: 'github' | 'generic';
 			visibility?: 'public' | 'private';
-			authSource?: 'clerk_github_oauth';
+			authSource?: 'clerk_github_oauth' | 'github_app';
 	  }
 	| {
 			type: 'npm';
@@ -64,6 +71,27 @@ type PreviewAccess = {
 
 let daytonaInstance: Daytona | null = null;
 type InstanceActionResult<T> = Result<T, WebError>;
+
+type GitHubInstallationRecord = {
+	installationId: number;
+	repositorySelection: 'all' | 'selected';
+	repositoryNames: string[];
+	status: 'active' | 'suspended' | 'deleted';
+};
+
+const githubConnectionsInternal = internal as unknown as {
+	githubConnections: {
+		getByOwner: FunctionReference<
+			'query',
+			'internal',
+			{
+				instanceId: Id<'instances'>;
+				accountLogin: string;
+			},
+			GitHubInstallationRecord[]
+		>;
+	};
+};
 
 const getClerkClient = () => {
 	const secretKey = process.env.CLERK_SECRET_KEY;
@@ -121,7 +149,7 @@ function getDaytonaResult(): InstanceActionResult<Daytona> {
 	return Result.ok(daytonaInstance);
 }
 
-function generateBtcaConfig(resources: ResourceConfig[]): string {
+function generateBtcaConfig(resources: ResourceConfig[], model = getWebSandboxModel()): string {
 	return JSON.stringify(
 		{
 			$schema: 'https://btca.dev/btca.schema.json',
@@ -143,8 +171,8 @@ function generateBtcaConfig(resources: ResourceConfig[]): string {
 							specialNotes: resource.specialNotes
 						}
 			),
-			model: DEFAULT_MODEL,
-			provider: DEFAULT_PROVIDER
+			model: model.id,
+			provider: model.provider
 		},
 		null,
 		2
@@ -211,9 +239,16 @@ const getErrorDetails = (error: unknown) => {
 	return { message: 'Unknown error' };
 };
 
-const getErrorContext = (error: unknown) => {
+const getErrorContext = (error: unknown): Record<string, unknown> | undefined => {
 	if (!error || typeof error !== 'object') return undefined;
-	return 'context' in error ? (error as { context?: Record<string, unknown> }).context : undefined;
+	const directContext =
+		'context' in error ? (error as { context?: Record<string, unknown> }).context : undefined;
+	if (directContext) {
+		return directContext;
+	}
+
+	const cause = 'cause' in error ? (error as { cause?: unknown }).cause : undefined;
+	return cause ? getErrorContext(cause) : undefined;
 };
 
 const attachErrorContext = (error: unknown, context: Record<string, unknown>) => {
@@ -233,10 +268,10 @@ const throwInstanceError = (error: WebError): never => {
 };
 
 const unwrapInstance = <T>(result: InstanceActionResult<T>): T => {
-	return Result.match(result, {
-		ok: (value) => value,
-		err: (error) => throwInstanceError(error)
-	});
+	if (Result.isError(result)) {
+		throwInstanceError(result.error);
+	}
+	return (result as { value: T }).value;
 };
 
 const withStep = async <T>(
@@ -261,7 +296,9 @@ const formatUserMessage = (operation: string, step: string | undefined, detail?:
 				? 'Starting'
 				: operation === 'update'
 					? 'Updating'
-					: 'Instance';
+					: operation === 'migrate'
+						? 'Migrating'
+						: 'Instance';
 	const stepLabel = step
 		? {
 				load_resources: 'loading resources',
@@ -273,13 +310,38 @@ const formatUserMessage = (operation: string, step: string | undefined, detail?:
 				health_check: 'waiting for btca to respond',
 				get_versions: 'checking package versions',
 				update_packages: 'updating packages',
-				stop_sandbox: 'stopping the sandbox'
+				stop_sandbox: 'stopping the sandbox',
+				delete_old_sandbox: 'cleaning up the previous sandbox'
 			}[step]
 		: undefined;
 	const base = `${actionLabel} failed${stepLabel ? ` while ${stepLabel}` : ''}.`;
 	const trimmed = truncate(detail, 160);
 	return `${base}${trimmed ? ` ${trimmed}` : ''} Please retry.`;
 };
+
+const requiresSnapshotMigration = (instance: Doc<'instances'>) =>
+	instance.snapshotName !== BTCA_SNAPSHOT_NAME;
+
+async function setInstanceError(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	error: unknown,
+	fallbackMessage: string
+) {
+	const errorKind = getInstanceErrorKind(error);
+	const errorMessage = getUserFacingInstanceError(error, fallbackMessage);
+
+	await ctx.runMutation(
+		instanceMutations.setError,
+		withPrivateApiKey({
+			instanceId,
+			errorKind,
+			errorMessage
+		})
+	);
+
+	return { errorKind, errorMessage };
+}
 
 async function getResourceConfigs(
 	ctx: ActionCtx,
@@ -323,6 +385,23 @@ async function getResourceConfigs(
 	return [...merged.values()];
 }
 
+async function getSandboxModelConfig(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	projectId?: Id<'projects'>
+) {
+	if (!projectId) {
+		return getWebSandboxModel();
+	}
+
+	const project = await ctx.runQuery(internal.projects.getInternal, { projectId });
+	if (!project || project.instanceId !== instanceId) {
+		throw new WebValidationError({ message: 'Project not found', field: 'projectId' });
+	}
+
+	return getWebSandboxModel(project.model);
+}
+
 async function requireInstance(
 	ctx: ActionCtx,
 	instanceId: Id<'instances'>
@@ -342,8 +421,12 @@ async function requireInstanceResult(
 	return Result.ok(instance);
 }
 
-async function uploadBtcaConfig(sandbox: Sandbox, resources: ResourceConfig[]): Promise<void> {
-	const config = generateBtcaConfig(resources);
+async function uploadBtcaConfig(
+	sandbox: Sandbox,
+	resources: ResourceConfig[],
+	model = getWebSandboxModel()
+): Promise<void> {
+	const config = generateBtcaConfig(resources, model);
 	await sandbox.fs.uploadFile(Buffer.from(config), '/root/btca.config.jsonc');
 }
 
@@ -353,38 +436,160 @@ const requiresGitHubAuth = (resources: ResourceConfig[]) =>
 			resource.type === 'git' &&
 			resource.gitProvider === 'github' &&
 			resource.visibility === 'private' &&
-			resource.authSource === 'clerk_github_oauth'
+			(resource.authSource === 'clerk_github_oauth' || resource.authSource === 'github_app')
 	);
 
-async function syncGitHubAuth(sandbox: Sandbox, clerkUserId: string, resources: ResourceConfig[]) {
-	if (!requiresGitHubAuth(resources)) {
-		await sandbox.process.executeCommand('rm -f /root/.netrc');
-		return;
-	}
-
-	const connection = await inspectGitHubConnectionForClerkUser(clerkUserId);
-	if (connection.status === 'disconnected') {
+const getClerkGitHubToken = async (clerkUserId: string) => {
+	const oauthTokens = await getClerkClient().users.getUserOauthAccessToken(clerkUserId, 'github');
+	const tokenData = oauthTokens.data[0];
+	if (!tokenData?.token) {
 		throw new WebAuthError({
-			message: 'Connect GitHub in your profile before using private GitHub repositories.',
+			message: 'Reconnect any older private GitHub resources before using them in the web sandbox.',
 			code: 'UNAUTHORIZED'
 		});
 	}
 
-	if (connection.status === 'missing_scope') {
-		throw new WebAuthError({
-			message: 'Reconnect GitHub with private repository access before using private repos.',
-			code: 'FORBIDDEN'
-		});
+	return tokenData.token;
+};
+
+const escapeShellSingleQuoted = (value: string) => value.replace(/'/g, `'\\''`);
+
+const buildGitHubCredentialHelperScript = (
+	credentials: Array<{ owner: string; repo: string; token: string }>
+) => {
+	const cases = credentials
+		.map(
+			({ owner, repo, token }) => `  '${escapeShellSingleQuoted(`github.com:${owner}/${repo}`)}')
+    printf '%s\n' 'username=x-access-token'
+    printf '%s\n' 'password=${escapeShellSingleQuoted(token)}'
+    exit 0
+    ;;`
+		)
+		.join('\n');
+
+	return `#!/bin/sh
+host=""
+path=""
+while IFS='=' read -r key value; do
+	case "$key" in
+		host) host="$value" ;;
+		path) path="$value" ;;
+	esac
+done
+
+path="\${path#/}"
+path="\${path%.git}"
+
+case "$host:$path" in
+${cases}
+esac
+
+exit 0
+`;
+};
+
+async function syncGitHubAuth(
+	ctx: ActionCtx,
+	sandbox: Sandbox,
+	instanceId: Id<'instances'>,
+	clerkUserId: string,
+	resources: ResourceConfig[]
+) {
+	if (!requiresGitHubAuth(resources)) {
+		await sandbox.process.executeCommand(
+			'rm -f /root/.netrc /root/.btca-github-credential-helper.sh && git config --global --unset-all credential.helper >/dev/null 2>&1 || true && git config --global --unset credential.useHttpPath >/dev/null 2>&1 || true'
+		);
+		return;
 	}
 
-	const netrc = [
-		`machine github.com`,
-		`login x-access-token`,
-		`password ${connection.token}`,
-		''
-	].join('\n');
-	await sandbox.fs.uploadFile(Buffer.from(netrc), '/root/.netrc');
-	await sandbox.process.executeCommand('chmod 600 /root/.netrc');
+	const credentials: Array<{ owner: string; repo: string; token: string }> = [];
+	const installationTokenCache = new Map<number, string>();
+	let clerkToken: string | null = null;
+
+	for (const resource of resources) {
+		if (
+			resource.type !== 'git' ||
+			resource.gitProvider !== 'github' ||
+			resource.visibility !== 'private'
+		) {
+			continue;
+		}
+
+		const repoRef = parseGitHubRepoRef(resource.url);
+		if (!repoRef) {
+			continue;
+		}
+
+		if (resource.authSource === 'github_app') {
+			const repoFullName = getRepoFullName(repoRef);
+			const activeInstallations = (
+				(await ctx.runQuery(githubConnectionsInternal.githubConnections.getByOwner, {
+					instanceId,
+					accountLogin: repoRef.owner.toLowerCase()
+				})) as GitHubInstallationRecord[]
+			).filter((installation) => installation.status === 'active');
+
+			if (activeInstallations.length === 0) {
+				throw new WebAuthError({
+					message: `Connect GitHub and install the btca GitHub App on ${repoRef.owner} before using private repositories.`,
+					code: 'UNAUTHORIZED'
+				});
+			}
+
+			let token: string | null = null;
+			for (const installation of activeInstallations) {
+				if (
+					installation.repositorySelection === 'selected' &&
+					installation.repositoryNames.length > 0 &&
+					!installation.repositoryNames.includes(repoFullName)
+				) {
+					continue;
+				}
+
+				token =
+					installationTokenCache.get(installation.installationId) ??
+					(await createInstallationToken(installation.installationId));
+				installationTokenCache.set(installation.installationId, token);
+
+				const repoResponse = await fetchGitHubRepo(repoRef, token);
+				if (repoResponse.status === 404) {
+					continue;
+				}
+				if (!repoResponse.ok) {
+					throw new WebUnhandledError({
+						message: `GitHub repository lookup failed with status ${repoResponse.status}`
+					});
+				}
+
+				break;
+			}
+
+			if (!token) {
+				throw new WebAuthError({
+					message: `Grant the ${repoFullName} repository to the btca GitHub App before using private repositories.`,
+					code: 'FORBIDDEN'
+				});
+			}
+
+			credentials.push({ ...repoRef, token });
+			continue;
+		}
+
+		if (!clerkToken) {
+			clerkToken = await getClerkGitHubToken(clerkUserId);
+		}
+
+		credentials.push({ ...repoRef, token: clerkToken });
+	}
+
+	const helperPath = '/root/.btca-github-credential-helper.sh';
+	const helperScript = buildGitHubCredentialHelperScript(credentials);
+	await sandbox.fs.uploadFile(Buffer.from(helperScript), helperPath);
+	await sandbox.process.executeCommand(`chmod 700 ${helperPath}`);
+	await sandbox.process.executeCommand('rm -f /root/.netrc');
+	await sandbox.process.executeCommand(
+		`git config --global --unset-all credential.helper >/dev/null 2>&1 || true && git config --global credential.useHttpPath true && git config --global credential.helper '${helperPath}'`
+	);
 }
 
 async function getBtcaLogTail(sandbox: Sandbox, lines = 80) {
@@ -499,6 +704,66 @@ async function updatePackages(sandbox: Sandbox): Promise<void> {
 	await sandbox.process.executeCommand(`bun add -g ${BTCA_PACKAGE_NAME}`);
 }
 
+async function createPreparedSandbox(
+	ctx: ActionCtx,
+	instanceId: Id<'instances'>,
+	instance: Doc<'instances'>,
+	includePrivate = true
+): Promise<{ sandbox: Sandbox; versions: InstalledVersions }> {
+	requireEnv('OPENCODE_API_KEY');
+
+	let sandbox: Sandbox | null = null;
+	let step = 'load_resources';
+
+	try {
+		const resources = unwrapInstance(
+			await withStep(step, () => getResourceConfigs(ctx, instanceId, undefined, includePrivate))
+		);
+		const daytona = getDaytona();
+		step = 'create_sandbox';
+		const createdSandbox = unwrapInstance(
+			await withStep(step, () =>
+				daytona.create({
+					snapshot: BTCA_SNAPSHOT_NAME,
+					autoStopInterval: SANDBOX_IDLE_MINUTES,
+					envVars: {
+						NODE_ENV: 'production',
+						OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
+					},
+					public: false
+				})
+			)
+		);
+		sandbox = createdSandbox;
+
+		step = 'upload_config';
+		unwrapInstance(
+			await withStep(step, () =>
+				syncGitHubAuth(ctx, createdSandbox, instanceId, instance.clerkId, resources)
+			)
+		);
+		step = 'upload_config';
+		unwrapInstance(await withStep(step, () => uploadBtcaConfig(createdSandbox, resources)));
+		step = 'get_versions';
+		const versions = unwrapInstance(
+			await withStep(step, () => getInstalledVersions(createdSandbox))
+		);
+		step = 'stop_sandbox';
+		unwrapInstance(await withStep(step, () => stopSandboxIfRunning(createdSandbox)));
+
+		return { sandbox: createdSandbox, versions };
+	} catch (error) {
+		if (sandbox) {
+			try {
+				await sandbox.delete(60);
+			} catch {
+				// Ignore cleanup errors.
+			}
+		}
+		throw error;
+	}
+}
+
 async function fetchLatestVersion(packageName: string): Promise<string | undefined> {
 	try {
 		const response = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
@@ -534,50 +799,18 @@ export const provision = privateAction({
 		);
 
 		let sandbox: Sandbox | null = null;
-		let step = 'load_resources';
+		let step = 'create_sandbox';
 		try {
-			const resources = unwrapInstance(
-				await withStep(step, () => getResourceConfigs(ctx, args.instanceId))
-			);
-			const daytona = getDaytona();
-			step = 'create_sandbox';
-			const createdSandbox = unwrapInstance(
-				await withStep(step, () =>
-					daytona.create({
-						snapshot: BTCA_SNAPSHOT_NAME,
-						autoStopInterval: SANDBOX_IDLE_MINUTES,
-						envVars: {
-							NODE_ENV: 'production',
-							OPENCODE_API_KEY: requireEnv('OPENCODE_API_KEY')
-						},
-						public: false
-					})
-				)
-			);
-			sandbox = createdSandbox;
-
-			step = 'upload_config';
-			unwrapInstance(
-				await withStep(step, () => syncGitHubAuth(createdSandbox, instance.clerkId, resources))
-			);
-			step = 'upload_config';
-			unwrapInstance(await withStep(step, () => uploadBtcaConfig(createdSandbox, resources)));
-
-			step = 'start_btca';
-			unwrapInstance(await withStep(step, () => startBtcaServer(createdSandbox)));
-
-			step = 'get_versions';
-			const versions = unwrapInstance(
-				await withStep(step, () => getInstalledVersions(createdSandbox))
-			);
-			step = 'stop_sandbox';
-			unwrapInstance(await withStep(step, () => stopSandboxIfRunning(createdSandbox)));
+			const preparedSandbox = await createPreparedSandbox(ctx, args.instanceId, instance);
+			sandbox = preparedSandbox.sandbox;
+			const versions = preparedSandbox.versions;
 
 			await ctx.runMutation(
 				instanceMutations.setProvisioned,
 				withPrivateApiKey({
 					instanceId: args.instanceId,
-					sandboxId: createdSandbox.id,
+					sandboxId: sandbox.id,
+					snapshotName: BTCA_SNAPSHOT_NAME,
 					btcaVersion: versions.btcaVersion
 				})
 			);
@@ -611,14 +844,6 @@ export const provision = privateAction({
 
 			return { sandboxId: sandbox.id };
 		} catch (error) {
-			if (sandbox) {
-				try {
-					await sandbox.delete();
-				} catch {
-					// Ignore cleanup errors
-				}
-			}
-
 			const errorDetails = getErrorDetails(error);
 			const context = getErrorContext(error);
 			const contextStep = typeof context?.step === 'string' ? context.step : step;
@@ -650,14 +875,8 @@ export const provision = privateAction({
 				}
 			});
 
-			await ctx.runMutation(
-				instanceMutations.setError,
-				withPrivateApiKey({
-					instanceId: args.instanceId,
-					errorMessage: message
-				})
-			);
-			throw new WebUnhandledError({ message });
+			const { errorMessage } = await setInstanceError(ctx, args.instanceId, error, message);
+			throw new WebUnhandledError({ message: errorMessage });
 		}
 	}
 });
@@ -793,14 +1012,16 @@ async function createSandboxFromScratch(
 	ctx: ActionCtx,
 	instanceId: Id<'instances'>,
 	instance: Doc<'instances'>,
+	projectId?: Id<'projects'>,
 	includePrivate = true
 ): Promise<{ sandbox: Sandbox; serverUrl: string }> {
 	requireEnv('OPENCODE_API_KEY');
 
 	let step = 'load_resources';
 	const resources = unwrapInstance(
-		await withStep(step, () => getResourceConfigs(ctx, instanceId, undefined, includePrivate))
+		await withStep(step, () => getResourceConfigs(ctx, instanceId, projectId, includePrivate))
 	);
+	const model = await getSandboxModelConfig(ctx, instanceId, projectId);
 	const daytona = getDaytona();
 	step = 'create_sandbox';
 	const sandbox = unwrapInstance(
@@ -818,9 +1039,13 @@ async function createSandboxFromScratch(
 	);
 
 	step = 'upload_config';
-	unwrapInstance(await withStep(step, () => syncGitHubAuth(sandbox, instance.clerkId, resources)));
+	unwrapInstance(
+		await withStep(step, () =>
+			syncGitHubAuth(ctx, sandbox, instanceId, instance.clerkId, resources)
+		)
+	);
 	step = 'upload_config';
-	unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
+	unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources, model)));
 	step = 'start_btca';
 	const serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox))).serverUrl;
 	step = 'get_versions';
@@ -831,6 +1056,7 @@ async function createSandboxFromScratch(
 		withPrivateApiKey({
 			instanceId,
 			sandboxId: sandbox.id,
+			snapshotName: BTCA_SNAPSHOT_NAME,
 			btcaVersion: versions.btcaVersion
 		})
 	);
@@ -882,7 +1108,13 @@ async function wakeInstanceInternal(
 
 		if (!instance.sandboxId) {
 			step = 'create_sandbox';
-			const result = await createSandboxFromScratch(ctx, instanceId, instance, includePrivate);
+			const result = await createSandboxFromScratch(
+				ctx,
+				instanceId,
+				instance,
+				projectId,
+				includePrivate
+			);
 			serverUrl = result.serverUrl;
 			sandboxId = result.sandbox.id;
 		} else {
@@ -891,6 +1123,7 @@ async function wakeInstanceInternal(
 			const resources = unwrapInstance(
 				await withStep(step, () => getResourceConfigs(ctx, instanceId, projectId, includePrivate))
 			);
+			const model = await getSandboxModelConfig(ctx, instanceId, projectId);
 			const daytona = getDaytona();
 			step = 'get_sandbox';
 			const sandbox = await daytona.get(instance.sandboxId);
@@ -899,10 +1132,12 @@ async function wakeInstanceInternal(
 			unwrapInstance(await withStep(step, () => ensureSandboxStarted(sandbox)));
 			step = 'upload_config';
 			unwrapInstance(
-				await withStep(step, () => syncGitHubAuth(sandbox, instance.clerkId, resources))
+				await withStep(step, () =>
+					syncGitHubAuth(ctx, sandbox, instanceId, instance.clerkId, resources)
+				)
 			);
 			step = 'upload_config';
-			unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
+			unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources, model)));
 			step = 'start_btca';
 			serverUrl = unwrapInstance(await withStep(step, () => startBtcaServer(sandbox))).serverUrl;
 			sandboxId = instance.sandboxId;
@@ -946,11 +1181,8 @@ async function wakeInstanceInternal(
 			context
 		});
 
-		await ctx.runMutation(
-			instanceMutations.setError,
-			withPrivateApiKey({ instanceId, errorMessage: message })
-		);
-		throw new WebUnhandledError({ message });
+		const { errorMessage } = await setInstanceError(ctx, instanceId, error, message);
+		throw new WebUnhandledError({ message: errorMessage });
 	}
 }
 
@@ -986,11 +1218,8 @@ async function stopInstanceInternal(
 		return { stopped: true };
 	} catch (error) {
 		const message = getErrorMessage(error);
-		await ctx.runMutation(
-			instanceMutations.setError,
-			withPrivateApiKey({ instanceId, errorMessage: message })
-		);
-		throw new WebUnhandledError({ message });
+		const { errorMessage } = await setInstanceError(ctx, instanceId, error, message);
+		throw new WebUnhandledError({ message: errorMessage });
 	}
 }
 
@@ -1018,7 +1247,9 @@ async function updateInstanceInternal(
 		await updatePackages(sandbox);
 		step = 'upload_config';
 		unwrapInstance(
-			await withStep(step, () => syncGitHubAuth(sandbox, instance.clerkId, resources))
+			await withStep(step, () =>
+				syncGitHubAuth(ctx, sandbox, instanceId, instance.clerkId, resources)
+			)
 		);
 		step = 'upload_config';
 		unwrapInstance(await withStep(step, () => uploadBtcaConfig(sandbox, resources)));
@@ -1075,20 +1306,182 @@ async function updateInstanceInternal(
 		return { updated: true };
 	} catch (error) {
 		const message = getErrorMessage(error);
-		await ctx.runMutation(
-			instanceMutations.setError,
-			withPrivateApiKey({ instanceId, errorMessage: message })
-		);
-		throw new WebUnhandledError({ message });
+		const { errorMessage } = await setInstanceError(ctx, instanceId, error, message);
+		throw new WebUnhandledError({ message: errorMessage });
 	}
 }
 
+export const migrate = privateAction({
+	args: instanceArgs,
+	returns: v.object({ sandboxId: v.string() }),
+	handler: async (ctx, args) => {
+		const instance = await requireInstance(ctx, args.instanceId);
+		const previousSandboxId = instance.sandboxId;
+		const migrationStartedAt = Date.now();
+		let sandbox: Sandbox | null = null;
+		let step = 'create_sandbox';
+
+		await ctx.runMutation(
+			instanceMutations.updateState,
+			withPrivateApiKey({ instanceId: args.instanceId, state: 'provisioning' })
+		);
+		await ctx.runMutation(
+			instanceMutations.setServerUrl,
+			withPrivateApiKey({ instanceId: args.instanceId, serverUrl: '' })
+		);
+		await ctx.runMutation(
+			instanceMutations.clearError,
+			withPrivateApiKey({ instanceId: args.instanceId })
+		);
+
+		try {
+			const preparedSandbox = await createPreparedSandbox(ctx, args.instanceId, instance);
+			sandbox = preparedSandbox.sandbox;
+			const versions = preparedSandbox.versions;
+
+			await ctx.runMutation(
+				instanceMutations.setProvisioned,
+				withPrivateApiKey({
+					instanceId: args.instanceId,
+					sandboxId: sandbox.id,
+					snapshotName: BTCA_SNAPSHOT_NAME,
+					btcaVersion: versions.btcaVersion
+				})
+			);
+			await ctx.runMutation(
+				instanceMutations.touchActivity,
+				withPrivateApiKey({ instanceId: args.instanceId })
+			);
+			await ctx.scheduler.runAfter(
+				0,
+				instances.actions.update,
+				withPrivateApiKey({ instanceId: args.instanceId })
+			);
+
+			if (previousSandboxId) {
+				step = 'delete_old_sandbox';
+				try {
+					const previousSandbox = await getDaytona().get(previousSandboxId);
+					await previousSandbox.delete(60);
+				} catch {
+					// Ignore cleanup errors for the previous sandbox.
+				}
+			}
+
+			console.log('Sandbox migration completed', {
+				instanceId: args.instanceId,
+				previousSandboxId,
+				newSandboxId: sandbox.id,
+				durationMs: Date.now() - migrationStartedAt
+			});
+
+			return { sandboxId: sandbox.id };
+		} catch (error) {
+			const message = formatUserMessage('migrate', step, getErrorMessage(error));
+			console.error('Sandbox migration failed', {
+				instanceId: args.instanceId,
+				previousSandboxId,
+				newSandboxId: sandbox?.id,
+				step,
+				durationMs: Date.now() - migrationStartedAt,
+				error: getErrorDetails(error),
+				context: getErrorContext(error)
+			});
+			const { errorMessage } = await setInstanceError(ctx, args.instanceId, error, message);
+			throw new WebUnhandledError({ message: errorMessage });
+		}
+	}
+});
+
+async function maybeScheduleSnapshotMigration(
+	ctx: ActionCtx,
+	instance: Doc<'instances'>
+): Promise<boolean> {
+	if (!requiresSnapshotMigration(instance)) {
+		return false;
+	}
+
+	if (instance.state === 'unprovisioned' || instance.state === 'provisioning') {
+		return false;
+	}
+
+	await ctx.runMutation(
+		instanceMutations.updateState,
+		withPrivateApiKey({ instanceId: instance._id, state: 'provisioning' })
+	);
+	await ctx.runMutation(
+		instanceMutations.setServerUrl,
+		withPrivateApiKey({ instanceId: instance._id, serverUrl: '' })
+	);
+	await ctx.runMutation(
+		instanceMutations.clearError,
+		withPrivateApiKey({ instanceId: instance._id })
+	);
+	await ctx.scheduler.runAfter(
+		0,
+		instances.actions.migrate,
+		withPrivateApiKey({ instanceId: instance._id })
+	);
+
+	return true;
+}
+
 export const wakeMyInstance = action({
-	args: {},
+	args: {
+		projectId: v.optional(v.id('projects'))
+	},
 	returns: v.object({ serverUrl: v.string() }),
-	handler: async (ctx): Promise<{ serverUrl: string }> => {
+	handler: async (ctx, args): Promise<{ serverUrl: string }> => {
 		const instance = await requireAuthenticatedInstance(ctx);
-		return wakeInstanceInternal(ctx, instance._id);
+		return wakeInstanceInternal(ctx, instance._id, args.projectId);
+	}
+});
+
+export const applyProjectRuntimeConfig = action({
+	args: {
+		projectId: v.id('projects')
+	},
+	returns: v.object({
+		applied: v.boolean(),
+		appliesOnWake: v.boolean()
+	}),
+	handler: async (
+		ctx,
+		args
+	): Promise<{
+		applied: boolean;
+		appliesOnWake: boolean;
+	}> => {
+		const instance = await requireAuthenticatedInstance(ctx);
+		const project: Doc<'projects'> | null = await ctx.runQuery(internal.projects.getInternal, {
+			projectId: args.projectId
+		});
+
+		if (!project || project.instanceId !== instance._id) {
+			throw new WebValidationError({ message: 'Project not found', field: 'projectId' });
+		}
+
+		if (instance.state !== 'running' || !instance.sandboxId || !instance.serverUrl) {
+			return {
+				applied: false,
+				appliesOnWake: true
+			};
+		}
+
+		const result = await withInstanceRuntimeConfigLock(
+			instance._id.toString(),
+			async () =>
+				(await ctx.runAction(internal.instances.actions.syncResources, {
+					instanceId: instance._id,
+					projectId: args.projectId,
+					includePrivate: true
+				})) as { synced: boolean }
+		);
+
+		return {
+			applied: result.synced,
+			appliesOnWake: !result.synced
+		};
 	}
 });
 
@@ -1117,8 +1510,33 @@ export const ensureInstanceExists = action({
 		const existing = await ctx.runQuery(instanceQueries.getByClerkId, {});
 
 		if (existing) {
+			let provisionScheduled = false;
+			if (existing.state === 'unprovisioned') {
+				await ctx.runMutation(
+					instanceMutations.updateState,
+					withPrivateApiKey({ instanceId: existing._id, state: 'provisioning' })
+				);
+				await ctx.runMutation(
+					instanceMutations.setServerUrl,
+					withPrivateApiKey({ instanceId: existing._id, serverUrl: '' })
+				);
+				await ctx.runMutation(
+					instanceMutations.clearError,
+					withPrivateApiKey({ instanceId: existing._id })
+				);
+				await ctx.scheduler.runAfter(
+					0,
+					instances.actions.provision,
+					withPrivateApiKey({ instanceId: existing._id })
+				);
+				provisionScheduled = true;
+			}
+			const migrationScheduled = await maybeScheduleSnapshotMigration(ctx, existing);
 			const isProvisioning =
-				existing.state === 'unprovisioned' || existing.state === 'provisioning';
+				provisionScheduled ||
+				migrationScheduled ||
+				existing.state === 'unprovisioned' ||
+				existing.state === 'provisioning';
 			return {
 				instanceId: existing._id,
 				status: isProvisioning ? 'provisioning' : 'exists'
@@ -1153,8 +1571,33 @@ export const ensureInstanceExistsPrivate = privateAction({
 		});
 
 		if (existing) {
+			let provisionScheduled = false;
+			if (existing.state === 'unprovisioned') {
+				await ctx.runMutation(
+					instanceMutations.updateState,
+					withPrivateApiKey({ instanceId: existing._id, state: 'provisioning' })
+				);
+				await ctx.runMutation(
+					instanceMutations.setServerUrl,
+					withPrivateApiKey({ instanceId: existing._id, serverUrl: '' })
+				);
+				await ctx.runMutation(
+					instanceMutations.clearError,
+					withPrivateApiKey({ instanceId: existing._id })
+				);
+				await ctx.scheduler.runAfter(
+					0,
+					instances.actions.provision,
+					withPrivateApiKey({ instanceId: existing._id })
+				);
+				provisionScheduled = true;
+			}
+			const migrationScheduled = await maybeScheduleSnapshotMigration(ctx, existing);
 			const isProvisioning =
-				existing.state === 'unprovisioned' || existing.state === 'provisioning';
+				provisionScheduled ||
+				migrationScheduled ||
+				existing.state === 'unprovisioned' ||
+				existing.state === 'provisioning';
 			return {
 				instanceId: existing._id,
 				status: isProvisioning ? 'provisioning' : 'exists'
@@ -1278,6 +1721,7 @@ export const syncResources = internalAction({
 				args.projectId,
 				args.includePrivate ?? true
 			);
+			const model = await getSandboxModelConfig(ctx, args.instanceId, args.projectId);
 			const daytona = getDaytona();
 			const sandbox = await daytona.get(instance.sandboxId);
 
@@ -1286,8 +1730,8 @@ export const syncResources = internalAction({
 			}
 
 			// Upload the config and reload the server
-			await syncGitHubAuth(sandbox, instance.clerkId, resources);
-			await uploadBtcaConfig(sandbox, resources);
+			await syncGitHubAuth(ctx, sandbox, args.instanceId, instance.clerkId, resources);
+			await uploadBtcaConfig(sandbox, resources, model);
 			const previewAccess = await getPreviewAccessForSandbox(
 				sandbox,
 				instance.serverUrl ?? undefined

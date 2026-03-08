@@ -47,6 +47,16 @@ const messageContentValidator = v.union(
 	})
 );
 
+const messageStatsValidator = v.object({
+	durationMs: v.optional(v.number()),
+	inputTokens: v.optional(v.number()),
+	outputTokens: v.optional(v.number()),
+	cachedTokens: v.optional(v.number()),
+	totalTokens: v.optional(v.number()),
+	tokensPerSecond: v.optional(v.number()),
+	totalPriceUsd: v.optional(v.number())
+});
+
 /**
  * Add a user message to a thread (requires ownership)
  */
@@ -113,7 +123,8 @@ export const addAssistantMessage = mutation({
 	args: {
 		threadId: v.id('threads'),
 		content: messageContentValidator,
-		canceled: v.optional(v.boolean())
+		canceled: v.optional(v.boolean()),
+		stats: v.optional(messageStatsValidator)
 	},
 	returns: v.id('messages'),
 	handler: async (ctx, args) => {
@@ -124,6 +135,7 @@ export const addAssistantMessage = mutation({
 			role: 'assistant',
 			content: args.content,
 			canceled: args.canceled,
+			stats: args.stats,
 			createdAt: Date.now()
 		});
 
@@ -164,6 +176,7 @@ const messageValidator = v.object({
 	content: messageContentValidator,
 	resources: v.optional(v.array(v.string())),
 	canceled: v.optional(v.boolean()),
+	stats: v.optional(messageStatsValidator),
 	createdAt: v.number()
 });
 
@@ -191,12 +204,13 @@ export const getByThread = query({
 export const updateAssistantMessage = mutation({
 	args: {
 		messageId: v.id('messages'),
-		content: messageContentValidator
+		content: messageContentValidator,
+		stats: v.optional(messageStatsValidator)
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		await unwrapAuthResult(await requireMessageOwnershipResult(ctx, args.messageId));
-		await ctx.db.patch(args.messageId, { content: args.content });
+		await ctx.db.patch(args.messageId, { content: args.content, stats: args.stats });
 		return null;
 	}
 });

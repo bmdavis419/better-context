@@ -84,7 +84,9 @@
 	const total = $derived(questionsResult?.total ?? 0);
 	const totalAll = $derived(questionsResult?.totalAll ?? 0);
 	const totalPages = $derived(questionsResult?.totalPages ?? 1);
-	const resourceOptions = $derived(questionsResult?.resources ?? []);
+	const resourceOptions = $derived(
+		(questionsResult?.resources ?? []) as Array<{ name: string; count: number }>
+	);
 	const resourceSelectOptions = $derived(
 		resourceFilter && !resourceOptions.some((option) => option.name === resourceFilter)
 			? [{ name: resourceFilter, count: 0 }, ...resourceOptions]

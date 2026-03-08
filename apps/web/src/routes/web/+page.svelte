@@ -67,11 +67,11 @@
 			</li>
 			<li class="flex items-start gap-2">
 				<span class="bc-kickerDot mt-1.5 shrink-0"></span>
-				<span><strong>Use a cloud sandbox to keep repo answers current</strong></span>
+				<span><strong>Choose between low, balanced, and high-end models per project</strong></span>
 			</li>
 			<li class="flex items-start gap-2">
 				<span class="bc-kickerDot mt-1.5 shrink-0"></span>
-				<span><strong>Connect btca to coding tools through Cloud MCP</strong></span>
+				<span><strong>Share one monthly AI usage budget across all web models</strong></span>
 			</li>
 			<li class="flex items-start gap-2">
 				<span class="bc-kickerDot mt-1.5 shrink-0"></span>

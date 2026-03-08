@@ -41,6 +41,15 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# app generated files
+apps/desktop/.svelte-kit
+apps/desktop/.svelte_kit
+apps/desktop/build
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen/
+apps/web/.svelte-kit
+apps/web/.svelte_kit
+
 # IntelliJ based IDEs
 .idea
 

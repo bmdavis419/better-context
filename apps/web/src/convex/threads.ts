@@ -106,6 +106,16 @@ const messageContentValidator = v.union(
 	})
 );
 
+const messageStatsValidator = v.object({
+	durationMs: v.optional(v.number()),
+	inputTokens: v.optional(v.number()),
+	outputTokens: v.optional(v.number()),
+	cachedTokens: v.optional(v.number()),
+	totalTokens: v.optional(v.number()),
+	tokensPerSecond: v.optional(v.number()),
+	totalPriceUsd: v.optional(v.number())
+});
+
 const messageValidator = v.object({
 	_id: v.id('messages'),
 	_creationTime: v.number(),
@@ -114,6 +124,7 @@ const messageValidator = v.object({
 	content: messageContentValidator,
 	resources: v.optional(v.array(v.string())),
 	canceled: v.optional(v.boolean()),
+	stats: v.optional(messageStatsValidator),
 	createdAt: v.number()
 });
 

@@ -29,6 +29,16 @@ export interface Resource {
 	specialNotes?: string;
 }
 
+export interface MessageStats {
+	durationMs?: number;
+	inputTokens?: number;
+	outputTokens?: number;
+	cachedTokens?: number;
+	totalTokens?: number;
+	tokensPerSecond?: number;
+	totalPriceUsd?: number;
+}
+
 // Message types (using AssistantContent from shared)
 export type Message =
 	| {
@@ -42,6 +52,7 @@ export type Message =
 			role: 'assistant';
 			content: AssistantContent;
 			canceled?: boolean;
+			stats?: MessageStats;
 	  }
 	| {
 			id: string;

@@ -35,6 +35,9 @@ export type AgentEvent =
 				inputTokens?: number;
 				outputTokens?: number;
 				reasoningTokens?: number;
+				cachedTokens?: number;
+				cacheReadTokens?: number;
+				cacheWriteTokens?: number;
 				totalTokens?: number;
 			};
 	  }
@@ -223,18 +226,29 @@ export const runAgentLoop = async (options: AgentLoopOptions): Promise<AgentLoop
 				});
 				break;
 			case 'finish':
-				events.push({
-					type: 'finish',
-					finishReason: part.finishReason ?? 'unknown',
-					usage: {
-						inputTokens: part.totalUsage?.inputTokens,
-						outputTokens: part.totalUsage?.outputTokens,
-						reasoningTokens:
-							part.totalUsage?.outputTokenDetails?.reasoningTokens ??
-							part.totalUsage?.reasoningTokens,
-						totalTokens: part.totalUsage?.totalTokens
-					}
-				});
+				{
+					const cacheReadTokens = part.totalUsage?.inputTokenDetails?.cacheReadTokens;
+					const cacheWriteTokens = part.totalUsage?.inputTokenDetails?.cacheWriteTokens;
+					events.push({
+						type: 'finish',
+						finishReason: part.finishReason ?? 'unknown',
+						usage: {
+							inputTokens:
+								part.totalUsage?.inputTokenDetails?.noCacheTokens ?? part.totalUsage?.inputTokens,
+							outputTokens: part.totalUsage?.outputTokens,
+							reasoningTokens:
+								part.totalUsage?.outputTokenDetails?.reasoningTokens ??
+								part.totalUsage?.reasoningTokens,
+							cachedTokens:
+								cacheReadTokens != null || cacheWriteTokens != null
+									? (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0)
+									: part.totalUsage?.cachedInputTokens,
+							cacheReadTokens,
+							cacheWriteTokens,
+							totalTokens: part.totalUsage?.totalTokens
+						}
+					});
+				}
 				break;
 			case 'error':
 				events.push({
@@ -316,18 +330,29 @@ export async function* streamAgentLoop(options: AgentLoopOptions): AsyncGenerato
 				};
 				break;
 			case 'finish':
-				yield {
-					type: 'finish',
-					finishReason: part.finishReason ?? 'unknown',
-					usage: {
-						inputTokens: part.totalUsage?.inputTokens,
-						outputTokens: part.totalUsage?.outputTokens,
-						reasoningTokens:
-							part.totalUsage?.outputTokenDetails?.reasoningTokens ??
-							part.totalUsage?.reasoningTokens,
-						totalTokens: part.totalUsage?.totalTokens
-					}
-				};
+				{
+					const cacheReadTokens = part.totalUsage?.inputTokenDetails?.cacheReadTokens;
+					const cacheWriteTokens = part.totalUsage?.inputTokenDetails?.cacheWriteTokens;
+					yield {
+						type: 'finish',
+						finishReason: part.finishReason ?? 'unknown',
+						usage: {
+							inputTokens:
+								part.totalUsage?.inputTokenDetails?.noCacheTokens ?? part.totalUsage?.inputTokens,
+							outputTokens: part.totalUsage?.outputTokens,
+							reasoningTokens:
+								part.totalUsage?.outputTokenDetails?.reasoningTokens ??
+								part.totalUsage?.reasoningTokens,
+							cachedTokens:
+								cacheReadTokens != null || cacheWriteTokens != null
+									? (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0)
+									: part.totalUsage?.cachedInputTokens,
+							cacheReadTokens,
+							cacheWriteTokens,
+							totalTokens: part.totalUsage?.totalTokens
+						}
+					};
+				}
 				break;
 			case 'error':
 				yield {

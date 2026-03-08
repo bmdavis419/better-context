@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { Result } from 'better-result';
+import { BTCA_SNAPSHOT_NAME } from 'btca-sandbox/shared';
 
 import { internalQuery, query } from '../_generated/server';
 import { requireInstanceOwnershipResult, unwrapAuthResult } from '../authHelpers';
@@ -11,6 +12,7 @@ const instanceValidator = v.object({
 	_creationTime: v.number(),
 	clerkId: v.string(),
 	sandboxId: v.optional(v.string()),
+	snapshotName: v.optional(v.string()),
 	state: v.union(
 		v.literal('unprovisioned'),
 		v.literal('provisioning'),
@@ -22,6 +24,7 @@ const instanceValidator = v.object({
 		v.literal('error')
 	),
 	serverUrl: v.optional(v.string()),
+	errorKind: v.optional(v.union(v.literal('disk_full'), v.literal('generic'))),
 	errorMessage: v.optional(v.string()),
 	btcaVersion: v.optional(v.string()),
 	opencodeVersion: v.optional(v.string()),
@@ -173,7 +176,9 @@ export const getStatus = query({
 		v.null(),
 		v.object({
 			instance: instanceValidator,
-			cachedResources: v.array(cachedResourceValidator)
+			cachedResources: v.array(cachedResourceValidator),
+			expectedSnapshotName: v.string(),
+			migrationNeeded: v.boolean()
 		})
 	),
 	handler: async (ctx) => {
@@ -200,7 +205,9 @@ export const getStatus = query({
 
 		return {
 			instance,
-			cachedResources: cachedResources.map((resource) => normalizeCachedResource(resource))
+			cachedResources: cachedResources.map((resource) => normalizeCachedResource(resource)),
+			expectedSnapshotName: BTCA_SNAPSHOT_NAME,
+			migrationNeeded: instance.snapshotName !== BTCA_SNAPSHOT_NAME
 		};
 	}
 });

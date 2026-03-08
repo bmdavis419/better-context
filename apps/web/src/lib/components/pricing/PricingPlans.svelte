@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Check, Loader2, Sparkles } from '@lucide/svelte';
-	import { BILLING_PLAN, SUPPORT_URL } from '$lib/billing/plans';
+	import { BILLING_PLAN } from '$lib/billing/plans';
 
 	type Props = {
 		isSubscribed?: boolean;
@@ -24,7 +24,8 @@
 	}: Props = $props();
 
 	const features = [
-		'More messages and ongoing usage',
+		'Choose between low, balanced, and high-end models',
+		'Shared monthly AI usage across all web models',
 		'Dedicated sandbox for cloud repo work',
 		'Saved threads and project organization',
 		'Cloud MCP for coding tools',
@@ -87,7 +88,7 @@
 				</li>
 				<li class="flex items-start gap-3">
 					<Check size={18} class="mt-0.5 text-[hsl(var(--bc-success))]" />
-					<span>Web app access with Claude Haiku 4.5</span>
+					<span>Pick from low, balanced, and high-end web models</span>
 				</li>
 			</ul>
 			<div
@@ -118,8 +119,7 @@
 			<div
 				class="bc-card mt-6 border-[hsl(var(--bc-border))] bg-[hsl(var(--bc-surface-2))] p-4 text-xs"
 			>
-				Usage is measured across model tokens and sandbox compute. If you hit your monthly limit,
-				you can upgrade or wait for the next billing cycle.
+				Monthly AI usage is shared across all models. Higher-end models use it faster.
 			</div>
 			{#if errorMessage}
 				<p class="mt-4 text-xs text-red-500">{errorMessage}</p>

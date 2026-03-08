@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import ChatMessages from '$lib/components/ChatMessages.svelte';
+	import ProjectModelPicker from '$lib/components/ProjectModelPicker.svelte';
 	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getBillingStore } from '$lib/stores/billing.svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
@@ -13,9 +14,24 @@
 	import { threadPreloadStore } from '$lib/stores/threadPreload.svelte';
 	import { trackEvent, ClientAnalyticsEvents } from '$lib/stores/analytics.svelte';
 	import { SUPPORT_URL } from '$lib/billing/plans';
-	import type { BtcaChunk, CancelState } from '$lib/types';
+	import { INSTANCE_DISK_FULL_MESSAGE } from '$lib/instanceErrors';
+	import type { BtcaChunk, CancelState, MessageStats } from '$lib/types';
 	import { api } from '../../../../convex/_generated/api';
 	import type { Id } from '../../../../convex/_generated/dataModel';
+
+	type ThreadMessageRecord = {
+		_id: Id<'messages'>;
+		role: 'user' | 'assistant' | 'system';
+		content: string | { type: 'chunks'; chunks: BtcaChunk[] };
+		resources?: string[];
+		canceled?: boolean;
+		stats?: MessageStats;
+	};
+
+	type AvailableResource = {
+		name: string;
+		type: string;
+	};
 
 	// Get thread ID from route params - can be 'new' for a fresh thread
 	const routeId = $derived((page.params as { id: string }).id);
@@ -56,6 +72,7 @@
 	let streamStatus = $state<string | null>(null);
 	let cancelState = $state<CancelState>('none');
 	let inputValue = $state('');
+	let isResettingInstance = $state(false);
 	let chatMessagesRef = $state<{ scrollToBottom: (behavior?: ScrollBehavior) => void } | null>(
 		null
 	);
@@ -72,9 +89,9 @@
 
 	// Derived values
 	const thread = $derived(threadQuery?.data);
-	const messages = $derived(thread?.messages ?? []);
+	const messages = $derived((thread?.messages ?? []) as ThreadMessageRecord[]);
 	const threadResources = $derived(thread?.threadResources ?? []);
-	const availableResources = $derived(resourcesQuery?.data ?? []);
+	const availableResources = $derived((resourcesQuery?.data ?? []) as AvailableResource[]);
 	const hasUsableInstance = $derived.by(() => {
 		if (instanceStore.isLoading) return false;
 		if (!instanceStore.instance) return false;
@@ -84,6 +101,9 @@
 		(billingStore.isSubscribed || billingStore.isOnFreePlan) &&
 			!billingStore.isOverLimit &&
 			hasUsableInstance
+	);
+	const showDiskFullBanner = $derived.by(
+		() => instanceStore.state === 'error' && instanceStore.errorKind === 'disk_full'
 	);
 
 	// Only show local streaming UI if it's for THIS thread
@@ -231,6 +251,19 @@
 		}
 	}
 
+	async function resetInstanceFromChat() {
+		if (isResettingInstance) return;
+		isResettingInstance = true;
+		try {
+			const result = await instanceStore.reset();
+			if (result?.error) {
+				alert(result.error);
+			}
+		} finally {
+			isResettingInstance = false;
+		}
+	}
+
 	async function retryMessage(message: import('$lib/types').Message & { role: 'user' }) {
 		if (!threadId || isStreaming) return;
 
@@ -289,10 +322,17 @@
 					'Your instance is stopped. Wake it now? It will take about 30-60 seconds.'
 				);
 				if (wakeNow) {
-					const result = await instanceStore.wake();
+					const result = await instanceStore.wake(projectStore.selectedProject?._id);
 					if (result?.error) {
 						alert(result.error);
 					}
+				}
+				return;
+			}
+			if (instanceStore.state === 'error' && instanceStore.errorKind === 'disk_full') {
+				const resetNow = confirm(`${INSTANCE_DISK_FULL_MESSAGE} Reset it now?`);
+				if (resetNow) {
+					await resetInstanceFromChat();
 				}
 				return;
 			}
@@ -321,7 +361,7 @@
 			if (found) validResources.push(found.name);
 			else invalidResources.push(res);
 		}
-		if (invalidResources.length > 0) {
+		if (invalidResources.length > 0 && validResources.length === 0) {
 			alert(`Unknown resources: ${invalidResources.join(', ')}`);
 			return;
 		}
@@ -418,6 +458,7 @@
 							const event = JSON.parse(eventData) as
 								| { type: 'add'; chunk: BtcaChunk }
 								| { type: 'update'; id: string; chunk: Partial<BtcaChunk> }
+								| { type: 'append'; id: string; chunkType: 'text' | 'reasoning'; delta: string }
 								| { type: 'status'; status: string }
 								| { type: 'session'; sessionId: string }
 								| { type: 'done' }
@@ -443,6 +484,30 @@
 									if (c.id !== event.id) return c;
 									return { ...c, ...event.chunk } as BtcaChunk;
 								});
+							} else if (event.type === 'append') {
+								let matched = false;
+								currentChunks = currentChunks.map((c) => {
+									if (c.id !== event.id) return c;
+									if (event.chunkType === 'text' && c.type === 'text') {
+										matched = true;
+										return { ...c, text: c.text + event.delta };
+									}
+									if (event.chunkType === 'reasoning' && c.type === 'reasoning') {
+										matched = true;
+										return { ...c, text: c.text + event.delta };
+									}
+									return c;
+								});
+								if (!matched) {
+									currentChunks = [
+										...currentChunks,
+										{
+											type: event.chunkType,
+											id: event.id,
+											text: event.delta
+										} satisfies BtcaChunk
+									];
+								}
 							} else if (event.type === 'error') {
 								throw new Error(event.error);
 							} else if (event.type === 'done') {
@@ -644,6 +709,9 @@
 			if (instanceStore.state === 'stopped') {
 				return 'Instance is stopped. Wake it to chat.';
 			}
+			if (instanceStore.state === 'error' && instanceStore.errorKind === 'disk_full') {
+				return 'Instance cache full. Reset it to continue.';
+			}
 			return 'Instance unavailable. Try again soon.';
 		}
 		if (isStreaming && cancelState === 'pending') return 'Press Escape again to cancel';
@@ -692,7 +760,8 @@
 					id: m._id as string,
 					role: 'assistant',
 					content: m.content,
-					canceled: m.canceled
+					canceled: m.canceled,
+					stats: m.stats
 				};
 			}
 
@@ -786,6 +855,30 @@
 				</div>
 			{/if}
 
+			{#if showDiskFullBanner}
+				<div class="mb-3 bc-card border-red-500/30 bg-red-500/10 p-3">
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<div>
+							<p class="text-sm font-medium text-red-500">Instance cache full</p>
+							<p class="mt-1 text-xs text-red-400">{INSTANCE_DISK_FULL_MESSAGE}</p>
+						</div>
+						<button
+							type="button"
+							class="bc-btn bc-btn-primary text-xs"
+							onclick={resetInstanceFromChat}
+							disabled={isResettingInstance}
+						>
+							{#if isResettingInstance}
+								<Loader2 size={12} class="animate-spin" />
+								Resetting...
+							{:else}
+								Reset instance
+							{/if}
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			{#if threadResources.length > 0}
 				<div class="mb-2 flex flex-wrap items-center gap-2">
 					<span class="bc-muted text-xs">Active:</span>
@@ -850,13 +943,17 @@
 			</div>
 
 			<div class="bc-muted mt-2 flex items-center justify-between text-xs">
-				<span>
-					{#if isStreaming}
-						{cancelState === 'pending' ? 'Press Escape again to cancel' : 'Streaming...'}
-					{:else}
-						Enter to send
-					{/if}
-				</span>
+				<div class="flex items-center gap-3">
+					<span>
+						{#if isStreaming}
+							{cancelState === 'pending' ? 'Press Escape again to cancel' : 'Streaming...'}
+						{:else}
+							Enter to send
+						{/if}
+					</span>
+					<span class="bc-muted">·</span>
+					<ProjectModelPicker disabled={isStreaming} />
+				</div>
 				{#if !isStreaming && !isNewThread}
 					<button type="button" class="text-xs hover:underline" onclick={clearChat}>Clear</button>
 				{/if}

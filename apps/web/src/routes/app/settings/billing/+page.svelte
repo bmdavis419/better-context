@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, CreditCard, ExternalLink } from '@lucide/svelte';
+	import { Loader2, CreditCard, ExternalLink, HardDrive } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { useConvexClient } from 'convex-svelte';
 	import { getAuthState } from '$lib/stores/auth.svelte';
@@ -15,21 +15,13 @@
 
 	let isRedirecting = $state(false);
 	let errorMessage = $state<string | null>(null);
+	const aiUsage = $derived(billingStore.summary?.usage.aiBudget);
+	const remainingPct = $derived(aiUsage?.remainingPct ?? 100);
 
 	const formattedEndDate = $derived.by(() => {
 		const end = billingStore.summary?.currentPeriodEnd;
 		if (!end) return null;
 		return new Date(end).toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'long',
-			day: 'numeric'
-		});
-	});
-
-	const formattedCancelDate = $derived.by(() => {
-		const canceledAt = billingStore.canceledAt;
-		if (!canceledAt) return null;
-		return new Date(canceledAt).toLocaleDateString(undefined, {
 			year: 'numeric',
 			month: 'long',
 			day: 'numeric'
@@ -133,6 +125,32 @@
 					{:else}
 						<p class="bc-muted mt-3 text-sm">No payment method on file yet.</p>
 					{/if}
+				</div>
+			</div>
+
+			<div class="bc-card bc-reveal p-5" style="--delay: 100ms">
+				<div class="flex items-center justify-between gap-4">
+					<div class="flex items-center gap-3">
+						<div class="bc-logoMark h-9 w-9">
+							<HardDrive size={16} />
+						</div>
+						<div>
+							<h3 class="font-medium">Monthly AI usage</h3>
+							<p class="bc-muted text-xs">Higher-end models use this faster.</p>
+						</div>
+					</div>
+					<span class="text-sm font-medium">{Math.round(remainingPct)}% remaining</span>
+				</div>
+				<div class="sandbox-progress-bar mt-4" style:width="100%">
+					<div
+						class="sandbox-progress-fill"
+						style:width={`${remainingPct}%`}
+						style:background-color={remainingPct <= 10
+							? 'hsl(var(--bc-error))'
+							: remainingPct <= 25
+								? 'hsl(var(--bc-warning))'
+								: 'hsl(var(--bc-accent))'}
+					></div>
 				</div>
 			</div>
 

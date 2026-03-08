@@ -35,10 +35,21 @@ const messageContentValidator = v.union(
 	})
 );
 
+const messageStatsValidator = v.object({
+	durationMs: v.optional(v.number()),
+	inputTokens: v.optional(v.number()),
+	outputTokens: v.optional(v.number()),
+	cachedTokens: v.optional(v.number()),
+	totalTokens: v.optional(v.number()),
+	tokensPerSecond: v.optional(v.number()),
+	totalPriceUsd: v.optional(v.number())
+});
+
 export default defineSchema({
 	instances: defineTable({
 		clerkId: v.string(),
 		sandboxId: v.optional(v.string()),
+		snapshotName: v.optional(v.string()),
 		state: v.union(
 			v.literal('unprovisioned'),
 			v.literal('provisioning'),
@@ -50,6 +61,7 @@ export default defineSchema({
 			v.literal('error')
 		),
 		serverUrl: v.optional(v.string()),
+		errorKind: v.optional(v.union(v.literal('disk_full'), v.literal('generic'))),
 		errorMessage: v.optional(v.string()),
 		btcaVersion: v.optional(v.string()),
 		opencodeVersion: v.optional(v.string()),
@@ -122,7 +134,7 @@ export default defineSchema({
 		specialNotes: v.optional(v.string()),
 		gitProvider: v.optional(v.union(v.literal('github'), v.literal('generic'))),
 		visibility: v.optional(v.union(v.literal('public'), v.literal('private'))),
-		authSource: v.optional(v.literal('clerk_github_oauth')),
+		authSource: v.optional(v.union(v.literal('clerk_github_oauth'), v.literal('github_app'))),
 		createdAt: v.number()
 	})
 		.index('by_instance', ['instanceId'])
@@ -143,6 +155,30 @@ export default defineSchema({
 		.index('by_instance', ['instanceId'])
 		.index('by_clerk_user_id', ['clerkUserId']),
 
+	githubInstallations: defineTable({
+		instanceId: v.id('instances'),
+		clerkUserId: v.string(),
+		installationId: v.number(),
+		accountLogin: v.string(),
+		accountType: v.union(v.literal('User'), v.literal('Organization')),
+		targetType: v.union(v.literal('User'), v.literal('Organization')),
+		repositorySelection: v.union(v.literal('all'), v.literal('selected')),
+		repositoryIds: v.array(v.number()),
+		repositoryNames: v.array(v.string()),
+		contentsPermission: v.optional(v.string()),
+		metadataPermission: v.optional(v.string()),
+		htmlUrl: v.optional(v.string()),
+		status: v.union(v.literal('active'), v.literal('suspended'), v.literal('deleted')),
+		connectedAt: v.number(),
+		lastSyncedAt: v.number(),
+		suspendedAt: v.optional(v.number())
+	})
+		.index('by_instance', ['instanceId'])
+		.index('by_clerk_user_id', ['clerkUserId'])
+		.index('by_installation_id', ['installationId'])
+		.index('by_instance_and_installation', ['instanceId', 'installationId'])
+		.index('by_instance_and_account_login', ['instanceId', 'accountLogin']),
+
 	threads: defineTable({
 		instanceId: v.id('instances'),
 		projectId: v.optional(v.id('projects')),
@@ -159,6 +195,7 @@ export default defineSchema({
 		content: messageContentValidator,
 		resources: v.optional(v.array(v.string())),
 		canceled: v.optional(v.boolean()),
+		stats: v.optional(messageStatsValidator),
 		createdAt: v.number()
 	}).index('by_thread', ['threadId']),
 

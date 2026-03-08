@@ -63,9 +63,12 @@ describe('createSseStream', () => {
 				type: 'finish',
 				finishReason: 'stop',
 				usage: {
-					inputTokens: 1_000_000,
+					inputTokens: 750_000,
 					outputTokens: 2_000_000,
 					reasoningTokens: 250_000,
+					cachedTokens: 250_000,
+					cacheReadTokens: 200_000,
+					cacheWriteTokens: 50_000,
 					totalTokens: 3_250_000
 				}
 			} as const;
@@ -84,7 +87,13 @@ describe('createSseStream', () => {
 				lookup: async () => ({
 					source: 'models.dev' as const,
 					modelKey: 'openai/gpt-4o-mini',
-					ratesUsdPerMTokens: { input: 1, output: 2, reasoning: 0.5 }
+					ratesUsdPerMTokens: {
+						input: 1,
+						output: 2,
+						reasoning: 0.5,
+						cacheRead: 0.25,
+						cacheWrite: 1.5
+					}
 				})
 			}
 		});
@@ -97,9 +106,12 @@ describe('createSseStream', () => {
 
 		if (doneEvent?.type !== 'done') throw new Error('missing done event');
 
-		expect(doneEvent.usage?.inputTokens).toBe(1_000_000);
+		expect(doneEvent.usage?.inputTokens).toBe(750_000);
 		expect(doneEvent.usage?.outputTokens).toBe(2_000_000);
 		expect(doneEvent.usage?.reasoningTokens).toBe(250_000);
+		expect(doneEvent.usage?.cachedTokens).toBe(250_000);
+		expect(doneEvent.usage?.cacheReadTokens).toBe(200_000);
+		expect(doneEvent.usage?.cacheWriteTokens).toBe(50_000);
 		expect(doneEvent.usage?.totalTokens).toBe(3_250_000);
 
 		expect(typeof doneEvent.metrics?.timing?.totalMs).toBe('number');
@@ -113,8 +125,8 @@ describe('createSseStream', () => {
 		expect(doneEvent.metrics?.pricing?.modelKey).toBe('openai/gpt-4o-mini');
 		expect(doneEvent.metrics?.pricing?.ratesUsdPerMTokens?.input).toBe(1);
 
-		// cost = (1.0 * 1) + (2.0 * 2) + (0.25 * 0.5) = 5.125
-		expect(doneEvent.metrics?.pricing?.costUsd?.total).toBeCloseTo(5.125, 8);
+		// cost = (0.75 * 1) + (2.0 * 2) + (0.25 * 0.5) + (0.2 * 0.25) + (0.05 * 1.5) = 5
+		expect(doneEvent.metrics?.pricing?.costUsd?.total).toBeCloseTo(5, 8);
 	});
 
 	it('does not throw if the client cancels before an error is emitted', async () => {

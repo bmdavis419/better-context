@@ -5,7 +5,7 @@
 	import DOMPurify from 'isomorphic-dompurify';
 	import ToolCallSummary from '$lib/components/ToolCallSummary.svelte';
 	import { getChatHighlighter } from '../shiki/chatHighlighter.ts';
-	import type { Message, BtcaChunk, AssistantContent } from '$lib/types';
+	import type { Message, BtcaChunk, AssistantContent, MessageStats } from '$lib/types';
 
 	// Type guards for AssistantContent (can be string | { type: 'text' } | { type: 'chunks' })
 	function isTextContent(content: AssistantContent): content is { type: 'text'; content: string } {
@@ -306,6 +306,53 @@
 	function getRenderableChunks(chunks: BtcaChunk[]): BtcaChunk[] {
 		return sortChunks(chunks).filter((chunk) => chunk.type !== 'tool');
 	}
+
+	function formatDuration(durationMs: number) {
+		const seconds = durationMs / 1000;
+		return seconds >= 10 ? `${seconds.toFixed(1)}s` : `${seconds.toFixed(2)}s`;
+	}
+
+	function formatTokens(totalTokens: number) {
+		return `${new Intl.NumberFormat().format(totalTokens)} tokens`;
+	}
+
+	function formatTokenValue(label: string, totalTokens: number) {
+		return `${label} ${new Intl.NumberFormat().format(totalTokens)}`;
+	}
+
+	function formatTokensPerSecond(tokensPerSecond: number) {
+		return `${tokensPerSecond.toFixed(1)} tok/s`;
+	}
+
+	function formatUsd(value: number) {
+		const abs = Math.abs(value);
+		const decimals = abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
+		return `$${value.toFixed(decimals).replace(/\.?0+$/, '')}`;
+	}
+
+	function getStatsParts(stats: MessageStats | undefined) {
+		if (!stats) return [];
+
+		const hasSplitTokenStats =
+			stats.inputTokens != null || stats.outputTokens != null || stats.cachedTokens != null;
+
+		return [
+			stats.durationMs != null ? formatDuration(stats.durationMs) : null,
+			hasSplitTokenStats
+				? formatTokenValue('in', stats.inputTokens ?? 0)
+				: stats.totalTokens != null
+					? formatTokens(stats.totalTokens)
+					: null,
+			hasSplitTokenStats ? formatTokenValue('out', stats.outputTokens ?? 0) : null,
+			hasSplitTokenStats
+				? stats.cachedTokens != null
+					? formatTokenValue('cached', stats.cachedTokens)
+					: 'cached n/a'
+				: null,
+			stats.tokensPerSecond != null ? formatTokensPerSecond(stats.tokensPerSecond) : null,
+			stats.totalPriceUsd != null ? formatUsd(stats.totalPriceUsd) : null
+		].filter((part): part is string => part !== null);
+	}
 </script>
 
 <div class="relative min-h-0 flex-1">
@@ -349,6 +396,7 @@
 						{/if}
 					</div>
 				{:else if message.role === 'assistant'}
+					{@const statsParts = getStatsParts(message.stats)}
 					<div class="chat-message chat-message-assistant">
 						<div class="mb-2">
 							<span class="text-xs font-medium text-[hsl(var(--bc-success))]">AI</span>
@@ -382,7 +430,13 @@
 								{/each}
 							</div>
 						{/if}
-						<div class="mt-3">
+						<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+							{#if statsParts.length > 0}
+								<div class="bc-muted text-xs">
+									<span class="font-medium">Stats:</span>
+									{statsParts.join(' • ')}
+								</div>
+							{/if}
 							<button
 								type="button"
 								class="copy-answer-btn"

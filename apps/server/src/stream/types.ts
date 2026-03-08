@@ -70,6 +70,9 @@ export const BtcaStreamUsageSchema = z.object({
 	inputTokens: z.number().optional(),
 	outputTokens: z.number().optional(),
 	reasoningTokens: z.number().optional(),
+	cachedTokens: z.number().optional(),
+	cacheReadTokens: z.number().optional(),
+	cacheWriteTokens: z.number().optional(),
 	totalTokens: z.number().optional()
 });
 

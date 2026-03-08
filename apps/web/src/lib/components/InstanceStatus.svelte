@@ -10,6 +10,7 @@
 		Square
 	} from '@lucide/svelte';
 	import { getInstanceStore } from '$lib/stores/instance.svelte';
+	import { INSTANCE_DISK_FULL_MESSAGE } from '$lib/instanceErrors';
 
 	type InstanceAction = 'wake' | 'stop' | 'update' | 'reset';
 
@@ -83,6 +84,14 @@
 
 	const stateInfo = $derived.by(() => {
 		const state = instanceStore.state ?? 'unknown';
+		if (state === 'error' && instanceStore.errorKind === 'disk_full') {
+			return {
+				label: 'Cache full',
+				description: 'Your instance cache is full. Reset it to continue.',
+				tone: 'error' as const,
+				icon: AlertTriangle
+			};
+		}
 		return (
 			stateMeta[state] ?? {
 				label: 'Checking',
@@ -120,6 +129,7 @@
 	const canStop = $derived.by(() => instanceStore.state === 'running');
 	const canUpdate = $derived.by(() => ['running', 'stopped'].includes(instanceStore.state ?? ''));
 	const canReset = $derived.by(() => instanceStore.state === 'error');
+	const isDiskFullError = $derived.by(() => instanceStore.errorKind === 'disk_full');
 
 	const updateSummary = $derived.by(() => {
 		const parts: string[] = [];
@@ -245,7 +255,11 @@
 					<div class="flex flex-col gap-2 rounded border border-red-500/30 bg-red-500/10 p-3">
 						<div class="text-xs font-medium text-red-500">Instance needs attention</div>
 						<p class="text-xs text-red-400">
-							Try resetting your instance. This will fully restart it from scratch.
+							{#if isDiskFullError}
+								{INSTANCE_DISK_FULL_MESSAGE}
+							{:else}
+								Try resetting your instance. This will fully restart it from scratch.
+							{/if}
 						</p>
 						<button
 							type="button"
@@ -311,7 +325,11 @@
 				{#if instanceStore.error || instanceStore.instance?.errorMessage}
 					<div class="mt-2 flex items-start gap-2 text-xs text-red-500">
 						<AlertTriangle size={12} />
-						<span>{instanceStore.error ?? instanceStore.instance?.errorMessage}</span>
+						<span>
+							{isDiskFullError
+								? INSTANCE_DISK_FULL_MESSAGE
+								: (instanceStore.error ?? instanceStore.instance?.errorMessage)}
+						</span>
 					</div>
 				{/if}
 			{/if}

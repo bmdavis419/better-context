@@ -18,14 +18,17 @@
 	} from '@lucide/svelte';
 	import { useQuery, useConvexClient } from 'convex-svelte';
 	import { goto } from '$app/navigation';
+	import { PUBLIC_CONVEX_URL } from '$env/static/public';
 	import ResourceLogo from '$lib/components/ResourceLogo.svelte';
-	import { getAuthState, openUserProfile, reconnectGitHub } from '$lib/stores/auth.svelte';
+	import { getAuthState } from '$lib/stores/auth.svelte';
 	import { getProjectStore } from '$lib/stores/project.svelte';
 	import { api } from '../../../../convex/_generated/api';
 
 	const auth = getAuthState();
 	const client = useConvexClient();
 	const projectStore = getProjectStore();
+	const getConvexHttpBaseUrl = (url: string) => url.replace('.convex.cloud', '.convex.site');
+	const convexHttpBaseUrl = getConvexHttpBaseUrl(PUBLIC_CONVEX_URL);
 
 	type ResourceFormType = 'git' | 'npm';
 
@@ -66,12 +69,19 @@
 	let addingGlobal = $state<string | null>(null);
 	let globalAddError = $state<string | null>(null);
 	let isSyncingGitHub = $state(false);
-	let isReauthorizingGitHub = $state(false);
+	let isConnectingGitHub = $state(false);
 	let githubSyncError = $state<string | null>(null);
 	let githubSyncTriggered = $state(false);
 
-	const userResourceNames = $derived(new Set((userResourcesQuery?.data ?? []).map((r) => r.name)));
-	const githubConnection = $derived(githubConnectionQuery?.data ?? null);
+	const userResourceNames = $derived(
+		new Set(
+			((userResourcesQuery?.data ?? []) as Array<{ name: string }>).map((resource) => resource.name)
+		)
+	);
+	const githubConnection = $derived(
+		githubConnectionQuery?.data ?? { status: 'disconnected', installations: [] }
+	);
+	const githubInstallations = $derived(githubConnection.installations ?? []);
 	const getNpmResourceUrl = (packageName?: string, version?: string) =>
 		packageName
 			? `https://www.npmjs.com/package/${packageName.split('/').map(encodeURIComponent).join('/')}${version ? `/v/${encodeURIComponent(version)}` : ''}`
@@ -231,6 +241,19 @@
 	});
 
 	$effect(() => {
+		const params = new URLSearchParams(globalThis.location?.search ?? '');
+		const githubError = params.get('github_error');
+		if (!githubError) return;
+
+		githubSyncError =
+			{
+				invalid_state: 'The GitHub connect link expired. Try connecting GitHub again.',
+				missing_installation: 'GitHub setup did not finish. Try the connect flow again.',
+				missing_instance: 'Your web sandbox instance could not be found. Refresh and try again.'
+			}[githubError] ?? 'GitHub setup did not finish. Try connecting again.';
+	});
+
+	$effect(() => {
 		if (!auth.isSignedIn) {
 			githubSyncTriggered = false;
 			return;
@@ -257,35 +280,45 @@
 
 	async function handleConnectGitHub() {
 		githubSyncError = null;
+		isConnectingGitHub = true;
 
-		if (githubConnection?.status === 'missing_scope') {
-			isReauthorizingGitHub = true;
-
-			const reauthorized = await reconnectGitHub(['repo']);
-			isReauthorizingGitHub = false;
-
-			if (reauthorized) {
-				await syncGitHubConnection();
+		try {
+			const token = await auth.getToken({ template: 'convex' });
+			if (!token) {
+				githubSyncError =
+					'Your session has expired. Refresh the page and try connecting GitHub again.';
 				return;
 			}
-		}
 
-		openUserProfile({ github: ['repo'] });
+			const response = await fetch(
+				`${convexHttpBaseUrl}/github/connect/start?returnTo=${encodeURIComponent('/app/settings/resources')}`,
+				{
+					headers: {
+						Authorization: `Bearer ${token}`
+					}
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error(await response.text());
+			}
+
+			const payload = (await response.json()) as { url?: string };
+			if (!payload.url) {
+				throw new Error('GitHub connect URL was missing from the server response');
+			}
+
+			globalThis.location.href = payload.url;
+		} catch (error) {
+			githubSyncError =
+				error instanceof Error ? error.message : 'Failed to start GitHub connect flow';
+		} finally {
+			isConnectingGitHub = false;
+		}
 	}
 
 	async function handleRefreshGitHubAccess() {
-		githubSyncError = null;
-		isReauthorizingGitHub = true;
-
-		const reauthorized = await reconnectGitHub(['repo']);
-		isReauthorizingGitHub = false;
-
-		if (reauthorized) {
-			await syncGitHubConnection();
-			return;
-		}
-
-		openUserProfile({ github: ['repo'] });
+		await syncGitHubConnection();
 	}
 
 	async function handleAddResource() {
@@ -398,49 +431,61 @@
 						<h2 class="text-lg font-medium">GitHub Private Repos</h2>
 					</div>
 					<p class="bc-muted text-sm">
-						Private GitHub repositories work only in the signed-in web app sandbox. Your local CLI
-						still uses the git auth on your own machine.
+						Private GitHub repositories now use the btca GitHub App with read-only repository
+						access. Your local CLI still uses git auth on your own machine.
 					</p>
 					<div class="flex flex-wrap items-center gap-2 text-sm">
 						<span class="bc-chip px-2 py-1">
-							{#if githubConnection?.status === 'connected'}
-								Connected to @{githubConnection.githubLogin}
-							{:else if githubConnection?.status === 'missing_scope'}
-								GitHub connected, but private repo access is missing
+							{#if githubConnection.status === 'connected'}
+								{githubInstallations.length === 1
+									? `Connected to ${githubInstallations[0]?.accountLogin}`
+									: `Connected to ${githubInstallations.length} GitHub installations`}
 							{:else}
 								GitHub not connected
 							{/if}
 						</span>
-						{#if githubConnection?.status === 'connected'}
-							<span class="bc-muted">Scopes: {githubConnection.scopes.join(', ')}</span>
+						{#if githubConnection.status === 'connected'}
+							<span class="bc-muted">Permissions: contents read-only, metadata read-only</span>
 						{/if}
 					</div>
 					<p class="bc-muted text-xs">
-						If GitHub is already connected without private repo access, btca will try a direct
-						reconnect first and fall back to the Clerk profile modal with the required scope. You
-						can also refresh GitHub access later if you need newly granted org access to show up.
+						Install the btca GitHub App on your personal account or org, then grant the private
+						repositories you want the web sandbox to clone. You can change repo access later from
+						GitHub and refresh status here.
 					</p>
 					{#if githubSyncError}
 						<div class="text-sm text-red-500">{githubSyncError}</div>
 					{/if}
+					{#if githubInstallations.length > 0}
+						<div class="flex flex-col gap-2 pt-1 text-sm">
+							{#each githubInstallations as installation}
+								<div class="flex flex-wrap items-center gap-2">
+									<span class="bc-chip px-2 py-1">
+										{installation.accountLogin} · {installation.repositorySelection === 'all'
+											? 'all repos'
+											: `${installation.repositoryNames.length} selected repos`}
+									</span>
+									{#if installation.status === 'suspended'}
+										<span class="text-xs text-yellow-400">Suspended</span>
+									{/if}
+									{#if installation.htmlUrl}
+										<a
+											class="bc-muted inline-flex items-center gap-1 text-xs hover:text-white"
+											href={installation.htmlUrl}
+											target="_blank"
+											rel="noreferrer"
+										>
+											Manage on GitHub
+											<ExternalLink size={12} />
+										</a>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 				<div class="flex flex-wrap gap-2">
-					{#if githubConnection?.status === 'connected'}
-						<button
-							type="button"
-							class="bc-btn text-sm"
-							onclick={handleRefreshGitHubAccess}
-							disabled={isReauthorizingGitHub}
-						>
-							{#if isReauthorizingGitHub}
-								<Loader2 size={16} class="animate-spin" />
-							{:else}
-								<RefreshCw size={16} />
-							{/if}
-							Refresh GitHub Access
-						</button>
-					{/if}
-					<button type="button" class="bc-btn text-sm" onclick={syncGitHubConnection}>
+					<button type="button" class="bc-btn text-sm" onclick={handleRefreshGitHubAccess}>
 						{#if isSyncingGitHub}
 							<Loader2 size={16} class="animate-spin" />
 						{:else}
@@ -449,16 +494,12 @@
 						Refresh Status
 					</button>
 					<button type="button" class="bc-btn bc-btn-primary text-sm" onclick={handleConnectGitHub}>
-						{#if isReauthorizingGitHub}
+						{#if isConnectingGitHub}
 							<Loader2 size={16} class="animate-spin" />
 						{:else}
 							<Github size={16} />
 						{/if}
-						{githubConnection?.status === 'missing_scope'
-							? 'Reconnect GitHub'
-							: githubConnection?.status === 'connected'
-								? 'Manage GitHub'
-								: 'Connect GitHub'}
+						{githubConnection.status === 'connected' ? 'Grant Repo Access' : 'Connect GitHub'}
 					</button>
 				</div>
 			</div>
@@ -491,8 +532,9 @@
 				Add your own git repositories or npm packages as documentation resources.
 			</p>
 			<p class="bc-muted mb-4 text-xs">
-				Public repos can be added directly. Private GitHub repos require a connected GitHub account
-				with private repository access. npm packages can be added with an optional pinned version.
+				Public repos can be added directly. Private GitHub repos require the btca GitHub App with
+				access to the repo owner and repository. npm packages can be added with an optional pinned
+				version.
 			</p>
 
 			<!-- Quick Add Section -->

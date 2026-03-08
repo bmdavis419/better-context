@@ -1,32 +1,52 @@
 'use node';
 
-import { createClerkClient } from '@clerk/backend';
 import type { FunctionReference } from 'convex/server';
 import { v } from 'convex/values';
 
-import { internal } from './_generated/api';
+import { api, internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { action } from './_generated/server';
 import { instances } from './apiHelpers';
-import { WebAuthError, WebConfigMissingError, WebUnhandledError } from '../lib/result/errors';
-
-const GITHUB_PROVIDER = 'github';
-const REQUIRED_GITHUB_SCOPES = ['repo'] as const;
+import { getInstallationSnapshot } from './githubApp';
+import { WebAuthError, WebUnhandledError } from '../lib/result/errors';
 
 type InternalGithubConnections = {
+	getByInstanceId: FunctionReference<
+		'query',
+		'internal',
+		{ instanceId: Id<'instances'> },
+		Array<{
+			installationId: number;
+		}>
+	>;
 	upsertForInstance: FunctionReference<
 		'mutation',
 		'internal',
 		{
 			instanceId: Id<'instances'>;
 			clerkUserId: string;
-			githubUserId?: number;
-			githubLogin?: string;
-			scopes: string[];
-			status: 'connected' | 'missing_scope' | 'disconnected';
-			connectedAt?: number;
+			installationId: number;
+			accountLogin: string;
+			accountType: 'User' | 'Organization';
+			targetType: 'User' | 'Organization';
+			repositorySelection: 'all' | 'selected';
+			repositoryIds: number[];
+			repositoryNames: string[];
+			contentsPermission?: string;
+			metadataPermission?: string;
+			htmlUrl?: string;
+			status: 'active' | 'suspended' | 'deleted';
+			connectedAt: number;
+			lastSyncedAt: number;
+			suspendedAt?: number;
 		},
-		Id<'githubConnections'>
+		Id<'githubInstallations'>
+	>;
+	markDeletedByInstallationId: FunctionReference<
+		'mutation',
+		'internal',
+		{ installationId: number },
+		null
 	>;
 };
 
@@ -34,132 +54,54 @@ const githubConnectionsInternal = internal as unknown as {
 	githubConnections: InternalGithubConnections;
 };
 
-type GitHubUser = {
-	id: number;
-	login: string;
-};
-
-export type GitHubConnectionSnapshot =
-	| {
-			status: 'connected' | 'missing_scope';
-			scopes: string[];
-			githubUserId: number;
-			githubLogin: string;
-			connectedAt?: number;
-			token: string;
-	  }
-	| {
-			status: 'disconnected';
-			scopes: string[];
-			githubUserId?: undefined;
-			githubLogin?: undefined;
-			connectedAt?: undefined;
-			token?: undefined;
-	  };
-
-const getClerkClient = () => {
-	const secretKey = process.env.CLERK_SECRET_KEY;
-	if (!secretKey) {
-		throw new WebConfigMissingError({
-			message: 'CLERK_SECRET_KEY environment variable is not set',
-			config: 'CLERK_SECRET_KEY'
-		});
-	}
-	return createClerkClient({ secretKey });
-};
-
-const normalizeScopes = (scopes: string[]) =>
-	[...new Set(scopes.map((scope) => scope.trim()).filter(Boolean))].sort();
-
-const parseScopesHeader = (value: string | null) =>
-	normalizeScopes(
-		(value ?? '')
-			.split(',')
-			.map((scope) => scope.trim())
-			.filter(Boolean)
-	);
-
-const hasRequiredGitHubScopes = (scopes: string[]) =>
-	REQUIRED_GITHUB_SCOPES.every((scope) => scopes.includes(scope));
-
-const getGitHubHeaders = (token: string) => ({
-	Authorization: `Bearer ${token}`,
-	Accept: 'application/vnd.github+json',
-	'User-Agent': 'btca-web'
-});
-
-const fetchGitHubUser = async (token: string): Promise<{ user: GitHubUser; scopes: string[] }> => {
-	const response = await fetch('https://api.github.com/user', {
-		headers: getGitHubHeaders(token)
-	});
-
-	if (response.status === 401 || response.status === 403) {
-		throw new WebAuthError({
-			message: 'GitHub access token is no longer valid',
-			code: 'UNAUTHORIZED'
-		});
-	}
-
-	if (!response.ok) {
-		throw new WebUnhandledError({
-			message: `GitHub user lookup failed with status ${response.status}`
-		});
-	}
-
-	const user = (await response.json()) as GitHubUser;
-	const scopes = parseScopesHeader(response.headers.get('x-oauth-scopes'));
-	return { user, scopes };
-};
-
-export const inspectGitHubConnectionForClerkUser = async (
-	clerkUserId: string
-): Promise<GitHubConnectionSnapshot> => {
-	const clerkClient = getClerkClient();
-	const oauthTokens = await clerkClient.users.getUserOauthAccessToken(clerkUserId, GITHUB_PROVIDER);
-	const tokenData = oauthTokens.data[0];
-
-	if (!tokenData?.token) {
-		return {
-			status: 'disconnected',
-			scopes: []
-		};
-	}
-
-	let userResult: { user: GitHubUser; scopes: string[] };
-	try {
-		userResult = await fetchGitHubUser(tokenData.token);
-	} catch (error) {
-		if (WebAuthError.is(error)) {
-			return {
-				status: 'disconnected',
-				scopes: []
-			};
-		}
-		throw error;
-	}
-	const { user, scopes: headerScopes } = userResult;
-	const scopes = normalizeScopes([...(tokenData.scopes ?? []), ...headerScopes]);
-
-	return {
-		status: hasRequiredGitHubScopes(scopes) ? 'connected' : 'missing_scope',
-		scopes,
-		githubUserId: user.id,
-		githubLogin: user.login,
-		connectedAt: Date.now(),
-		token: tokenData.token
-	};
+type GitHubConnectionSummary = {
+	status: 'connected' | 'disconnected';
+	installations: Array<{
+		installationId: number;
+		accountLogin: string;
+		accountType: 'User' | 'Organization';
+		targetType: 'User' | 'Organization';
+		repositorySelection: 'all' | 'selected';
+		repositoryIds: number[];
+		repositoryNames: string[];
+		contentsPermission?: string;
+		metadataPermission?: string;
+		htmlUrl?: string;
+		status: 'active' | 'suspended' | 'deleted';
+		connectedAt: number;
+		lastSyncedAt: number;
+		suspendedAt?: number;
+	}>;
+	connectedAt?: number;
+	lastSyncedAt?: number;
 };
 
 export const syncMyConnection = action({
 	args: {},
 	returns: v.object({
-		status: v.union(v.literal('connected'), v.literal('missing_scope'), v.literal('disconnected')),
-		scopes: v.array(v.string()),
-		githubUserId: v.optional(v.number()),
-		githubLogin: v.optional(v.string()),
-		connectedAt: v.optional(v.number())
+		status: v.union(v.literal('connected'), v.literal('disconnected')),
+		installations: v.array(
+			v.object({
+				installationId: v.number(),
+				accountLogin: v.string(),
+				accountType: v.union(v.literal('User'), v.literal('Organization')),
+				targetType: v.union(v.literal('User'), v.literal('Organization')),
+				repositorySelection: v.union(v.literal('all'), v.literal('selected')),
+				repositoryIds: v.array(v.number()),
+				repositoryNames: v.array(v.string()),
+				contentsPermission: v.optional(v.string()),
+				metadataPermission: v.optional(v.string()),
+				htmlUrl: v.optional(v.string()),
+				status: v.union(v.literal('active'), v.literal('suspended'), v.literal('deleted')),
+				connectedAt: v.number(),
+				lastSyncedAt: v.number(),
+				suspendedAt: v.optional(v.number())
+			})
+		),
+		connectedAt: v.optional(v.number()),
+		lastSyncedAt: v.optional(v.number())
 	}),
-	handler: async (ctx) => {
+	handler: async (ctx): Promise<GitHubConnectionSummary> => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) {
 			throw new WebAuthError({
@@ -175,23 +117,45 @@ export const syncMyConnection = action({
 			throw new WebUnhandledError({ message: 'Instance not found for authenticated user' });
 		}
 
-		const snapshot = await inspectGitHubConnectionForClerkUser(identity.subject);
-		await ctx.runMutation(githubConnectionsInternal.githubConnections.upsertForInstance, {
-			instanceId: instance._id,
-			clerkUserId: identity.subject,
-			githubUserId: snapshot.githubUserId,
-			githubLogin: snapshot.githubLogin,
-			scopes: snapshot.scopes,
-			status: snapshot.status,
-			connectedAt: snapshot.connectedAt
-		});
+		const installations = await ctx.runQuery(
+			githubConnectionsInternal.githubConnections.getByInstanceId,
+			{
+				instanceId: instance._id
+			}
+		);
 
-		return {
-			status: snapshot.status,
-			scopes: snapshot.scopes,
-			githubUserId: snapshot.githubUserId,
-			githubLogin: snapshot.githubLogin,
-			connectedAt: snapshot.connectedAt
-		};
+		for (const installation of installations) {
+			const snapshot = await getInstallationSnapshot(installation.installationId);
+			if (!snapshot) {
+				await ctx.runMutation(
+					githubConnectionsInternal.githubConnections.markDeletedByInstallationId,
+					{
+						installationId: installation.installationId
+					}
+				);
+				continue;
+			}
+
+			await ctx.runMutation(githubConnectionsInternal.githubConnections.upsertForInstance, {
+				instanceId: instance._id,
+				clerkUserId: identity.subject,
+				installationId: snapshot.installationId,
+				accountLogin: snapshot.accountLogin,
+				accountType: snapshot.accountType,
+				targetType: snapshot.targetType,
+				repositorySelection: snapshot.repositorySelection,
+				repositoryIds: snapshot.repositoryIds,
+				repositoryNames: snapshot.repositoryNames,
+				contentsPermission: snapshot.contentsPermission,
+				metadataPermission: snapshot.metadataPermission,
+				htmlUrl: snapshot.htmlUrl,
+				status: snapshot.status,
+				connectedAt: snapshot.connectedAt,
+				lastSyncedAt: snapshot.lastSyncedAt,
+				suspendedAt: snapshot.suspendedAt
+			});
+		}
+
+		return await ctx.runQuery(api.githubConnections.getMyConnection, {});
 	}
 });
