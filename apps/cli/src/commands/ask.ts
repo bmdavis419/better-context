@@ -214,58 +214,62 @@ export const runAskCommand = (args: {
 						quiet: true
 					});
 
-					yield* Effect.tryPromise(async () => {
-						let receivedMeta = false;
-						let inReasoning = false;
-						let hasText = false;
+					yield* Effect.tryPromise({
+						try: async () => {
+							let receivedMeta = false;
+							let inReasoning = false;
+							let hasText = false;
 
-						for await (const event of parseSSEStream(response)) {
-							handleStreamEvent(event, {
-								onMeta: () => {
-									if (!receivedMeta) {
-										console.log('creating collection...\n');
-										receivedMeta = true;
+							for await (const event of parseSSEStream(response)) {
+								handleStreamEvent(event, {
+									onMeta: () => {
+										if (!receivedMeta) {
+											console.log('creating collection...\n');
+											receivedMeta = true;
+										}
+									},
+									onReasoningDelta: (delta) => {
+										if (!showThinking) return;
+										if (!inReasoning) {
+											process.stdout.write('<thinking>\n');
+											inReasoning = true;
+										}
+										process.stdout.write(delta);
+									},
+									onTextDelta: (delta) => {
+										if (inReasoning) {
+											process.stdout.write('\n</thinking>\n\n');
+											inReasoning = false;
+										}
+										hasText = true;
+										outputChars += delta.length;
+										process.stdout.write(delta);
+									},
+									onToolCall: (tool) => {
+										if (inReasoning) {
+											process.stdout.write('\n</thinking>\n\n');
+											inReasoning = false;
+										}
+										if (!showTools) return;
+										if (hasText) {
+											process.stdout.write('\n');
+										}
+										console.log(`[${tool}]`);
+									},
+									onError: (message, tag, hint) => {
+										throw streamErrorToBtcaError(message, tag, hint);
 									}
-								},
-								onReasoningDelta: (delta) => {
-									if (!showThinking) return;
-									if (!inReasoning) {
-										process.stdout.write('<thinking>\n');
-										inReasoning = true;
-									}
-									process.stdout.write(delta);
-								},
-								onTextDelta: (delta) => {
-									if (inReasoning) {
-										process.stdout.write('\n</thinking>\n\n');
-										inReasoning = false;
-									}
-									hasText = true;
-									outputChars += delta.length;
-									process.stdout.write(delta);
-								},
-								onToolCall: (tool) => {
-									if (inReasoning) {
-										process.stdout.write('\n</thinking>\n\n');
-										inReasoning = false;
-									}
-									if (!showTools) return;
-									if (hasText) {
-										process.stdout.write('\n');
-									}
-									console.log(`[${tool}]`);
-								},
-								onError: (message, tag, hint) => {
-									throw streamErrorToBtcaError(message, tag, hint);
-								}
-							});
-						}
+								});
+							}
 
-						if (inReasoning) {
-							process.stdout.write('\n</thinking>\n');
-						}
+							if (inReasoning) {
+								process.stdout.write('\n</thinking>\n');
+							}
 
-						console.log('\n');
+							console.log('\n');
+						},
+						catch: (cause) =>
+							cause instanceof BtcaError ? cause : new BtcaError(String(cause))
 					});
 				} finally {
 					teardownSignalCleanup();
