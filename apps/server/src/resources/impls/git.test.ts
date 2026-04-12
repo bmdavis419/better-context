@@ -3,8 +3,36 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import { loadGitResource } from './git.ts';
+import { loadGitResource, syncSparseCheckoutPaths } from './git.ts';
 import type { BtcaGitResourceArgs } from '../types.ts';
+
+const runGit = async (
+	args: string[],
+	options: { cwd?: string; env?: Record<string, string> } = {}
+) => {
+	const proc = Bun.spawn(['git', ...args], {
+		cwd: options.cwd,
+		env: {
+			...process.env,
+			GIT_AUTHOR_NAME: 'btca-test',
+			GIT_AUTHOR_EMAIL: 'btca-test@example.com',
+			GIT_COMMITTER_NAME: 'btca-test',
+			GIT_COMMITTER_EMAIL: 'btca-test@example.com',
+			...(options.env ?? {})
+		},
+		stdout: 'pipe',
+		stderr: 'pipe'
+	});
+	const stdout = await new Response(proc.stdout).text();
+	const stderr = await new Response(proc.stderr).text();
+	const exitCode = await proc.exited;
+
+	if (exitCode !== 0) {
+		throw new Error(`git ${args.join(' ')} failed (${exitCode}): ${stderr}`);
+	}
+
+	return { stdout, stderr };
+};
 
 describe('Git Resource', () => {
 	let testDir: string;
@@ -114,6 +142,61 @@ describe('Git Resource', () => {
 			};
 
 			expect(loadGitResource(args)).rejects.toThrow('path traversal');
+		});
+
+		it('supports sparse checkout updates for submodule-backed search paths', async () => {
+			const childRepo = path.join(testDir, 'child-repo');
+			const childBareRepo = path.join(testDir, 'child-repo.git');
+			const parentRepo = path.join(testDir, 'parent-repo');
+			const cloneRepo = path.join(testDir, 'clone-repo');
+
+			await fs.mkdir(childRepo, { recursive: true });
+			await runGit(['init', '-b', 'main'], { cwd: childRepo });
+			await fs.writeFile(path.join(childRepo, 'README.md'), '# child\n');
+			await runGit(['add', 'README.md'], { cwd: childRepo });
+			await runGit(['commit', '-m', 'init child'], { cwd: childRepo });
+			await runGit(['clone', '--bare', childRepo, childBareRepo]);
+
+			await fs.mkdir(parentRepo, { recursive: true });
+			await runGit(['init', '-b', 'main'], { cwd: parentRepo });
+			await fs.writeFile(path.join(parentRepo, 'README.md'), '# parent\n');
+			await runGit(['add', 'README.md'], { cwd: parentRepo });
+			await runGit(['commit', '-m', 'init parent'], { cwd: parentRepo });
+			await runGit(
+				[
+					'-c',
+					'protocol.file.allow=always',
+					'submodule',
+					'add',
+					childBareRepo,
+					'chipwhisperer-minimal'
+				],
+				{ cwd: parentRepo }
+			);
+			await runGit(['commit', '-am', 'add submodule'], { cwd: parentRepo });
+
+			await runGit(['clone', '--no-checkout', '--sparse', '-b', 'main', parentRepo, cloneRepo]);
+
+			await syncSparseCheckoutPaths({
+				localAbsolutePath: cloneRepo,
+				repoSubPaths: ['chipwhisperer-minimal'],
+				quiet: true
+			});
+
+			const firstStat = await fs.stat(path.join(cloneRepo, 'chipwhisperer-minimal'));
+			expect(firstStat.isDirectory()).toBe(true);
+
+			await runGit(['fetch', '--depth', '1', 'origin', 'main'], { cwd: cloneRepo });
+			await runGit(['reset', '--hard', 'origin/main'], { cwd: cloneRepo });
+
+			await syncSparseCheckoutPaths({
+				localAbsolutePath: cloneRepo,
+				repoSubPaths: ['chipwhisperer-minimal'],
+				quiet: true
+			});
+
+			const secondStat = await fs.stat(path.join(cloneRepo, 'chipwhisperer-minimal'));
+			expect(secondStat.isDirectory()).toBe(true);
 		});
 	});
 });

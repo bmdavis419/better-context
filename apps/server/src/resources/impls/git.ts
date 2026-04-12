@@ -224,6 +224,38 @@ const runGit = async (
 	return { exitCode, stderr };
 };
 
+export const syncSparseCheckoutPaths = async (args: {
+	localAbsolutePath: string;
+	repoSubPaths: readonly string[];
+	quiet: boolean;
+}) => {
+	await runGitChecked(
+		['sparse-checkout', 'set', '--skip-checks', ...args.repoSubPaths],
+		{ cwd: args.localAbsolutePath, quiet: args.quiet },
+		(sparseResult) =>
+			new ResourceError({
+				message: `Failed to set sparse-checkout path(s): "${args.repoSubPaths.join(', ')}"`,
+				hint: 'Verify the search paths exist in the repository. Check the repository structure to find the correct path.',
+				cause: new Error(
+					`git sparse-checkout failed with exit code ${sparseResult.exitCode}: ${sparseResult.stderr}`
+				)
+			})
+	);
+
+	await runGitChecked(
+		['checkout'],
+		{ cwd: args.localAbsolutePath, quiet: args.quiet },
+		(checkoutResult) =>
+			new ResourceError({
+				message: 'Failed to checkout repository',
+				hint: CommonHints.CLEAR_CACHE,
+				cause: new Error(
+					`git checkout failed with exit code ${checkoutResult.exitCode}: ${checkoutResult.stderr}`
+				)
+			})
+	);
+};
+
 const gitClone = async (args: {
 	repoUrl: string;
 	repoBranch: string;
@@ -290,31 +322,11 @@ const gitClone = async (args: {
 	});
 
 	if (needsSparseCheckout) {
-		await runGitChecked(
-			['sparse-checkout', 'set', ...args.repoSubPaths],
-			{ cwd: args.localAbsolutePath, quiet: args.quiet },
-			(sparseResult) =>
-				new ResourceError({
-					message: `Failed to set sparse-checkout path(s): "${args.repoSubPaths.join(', ')}"`,
-					hint: 'Verify the search paths exist in the repository. Check the repository structure to find the correct path.',
-					cause: new Error(
-						`git sparse-checkout failed with exit code ${sparseResult.exitCode}: ${sparseResult.stderr}`
-					)
-				})
-		);
-
-		await runGitChecked(
-			['checkout'],
-			{ cwd: args.localAbsolutePath, quiet: args.quiet },
-			(checkout) =>
-				new ResourceError({
-					message: 'Failed to checkout repository',
-					hint: CommonHints.CLEAR_CACHE,
-					cause: new Error(
-						`git checkout failed with exit code ${checkout.exitCode}: ${checkout.stderr}`
-					)
-				})
-		);
+		await syncSparseCheckoutPaths({
+			localAbsolutePath: args.localAbsolutePath,
+			repoSubPaths: args.repoSubPaths,
+			quiet: args.quiet
+		});
 	}
 };
 
@@ -358,31 +370,11 @@ const gitUpdate = async (args: {
 	);
 
 	if (args.repoSubPaths.length > 0) {
-		await runGitChecked(
-			['sparse-checkout', 'set', ...args.repoSubPaths],
-			{ cwd: args.localAbsolutePath, quiet: args.quiet },
-			(sparseResult) =>
-				new ResourceError({
-					message: `Failed to set sparse-checkout path(s): "${args.repoSubPaths.join(', ')}"`,
-					hint: 'Verify the search paths exist in the repository. Check the repository structure to find the correct path.',
-					cause: new Error(
-						`git sparse-checkout failed with exit code ${sparseResult.exitCode}: ${sparseResult.stderr}`
-					)
-				})
-		);
-
-		await runGitChecked(
-			['checkout'],
-			{ cwd: args.localAbsolutePath, quiet: args.quiet },
-			(checkoutResult) =>
-				new ResourceError({
-					message: 'Failed to checkout repository',
-					hint: CommonHints.CLEAR_CACHE,
-					cause: new Error(
-						`git checkout failed with exit code ${checkoutResult.exitCode}: ${checkoutResult.stderr}`
-					)
-				})
-		);
+		await syncSparseCheckoutPaths({
+			localAbsolutePath: args.localAbsolutePath,
+			repoSubPaths: args.repoSubPaths,
+			quiet: args.quiet
+		});
 	}
 };
 
