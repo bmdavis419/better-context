@@ -11,7 +11,7 @@ BTCA Local, aka "The Better Context App Local" is a simple app defined as a skil
 
 <guidelines>
     <guideline>
-        if the user includes a direct like to a github repo, always load and reference that
+        if the user includes a direct link to a github repo, always load and reference that
     </guideline>
     <guideline>
         if the user doesn't include any specific links/repos they want you to use, do your best to guess based on the context provided
