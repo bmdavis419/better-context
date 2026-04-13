@@ -52,8 +52,12 @@ async function main(): Promise<void> {
 	console.log('\nRun sandboxes with: bun sandbox');
 }
 
-// Only run when executed directly, not when imported
-if (import.meta.main) {
+// Only run when executed directly, not when imported.
+const mainModuleUrl =
+	process.argv[1] === undefined ? undefined : `file://${encodeURI(process.argv[1])}`;
+const isMainModule = mainModuleUrl !== undefined && import.meta.url === mainModuleUrl;
+
+if (isMainModule) {
 	main().catch((error) => {
 		console.error('Error:', error);
 		process.exit(1);

@@ -1,0 +1,78 @@
+on:
+  cli:
+    init:
+      commit-sha: ${{ event.git.sha }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.0.0
+  arch: ${{ init.arch }}
+
+aliases:
+  shared-env: &shared-env # TODO: These must be set somewhere we can't see
+    PUBLIC_CONVEX_URL: https://example.com
+    PUBLIC_CLERK_PUBLISHABLE_KEY: abc123
+
+tasks:
+  - key: code
+    call: git/clone 2.0.6
+    with:
+      repository: https://github.com/davis7dotsh/better-context.git
+      ref: ${{ init.commit-sha }}
+
+  - key: bun-version
+    use: code
+    run: jq -r '.packageManager | split("@")[1]' package.json > ${RWX_VALUES}/version
+    filter:
+      - package.json
+
+  - key: bun
+    run: |
+      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
+      echo "${HOME}/.bun" > "${RWX_ENV}/BUN_INSTALL"
+      echo "${HOME}/.bun/bin" > "${RWX_ENV}/PATH"
+      ~/.bun/bin/bun --print process.version | tr -d 'v' > ${RWX_VALUES}/node-version
+    env:
+      BUN_VERSION: ${{ tasks.bun-version.values.version}}
+
+  - key: node
+    use: bun
+    call: nodejs/install 1.1.13
+    with:
+      node-version: ${{ tasks.bun.values.node-version }}
+
+  - key: bun-install
+    use: [code, bun, node]
+    # TODO: add --frozen-lockfile back once packages are updated
+    run: bun install
+    filter:
+      - bun.lock
+      - bunfig.toml
+      - package.json
+      - apps/**/package.json
+      - packages/**/package.json
+
+  - key: lint
+    use: bun-install
+    run: bun run lint:all
+
+  - key: install-mintlify
+    use: bun-install
+    run: bun add -d @mintlify/cli
+
+  - key: bun-check
+    use: install-mintlify
+    run: bun run check:all
+    env: *shared-env
+
+  - key: bun-build
+    use: bun-check
+    run: bun run build:all
+    env: *shared-env
+
+  - key: captain
+    call: rwx/install-captain 1.1.5
+
+  - key: test
+    use: [captain, bun-install]
+    run: captain run better-context-bun

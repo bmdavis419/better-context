@@ -1,0 +1,24 @@
+on:
+  github:
+    push:
+      if: ${{ event.git.branch == 'main' }}
+      init:
+        ref: ${{ event.git.ref }}
+        commit-sha: ${{ event.git.sha }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.0.0
+
+tasks:
+  - key: ci-x86_64
+    call: ${{ run.dir }}/ci.yml
+    init:
+      arch: x86_64
+      commit-sha: ${{ init.commit-sha }}
+
+  - key: ci-arm64
+    call: ${{ run.dir }}/ci.yml
+    init:
+      arch: arm64
+      commit-sha: ${{ init.commit-sha }}

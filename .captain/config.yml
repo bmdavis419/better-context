@@ -1,0 +1,9 @@
+test-suites:
+  better-context-bun:
+    command: bun test --reporter=junit --reporter-outfile bun.xml
+    results:
+      language: JavaScript
+      framework: bun
+      path: bun.xml
+    retries:
+      command: bun test '{{ file }}' --test-name-pattern '{{ testNamePattern }}' --reporter=junit --reporter-outfile bun.xml

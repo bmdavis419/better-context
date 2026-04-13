@@ -12,6 +12,9 @@
 		"format": {
 			"dependsOn": ["^format"]
 		},
+		"lint": {
+			"dependsOn": ["^lint"]
+		},
 		"check": {
 			"dependsOn": ["^check"]
 		},

@@ -1,0 +1,73 @@
+on:
+  cli:
+    init:
+      commit-sha: ${{ event.git.sha }}
+      pr-number: "0"
+  github:
+    pull_request:
+      init:
+        commit-sha: ${{ event.git.sha }}
+        pr-number: ${{ event.github.pull_request.number }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.0.0
+
+concurrency-pools:
+  - id: davis7dotsh/better-context:pull-request:${{ init.pr-number }}
+    if: ${{ init.pr-number != "0" }}
+    capacity: 1
+    on-overflow: cancel-running
+
+tasks:
+  - key: code
+    call: git/clone 2.0.6
+    with:
+      repository: https://github.com/davis7dotsh/better-context.git
+      ref: ${{ init.commit-sha }}
+
+  - key: bun-version
+    use: code
+    run: jq -r '.packageManager | split("@")[1]' package.json > ${RWX_VALUES}/version
+    filter:
+      - package.json
+
+  - key: bun
+    run: |
+      curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
+      echo "${HOME}/.bun" > "${RWX_ENV}/BUN_INSTALL"
+      echo "${HOME}/.bun/bin" > "${RWX_ENV}/PATH"
+      ~/.bun/bin/bun --print process.version | tr -d 'v' > ${RWX_VALUES}/node-version
+    env:
+      BUN_VERSION: ${{ tasks.bun-version.values.version}}
+
+  - key: node
+    use: bun
+    call: nodejs/install 1.1.13
+    with:
+      node-version: ${{ tasks.bun.values.node-version }}
+
+  - key: bun-install
+    use: [code, bun, node]
+    run: bun install
+    filter:
+      - bun.lock
+      - bunfig.toml
+      - package.json
+      - apps/**/package.json
+      - packages/**/package.json
+
+  - key: lint
+    use: bun-install
+    run: bun run lint:all
+
+  - key: install-mintlify
+    use: bun-install
+    run: bun add -d @mintlify/cli
+
+  - key: check
+    use: install-mintlify
+    run: bun run check:all
+    env:
+      PUBLIC_CONVEX_URL: https://example.com
+      PUBLIC_CLERK_PUBLISHABLE_KEY: abc123
