@@ -56,6 +56,11 @@ export async function copyToClipboard(text: string) {
 			if (wlCopyResult) return;
 		}
 
+		if (isWayland()) {
+			const wlCopyResult = await runClipboard(['wl-copy']);
+			if (!wlCopyResult.isErr()) return;
+		}
+
 		// Try xclip first, fall back to xsel
 		const xclipResult = await runClipboard(['xclip', '-selection', 'clipboard']);
 		if (!xclipResult) {
