@@ -187,7 +187,8 @@ REPL supports `@resource` mentions.
 
 Clipboard behavior on Linux:
 
-- btca tries `wl-copy` (Wayland), then `xclip`, then `xsel`.
+- On WSL, btca first tries Windows clipboard via `clip.exe` (including Windows path fallback).
+- It then tries `wl-copy` (Wayland), then `xclip`, then `xsel`.
 - If these binaries are unavailable, btca falls back to terminal OSC52 clipboard copy.
 - OSC52 support depends on the terminal emulator and session configuration.
 
