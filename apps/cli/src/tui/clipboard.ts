@@ -18,6 +18,35 @@ const isWayland = () => {
 	return !!process.env.WAYLAND_DISPLAY;
 };
 
+export const getOsc52Sequence = (text: string) => {
+	const encoded = Buffer.from(text, 'utf8').toString('base64');
+	return `\u001b]52;c;${encoded}\u0007`;
+};
+
+export const tryOsc52Copy = (
+	text: string,
+	options: {
+		isTTY?: boolean;
+		term?: string;
+		write?: (value: string) => unknown;
+	} = {}
+) => {
+	const isTTY = options.isTTY ?? process.stdout.isTTY;
+	const term = options.term ?? process.env.TERM;
+	const write = options.write ?? ((value: string) => process.stdout.write(value));
+
+	if (!isTTY) return false;
+	if (term === 'dumb') return false;
+
+	try {
+		// OSC52 allows terminals to copy text to the system clipboard without external binaries.
+		write(getOsc52Sequence(text));
+		return true;
+	} catch {
+		return false;
+	}
+};
+
 export async function copyToClipboard(text: string) {
 	const platform = process.platform;
 
@@ -58,11 +87,16 @@ export async function copyToClipboard(text: string) {
 
 		// Try xclip first, fall back to xsel
 		const xclipResult = await runClipboard(['xclip', '-selection', 'clipboard']);
-		if (!xclipResult) {
-			const xselResult = await runClipboard(['xsel', '--clipboard', '--input']);
-			if (!xselResult) {
-				throw new Error('Failed to copy to clipboard: no compatible clipboard command succeeded.');
-			}
+		if (xclipResult) return;
+
+		const xselResult = await runClipboard(['xsel', '--clipboard', '--input']);
+		if (xselResult) return;
+
+		const osc52Result = tryOsc52Copy(text);
+		if (!osc52Result) {
+			throw new Error(
+				'Failed to copy to clipboard: no compatible clipboard command succeeded and terminal OSC52 fallback is unavailable.'
+			);
 		}
 	}
 }

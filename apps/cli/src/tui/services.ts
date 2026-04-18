@@ -115,21 +115,23 @@ export const services = {
 				const chunkOrder: string[] = [];
 				let doneEvent: Extract<BtcaStreamEvent, { type: 'done' }> | undefined;
 				try {
-					yield* Effect.tryPromise(() =>
-						(async () => {
-							for await (const event of parseSSEStream(response)) {
-								if (signal.aborted) break;
-								if (event.type === 'error') {
-									throw new Error(formatTuiStreamError(event));
+					yield* Effect.tryPromise({
+						try: () =>
+							(async () => {
+								for await (const event of parseSSEStream(response)) {
+									if (signal.aborted) break;
+									if (event.type === 'error') {
+										throw new Error(formatTuiStreamError(event));
+									}
+									if (event.type === 'done') {
+										doneEvent = event;
+										continue;
+									}
+									processStreamEvent(event, chunksById, chunkOrder, onChunkUpdate);
 								}
-								if (event.type === 'done') {
-									doneEvent = event;
-									continue;
-								}
-								processStreamEvent(event, chunksById, chunkOrder, onChunkUpdate);
-							}
-						})()
-					);
+							})(),
+						catch: (e) => (e instanceof Error ? e : new Error(String(e)))
+					});
 				} catch (error) {
 					if (!(error instanceof Error && error.name === 'AbortError')) {
 						return yield* Effect.fail(error);
@@ -152,12 +154,14 @@ export const services = {
 				if (!currentAbortController) return;
 				currentAbortController.abort();
 				currentAbortController = null;
-				yield* Effect.tryPromise(() =>
-					trackTelemetryEvent({
-						event: 'cli_stream_cancelled',
-						properties: { command: 'btca', mode: 'tui' }
-					})
-				);
+				yield* Effect.tryPromise({
+					try: () =>
+						trackTelemetryEvent({
+							event: 'cli_stream_cancelled',
+							properties: { command: 'btca', mode: 'tui' }
+						}),
+					catch: (e) => (e instanceof Error ? e : new Error(String(e)))
+				});
 			})
 		);
 	},
