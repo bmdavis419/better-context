@@ -472,7 +472,12 @@ export const MessagesProvider = (props: { children: ReactNode }) => {
 			getAssistantMessageText(assistantMessage)
 		].join('\n');
 		try {
-			await runCliEffect(Effect.tryPromise(() => copyToClipboard(payload)));
+			await runCliEffect(
+				Effect.tryPromise({
+					try: () => copyToClipboard(payload),
+					catch: (error) => (error instanceof Error ? error : new Error(String(error)))
+				})
+			);
 		} catch (error) {
 			addMessage({ role: 'system', content: `Error: ${formatError(error)}` });
 			return;
@@ -493,7 +498,12 @@ export const MessagesProvider = (props: { children: ReactNode }) => {
 		}
 
 		try {
-			await runCliEffect(Effect.tryPromise(() => copyToClipboard(parts.join('\n\n'))));
+			await runCliEffect(
+				Effect.tryPromise({
+					try: () => copyToClipboard(parts.join('\n\n')),
+					catch: (error) => (error instanceof Error ? error : new Error(String(error)))
+				})
+			);
 		} catch (error) {
 			addMessage({ role: 'system', content: `Error: ${formatError(error)}` });
 			return;

@@ -41,6 +41,12 @@ TUI command palette (`/`):
 - `/copy` copies the latest user question and assistant response.
 - `/copy-all` copies the full thread (all user and assistant messages).
 
+Clipboard behavior on Linux:
+
+- btca tries `wl-copy` (Wayland), then `xclip`, then `xsel`.
+- If those tools are not installed, btca falls back to terminal OSC52 clipboard copy.
+- OSC52 support depends on your terminal emulator and SSH/session settings.
+
 TUI keyboard shortcuts:
 
 - `Enter` sends message.

@@ -185,6 +185,12 @@ REPL supports `@resource` mentions.
 - `/copy` — copy the latest user question and assistant response
 - `/copy-all` — copy the full thread (all user and assistant messages)
 
+Clipboard behavior on Linux:
+
+- btca tries `wl-copy` (Wayland), then `xclip`, then `xsel`.
+- If these binaries are unavailable, btca falls back to terminal OSC52 clipboard copy.
+- OSC52 support depends on the terminal emulator and session configuration.
+
 **TUI keyboard shortcuts**:
 
 - `Enter` — send message
