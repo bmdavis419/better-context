@@ -87,10 +87,10 @@ export async function copyToClipboard(text: string) {
 
 		// Try xclip first, fall back to xsel
 		const xclipResult = await runClipboard(['xclip', '-selection', 'clipboard']);
-		if (!xclipResult) {
-			const xselResult = await runClipboard(['xsel', '--clipboard', '--input']);
-			if (xselResult) return;
-		}
+		if (xclipResult) return;
+
+		const xselResult = await runClipboard(['xsel', '--clipboard', '--input']);
+		if (xselResult) return;
 
 		const osc52Result = tryOsc52Copy(text);
 		if (!osc52Result) {
