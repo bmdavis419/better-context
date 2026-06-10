@@ -37,7 +37,7 @@ BTCA Local, aka "The Better Context App Local" is a simple app defined as a skil
     <step name="search">
         search the repo for the information you need. make sure to follow the guidelines
     </step>
-<workflow>
+</workflow>
 
 <end_goal>
 a clear, concise answer to the question with code examples
