@@ -43,6 +43,7 @@ btca reads credentials from OpenCode’s auth storage:
 
 Supported providers:
 
+- `atlascloud` — API key
 - `opencode` — API key
 - `openrouter` — API key
 - `openai` — OAuth (no API keys)
@@ -53,6 +54,8 @@ Supported providers:
 
 Environment variable overrides:
 
+- `ATLASCLOUD_API_KEY` (for provider `atlascloud`)
+- `ATLASCLOUD_BASE_URL` (optional Atlas Cloud endpoint override)
 - `OPENCODE_API_KEY` (for provider `opencode`)
 - `OPENROUTER_API_KEY` (for provider `openrouter`)
 - `MINIMAX_API_KEY` (for provider `minimax`)
@@ -63,7 +66,7 @@ Environment variable overrides:
 
 - If provider is `openai`, runs local OAuth flow (PKCE) and writes tokens into OpenCode auth.
 - If provider is `openai-compat`, prompts for base URL, provider name, model ID, and optional API key.
-- If provider is `opencode`, `openrouter`, `anthropic`, `google`, or `minimax`, prompts for API key and writes into OpenCode auth.
+- If provider is `atlascloud`, `opencode`, `openrouter`, `anthropic`, `google`, or `minimax`, prompts for API key and writes into OpenCode auth.
 - If provider is not handled directly, falls back to `opencode auth --provider <provider>`.
 
 **OpenAI-compatible provider inputs (and why):**

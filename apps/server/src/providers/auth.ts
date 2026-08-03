@@ -19,6 +19,7 @@ export type AuthStatus =
 	| { status: 'invalid'; authType: AuthType };
 
 const PROVIDER_AUTH_TYPES: Record<string, readonly AuthType[]> = {
+	atlascloud: ['api'],
 	opencode: ['api'],
 	'github-copilot': ['oauth'],
 	openrouter: ['api'],
@@ -35,6 +36,7 @@ const readEnv = (key: string) => {
 };
 
 const getEnvApiKey = (providerId: string) => {
+	if (providerId === 'atlascloud') return readEnv('ATLASCLOUD_API_KEY');
 	if (providerId === 'openrouter') return readEnv('OPENROUTER_API_KEY');
 	if (providerId === 'opencode') return readEnv('OPENCODE_API_KEY');
 	if (providerId === 'minimax') return readEnv('MINIMAX_API_KEY');
@@ -141,6 +143,8 @@ export const getAuthStatus = async (providerId: string): Promise<AuthStatus> => 
 
 export const getProviderAuthHint = (providerId: string) => {
 	switch (providerId) {
+		case 'atlascloud':
+			return 'Set ATLASCLOUD_API_KEY or run "btca connect -p atlascloud".';
 		case 'github-copilot':
 			return 'Run "btca connect -p github-copilot" and complete device flow OAuth.';
 		case 'openai':

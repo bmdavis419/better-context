@@ -1,4 +1,5 @@
 export const CURATED_MODELS: Record<string, { id: string; label: string }[]> = {
+	atlascloud: [{ id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' }],
 	openai: [
 		{ id: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
 		{ id: 'gpt-5.4', label: 'GPT-5.4' }
@@ -35,6 +36,7 @@ export const CURATED_MODELS: Record<string, { id: string; label: string }[]> = {
 };
 
 export const PROVIDER_INFO: Record<string, { label: string; requiresAuth: boolean }> = {
+	atlascloud: { label: 'Atlas Cloud', requiresAuth: true },
 	opencode: { label: 'OpenCode Zen', requiresAuth: true },
 	'github-copilot': { label: 'GitHub Copilot', requiresAuth: true },
 	anthropic: { label: 'Anthropic (Claude)', requiresAuth: true },
@@ -46,6 +48,7 @@ export const PROVIDER_INFO: Record<string, { label: string; requiresAuth: boolea
 };
 
 export const PROVIDER_AUTH_GUIDANCE: Record<string, string> = {
+	atlascloud: 'Atlas Cloud uses API keys: paste your Atlas Cloud API key to continue.',
 	'github-copilot': 'GitHub Copilot uses device flow OAuth: follow the browser prompt.',
 	openai: 'OpenAI requires OAuth: btca will open a browser to sign in.',
 	minimax: 'MiniMax uses API keys: paste your MiniMax API key to continue.',
@@ -57,6 +60,10 @@ export const PROVIDER_AUTH_GUIDANCE: Record<string, string> = {
 };
 
 export const PROVIDER_MODEL_DOCS: Record<string, { label: string; url: string }> = {
+	atlascloud: {
+		label: 'Model catalog',
+		url: 'https://api.atlascloud.ai/api/v1/models'
+	},
 	openai: { label: 'Model docs', url: 'https://platform.openai.com/docs/models' },
 	'openai-compat': {
 		label: 'OpenAI-compatible docs',
@@ -82,6 +89,10 @@ export const PROVIDER_MODEL_WARNINGS: Record<string, string> = {
 };
 
 export const PROVIDER_SETUP_LINKS: Record<string, { label: string; url: string }> = {
+	atlascloud: {
+		label: 'Get Atlas Cloud API key',
+		url: 'https://www.atlascloud.ai/console/api-keys'
+	},
 	opencode: { label: 'Get OpenCode Zen API key', url: 'https://opencode.ai/zen' },
 	minimax: {
 		label: 'Get MiniMax API key',
