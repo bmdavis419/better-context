@@ -12,6 +12,7 @@ btca reads credentials from OpenCode's auth storage:
 
 Supported providers:
 
+- `atlascloud` (API key)
 - `opencode` (API key)
 - `openrouter` (API key)
 - `openai` (OAuth, no API keys)
@@ -23,6 +24,8 @@ Supported providers:
 
 Environment variable overrides:
 
+- `ATLASCLOUD_API_KEY` (for provider `atlascloud`)
+- `ATLASCLOUD_BASE_URL` (optional Atlas Cloud endpoint override)
 - `OPENCODE_API_KEY` (for provider `opencode`)
 - `OPENROUTER_API_KEY` (for provider `openrouter`)
 - `MINIMAX_API_KEY` (for provider `minimax`)

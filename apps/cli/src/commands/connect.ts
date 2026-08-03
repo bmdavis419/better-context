@@ -151,6 +151,7 @@ async function runBtcaAuth(providerId: string): Promise<boolean> {
 	}
 
 	if (
+		providerId === 'atlascloud' ||
 		providerId === 'opencode' ||
 		providerId === 'openrouter' ||
 		providerId === 'anthropic' ||

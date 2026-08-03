@@ -5,6 +5,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
+import { createAtlasCloud } from './atlascloud.ts';
 import { createCopilotProvider } from './copilot.ts';
 import { createOpenCodeZen } from './opencode.ts';
 import { createOpenAICodex } from './openai.ts';
@@ -31,6 +32,9 @@ export type ProviderFactory = (options?: any) => {
 
 // Registry of all supported providers
 export const PROVIDER_REGISTRY: Record<string, ProviderFactory> = {
+	// Atlas Cloud (OpenAI-compatible gateway)
+	atlascloud: createAtlasCloud as ProviderFactory,
+
 	// OpenCode Zen (curated models gateway)
 	opencode: createOpenCodeZen as ProviderFactory,
 
